@@ -16,10 +16,8 @@
     "check": "biome check"
   },
   "dependencies": {
+    "@chenglou/pretext": "^0.0.8",
     "@interactive-os/json-document": "^1.0.1",
-    "@lexical/history": "^0.45.0",
-    "@lexical/plain-text": "^0.45.0",
-    "@lexical/react": "^0.45.0",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",
     "@tanstack/react-router": "latest",
@@ -27,7 +25,6 @@
     "@tanstack/react-router-ssr-query": "latest",
     "@tanstack/react-start": "latest",
     "@tanstack/router-plugin": "^1.132.0",
-    "lexical": "^0.45.0",
     "lucide-react": "^0.545.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

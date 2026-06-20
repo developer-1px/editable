@@ -1,0 +1,1724 @@
+import { createJSONDocument } from "@interactive-os/json-document";
+import { describe, expect, it } from "vitest";
+import { selectionFromCursorPoint } from "./cursorCommands";
+import { type NoteDocument, NoteDocumentSchema } from "./noteDocument";
+import {
+  deleteBackward,
+  deleteForward,
+  deleteWordBackward,
+  deleteWordForward,
+  insertFigure,
+  insertMention,
+  insertText,
+  splitParagraph,
+} from "./textCommands";
+
+function documentWithBlocks(blocks: NoteDocument["blocks"]): NoteDocument {
+  return {
+    id: "note-test",
+    title: "Text",
+    tags: [],
+    blocks,
+  };
+}
+
+function expectOk<T extends { ok: boolean }>(
+  result: T,
+): asserts result is Extract<T, { ok: true }> {
+  expect(result.ok).toBe(true);
+}
+
+function atomSelection(path: string) {
+  return {
+    selectedPointers: [path],
+    selectionRanges: [
+      {
+        anchor: { path, edge: "before" as const },
+        focus: { path, edge: "after" as const },
+      },
+    ],
+    primaryIndex: 0,
+    anchor: { path, edge: "before" as const },
+    focus: { path, edge: "after" as const },
+  };
+}
+
+describe("text commands", () => {
+  it("inserts inside text by replacing only the affected text path", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB" }],
+      },
+    ]);
+    const selection = selectionFromCursorPoint({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+
+    const command = insertText(document, selection, "x");
+
+    expectOk(command);
+    expect(command.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: "AxB" },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 2,
+    });
+  });
+
+  it("edits rich text block leaves through the same text command path", () => {
+    const headingDocument = documentWithBlocks([
+      {
+        id: "heading-1",
+        type: "heading",
+        level: 2,
+        children: [{ type: "text", text: "AB" }],
+      },
+    ]);
+    const listDocument = documentWithBlocks([
+      {
+        id: "list-1",
+        type: "listItem",
+        ordered: false,
+        depth: 0,
+        children: [{ type: "text", text: "AB" }],
+      },
+    ]);
+
+    const heading = insertText(
+      headingDocument,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 1,
+      }),
+      "x",
+    );
+    const list = insertText(
+      listDocument,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 1,
+      }),
+      "y",
+    );
+
+    expectOk(heading);
+    expectOk(list);
+    expect(heading.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: "AxB" },
+    ]);
+    expect(list.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: "AyB" },
+    ]);
+  });
+
+  it("edits code block text through a block text leaf", () => {
+    const document = documentWithBlocks([
+      {
+        id: "code-1",
+        type: "codeBlock",
+        text: "ab",
+      },
+    ]);
+
+    const insert = insertText(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/0/text", offset: 1 }),
+      "x",
+    );
+    const newline = splitParagraph(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/0/text", offset: 1 }),
+    );
+
+    expectOk(insert);
+    expectOk(newline);
+    expect(insert.patch).toEqual([
+      { op: "replace", path: "/blocks/0/text", value: "axb" },
+    ]);
+    expect(insert.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/text",
+      offset: 2,
+    });
+    expect(newline.patch).toEqual([
+      { op: "replace", path: "/blocks/0/text", value: "a\nb" },
+    ]);
+    expect(newline.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/text",
+      offset: 2,
+    });
+  });
+
+  it("preserves structured marks while editing text", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "bold", marks: [{ type: "bold" }] }],
+      },
+    ]);
+
+    const insert = insertText(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 2,
+      }),
+      "x",
+    );
+    const deleteText = deleteBackward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 2,
+      }),
+    );
+
+    expectOk(insert);
+    expectOk(deleteText);
+    expect(insert.patch).toEqual([
+      {
+        op: "replace",
+        path: "/blocks/0/children/0/text",
+        value: "boxld",
+      },
+    ]);
+    expect(insert.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 3,
+    });
+    expect(deleteText.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: "bld" },
+    ]);
+    expect(deleteText.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+  });
+
+  it("replaces a selected range inside one text node", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "ABCD" }],
+      },
+    ]);
+    const selection = {
+      selectedPointers: ["/blocks/0/children/0/text"],
+      selectionRanges: [
+        {
+          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+          focus: { path: "/blocks/0/children/0/text", offset: 3 },
+        },
+      ],
+      primaryIndex: 0,
+      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+      focus: { path: "/blocks/0/children/0/text", offset: 3 },
+    };
+
+    const command = insertText(document, selection, "x");
+
+    expectOk(command);
+    expect(command.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: "AxD" },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 2,
+    });
+  });
+
+  it("replaces a selected range across inline text and mention nodes", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [
+          { type: "text", text: "AB" },
+          { type: "mention", id: "user-1", label: "Ada" },
+          { type: "text", text: "CD" },
+        ],
+      },
+    ]);
+    const selection = {
+      selectedPointers: ["/blocks/0/children/1"],
+      selectionRanges: [
+        {
+          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+          focus: { path: "/blocks/0/children/2/text", offset: 1 },
+        },
+      ],
+      primaryIndex: 0,
+      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+      focus: { path: "/blocks/0/children/2/text", offset: 1 },
+    };
+
+    const command = insertText(document, selection, "x");
+
+    expectOk(command);
+    expect(command.patch).toEqual([
+      {
+        op: "replace",
+        path: "/blocks/0",
+        value: {
+          id: "block-1",
+          type: "paragraph",
+          children: [{ type: "text", text: "AxD" }],
+        },
+      },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 2,
+    });
+  });
+
+  it("inserts before and after inline atoms using neighboring text runs", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [
+          { type: "text", text: "A" },
+          { type: "mention", id: "user-1", label: "Ada" },
+          { type: "text", text: "B" },
+        ],
+      },
+    ]);
+
+    const before = insertText(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/1",
+        edge: "before",
+      }),
+      "x",
+    );
+    const after = insertText(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/1",
+        edge: "after",
+      }),
+      "y",
+    );
+
+    expectOk(before);
+    expectOk(after);
+    expect(before.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: "Ax" },
+    ]);
+    expect(after.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/2/text", value: "yB" },
+    ]);
+  });
+
+  it("creates an inline text run when an atom has no neighboring text run", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "mention", id: "user-1", label: "Ada" }],
+      },
+    ]);
+
+    const command = insertText(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0",
+        edge: "after",
+      }),
+      "x",
+    );
+
+    expectOk(command);
+    expect(command.patch).toEqual([
+      {
+        op: "add",
+        path: "/blocks/0/children/1",
+        value: { type: "text", text: "x" },
+      },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/1/text",
+      offset: 1,
+    });
+  });
+
+  it("targets neighboring paragraphs around a figure", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "A" }],
+      },
+      {
+        id: "figure-1",
+        type: "figure",
+        src: "/image.png",
+      },
+      {
+        id: "block-2",
+        type: "paragraph",
+        children: [{ type: "text", text: "B" }],
+      },
+    ]);
+
+    const before = insertText(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/1", edge: "before" }),
+      "x",
+    );
+    const after = insertText(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/1", edge: "after" }),
+      "y",
+    );
+
+    expectOk(before);
+    expectOk(after);
+    expect(before.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: "Ax" },
+    ]);
+    expect(after.patch).toEqual([
+      { op: "replace", path: "/blocks/2/children/0/text", value: "yB" },
+    ]);
+  });
+
+  it("creates paragraphs when inserting text before or after an isolated figure", () => {
+    const document = documentWithBlocks([
+      {
+        id: "figure-1",
+        type: "figure",
+        src: "/image.png",
+      },
+    ]);
+
+    const before = insertText(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/0", edge: "before" }),
+      "x",
+    );
+    const after = insertText(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/0", edge: "after" }),
+      "y",
+    );
+
+    expectOk(before);
+    expectOk(after);
+    expect(before.patch).toMatchObject([
+      {
+        op: "add",
+        path: "/blocks/0",
+        value: {
+          type: "paragraph",
+          children: [{ type: "text", text: "x" }],
+        },
+      },
+    ]);
+    expect(after.patch).toMatchObject([
+      {
+        op: "add",
+        path: "/blocks/1",
+        value: {
+          type: "paragraph",
+          children: [{ type: "text", text: "y" }],
+        },
+      },
+    ]);
+  });
+
+  it("restores value and selection through json-document undo and redo", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB" }],
+      },
+    ]);
+    const jsonDocument = createJSONDocument(NoteDocumentSchema, document, {
+      history: 10,
+      selection: true,
+      trustedInitial: true,
+    });
+    const selection = selectionFromCursorPoint({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+    jsonDocument.selection?.restore(selection);
+
+    const command = insertText(jsonDocument.value, selection, "x");
+    expectOk(command);
+    jsonDocument.commit(command.patch, {
+      selectionAfter: command.selectionAfter,
+    });
+
+    expect(jsonDocument.value.blocks[0]).toMatchObject({
+      type: "paragraph",
+      children: [{ type: "text", text: "AxB" }],
+    });
+    expect(jsonDocument.selection?.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 2,
+    });
+
+    jsonDocument.undo();
+
+    expect(jsonDocument.value.blocks[0]).toMatchObject({
+      type: "paragraph",
+      children: [{ type: "text", text: "AB" }],
+    });
+    expect(jsonDocument.selection?.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+
+    jsonDocument.redo();
+
+    expect(jsonDocument.value.blocks[0]).toMatchObject({
+      type: "paragraph",
+      children: [{ type: "text", text: "AxB" }],
+    });
+    expect(jsonDocument.selection?.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 2,
+    });
+  });
+
+  it("deletes one text character backward and forward", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB" }],
+      },
+    ]);
+
+    const backward = deleteBackward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 2,
+      }),
+    );
+    const forward = deleteForward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 0,
+      }),
+    );
+
+    expectOk(backward);
+    expectOk(forward);
+    expect(backward.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: "A" },
+    ]);
+    expect(backward.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+    expect(forward.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: "B" },
+    ]);
+    expect(forward.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 0,
+    });
+  });
+
+  it("deletes word ranges backward and forward through the same text leaf", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "one two" }],
+      },
+      {
+        id: "code-1",
+        type: "codeBlock",
+        text: "alpha beta",
+      },
+    ]);
+
+    const backward = deleteWordBackward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 7,
+      }),
+    );
+    const forward = deleteWordForward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 0,
+      }),
+    );
+    const code = deleteWordBackward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/1/text",
+        offset: 10,
+      }),
+    );
+
+    expectOk(backward);
+    expectOk(forward);
+    expectOk(code);
+    expect(backward.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: "one " },
+    ]);
+    expect(backward.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 4,
+    });
+    expect(forward.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: " two" },
+    ]);
+    expect(forward.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 0,
+    });
+    expect(code.patch).toEqual([
+      { op: "replace", path: "/blocks/1/text", value: "alpha " },
+    ]);
+    expect(code.selectionAfter.focus).toMatchObject({
+      path: "/blocks/1/text",
+      offset: 6,
+    });
+  });
+
+  it("deletes atom units with word deletion commands", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [
+          { type: "text", text: "A" },
+          { type: "mention", id: "user-1", label: "Ada" },
+          { type: "text", text: "B" },
+        ],
+      },
+      {
+        id: "figure-1",
+        type: "figure",
+        src: "/image.png",
+      },
+    ]);
+
+    const mentionForward = deleteWordForward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 1,
+      }),
+    );
+    const mentionBackward = deleteWordBackward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/2/text",
+        offset: 0,
+      }),
+    );
+    const figureForward = deleteWordForward(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/1", edge: "before" }),
+    );
+
+    expectOk(mentionForward);
+    expectOk(mentionBackward);
+    expectOk(figureForward);
+    expect(mentionForward.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/blocks/0",
+        value: { children: [{ type: "text", text: "AB" }] },
+      },
+    ]);
+    expect(mentionBackward.patch).toEqual(mentionForward.patch);
+    expect(figureForward.patch).toEqual([
+      {
+        op: "replace",
+        path: "/blocks",
+        value: [
+          {
+            id: "block-1",
+            type: "paragraph",
+            children: [
+              { type: "text", text: "A" },
+              { type: "mention", id: "user-1", label: "Ada" },
+              { type: "text", text: "B" },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("deletes selected text ranges", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "ABCD" }],
+      },
+    ]);
+    const selection = {
+      selectedPointers: ["/blocks/0/children/0/text"],
+      selectionRanges: [
+        {
+          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+          focus: { path: "/blocks/0/children/0/text", offset: 3 },
+        },
+      ],
+      primaryIndex: 0,
+      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+      focus: { path: "/blocks/0/children/0/text", offset: 3 },
+    };
+
+    const command = deleteBackward(document, selection);
+
+    expectOk(command);
+    expect(command.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: "AD" },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+  });
+
+  it("deletes selected ranges across inline atoms", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [
+          { type: "text", text: "AB" },
+          { type: "mention", id: "user-1", label: "Ada" },
+          { type: "text", text: "CD" },
+        ],
+      },
+    ]);
+    const selection = {
+      selectedPointers: ["/blocks/0/children/1"],
+      selectionRanges: [
+        {
+          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+          focus: { path: "/blocks/0/children/2/text", offset: 1 },
+        },
+      ],
+      primaryIndex: 0,
+      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+      focus: { path: "/blocks/0/children/2/text", offset: 1 },
+    };
+
+    const command = deleteBackward(document, selection);
+
+    expectOk(command);
+    expect(command.patch).toEqual([
+      {
+        op: "replace",
+        path: "/blocks/0",
+        value: {
+          id: "block-1",
+          type: "paragraph",
+          children: [{ type: "text", text: "AD" }],
+        },
+      },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+  });
+
+  it("deletes selected ranges through block atoms without deleting the following paragraph", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB" }],
+      },
+      {
+        id: "figure-1",
+        type: "figure",
+        src: "/image.png",
+      },
+      {
+        id: "block-2",
+        type: "paragraph",
+        children: [{ type: "text", text: "CD" }],
+      },
+    ]);
+    const selection = {
+      selectedPointers: ["/blocks/1"],
+      selectionRanges: [
+        {
+          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+          focus: { path: "/blocks/2", edge: "before" as const },
+        },
+      ],
+      primaryIndex: 0,
+      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+      focus: { path: "/blocks/2", edge: "before" as const },
+    };
+
+    const command = deleteBackward(document, selection);
+
+    expectOk(command);
+    expect(command.patch).toEqual([
+      {
+        op: "replace",
+        path: "/blocks",
+        value: [
+          {
+            id: "block-1",
+            type: "paragraph",
+            children: [{ type: "text", text: "A" }],
+          },
+          {
+            id: "block-2",
+            type: "paragraph",
+            children: [{ type: "text", text: "CD" }],
+          },
+        ],
+      },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+  });
+
+  it("deletes inline mention atoms from before or after edges", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [
+          { type: "text", text: "A" },
+          { type: "mention", id: "user-1", label: "Ada" },
+          { type: "text", text: "B" },
+        ],
+      },
+    ]);
+
+    const backward = deleteBackward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/1",
+        edge: "after",
+      }),
+    );
+    const forward = deleteForward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/1",
+        edge: "before",
+      }),
+    );
+
+    expectOk(backward);
+    expectOk(forward);
+    expect(backward.patch).toEqual([
+      { op: "remove", path: "/blocks/0/children/1" },
+    ]);
+    expect(forward.patch).toEqual([
+      { op: "remove", path: "/blocks/0/children/1" },
+    ]);
+    expect(backward.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/1/text",
+      offset: 0,
+    });
+    expect(forward.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/1/text",
+      offset: 0,
+    });
+  });
+
+  it("deletes figure blocks as whole atoms", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "A" }],
+      },
+      {
+        id: "figure-1",
+        type: "figure",
+        src: "/image.png",
+      },
+      {
+        id: "block-2",
+        type: "paragraph",
+        children: [{ type: "text", text: "B" }],
+      },
+    ]);
+
+    const command = deleteForward(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/1", edge: "before" }),
+    );
+
+    expectOk(command);
+    expect(command.patch).toEqual([{ op: "remove", path: "/blocks/1" }]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/1/children/0/text",
+      offset: 0,
+    });
+  });
+
+  it("deletes selected figure blocks before applying key direction", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "A" }],
+      },
+      {
+        id: "figure-1",
+        type: "figure",
+        src: "/image.png",
+      },
+      {
+        id: "block-2",
+        type: "paragraph",
+        children: [{ type: "text", text: "B" }],
+      },
+    ]);
+
+    const backward = deleteBackward(document, atomSelection("/blocks/1"));
+    const forward = deleteForward(document, atomSelection("/blocks/1"));
+
+    expectOk(backward);
+    expectOk(forward);
+    expect(backward.patch).toEqual([{ op: "remove", path: "/blocks/1" }]);
+    expect(forward.patch).toEqual([{ op: "remove", path: "/blocks/1" }]);
+  });
+
+  it("normalizes empty text runs after deletion", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [
+          { type: "text", text: "A" },
+          { type: "mention", id: "user-1", label: "Ada" },
+        ],
+      },
+    ]);
+    const onlyTextDocument = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "A" }],
+      },
+    ]);
+
+    const removeRun = deleteBackward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 1,
+      }),
+    );
+    const keepEmptyAnchor = deleteBackward(
+      onlyTextDocument,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 1,
+      }),
+    );
+
+    expectOk(removeRun);
+    expectOk(keepEmptyAnchor);
+    expect(removeRun.patch).toEqual([
+      { op: "remove", path: "/blocks/0/children/0" },
+    ]);
+    expect(removeRun.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0",
+      edge: "before",
+    });
+    expect(keepEmptyAnchor.patch).toEqual([
+      { op: "replace", path: "/blocks/0/children/0/text", value: "" },
+    ]);
+    expect(keepEmptyAnchor.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 0,
+    });
+  });
+
+  it("splits a paragraph at a text cursor", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB" }],
+      },
+    ]);
+
+    const command = splitParagraph(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 1,
+      }),
+    );
+
+    expectOk(command);
+    expect(command.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/blocks/0",
+        value: {
+          type: "paragraph",
+          children: [{ type: "text", text: "A" }],
+        },
+      },
+      {
+        op: "add",
+        path: "/blocks/1",
+        value: {
+          type: "paragraph",
+          children: [{ type: "text", text: "B" }],
+        },
+      },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/1/children/0/text",
+      offset: 0,
+    });
+  });
+
+  it("splits an empty paragraph into two empty paragraphs", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "" }],
+      },
+    ]);
+
+    const command = splitParagraph(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 0,
+      }),
+    );
+
+    expectOk(command);
+    expect(command.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/blocks/0",
+        value: {
+          type: "paragraph",
+          children: [{ type: "text", text: "" }],
+        },
+      },
+      {
+        op: "add",
+        path: "/blocks/1",
+        value: {
+          type: "paragraph",
+          children: [{ type: "text", text: "" }],
+        },
+      },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/1/children/0/text",
+      offset: 0,
+    });
+  });
+
+  it("splits at the start of a selected inline range after deleting the selection", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [
+          { type: "text", text: "AB" },
+          { type: "mention", id: "user-1", label: "Ada" },
+          { type: "text", text: "CD" },
+        ],
+      },
+    ]);
+    const selection = {
+      selectedPointers: ["/blocks/0/children/1"],
+      selectionRanges: [
+        {
+          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+          focus: { path: "/blocks/0/children/2/text", offset: 1 },
+        },
+      ],
+      primaryIndex: 0,
+      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+      focus: { path: "/blocks/0/children/2/text", offset: 1 },
+    };
+
+    const command = splitParagraph(document, selection);
+
+    expectOk(command);
+    expect(command.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/blocks",
+        value: [
+          { type: "paragraph", children: [{ type: "text", text: "A" }] },
+          { type: "paragraph", children: [{ type: "text", text: "D" }] },
+        ],
+      },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/1/children/0/text",
+      offset: 0,
+    });
+  });
+
+  it("preserves marks when splitting a paragraph", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB", marks: [{ type: "bold" }] }],
+      },
+    ]);
+
+    const command = splitParagraph(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 1,
+      }),
+    );
+
+    expectOk(command);
+    expect(command.patch).toMatchObject([
+      {
+        value: {
+          children: [{ type: "text", text: "A", marks: [{ type: "bold" }] }],
+        },
+      },
+      {
+        value: {
+          children: [{ type: "text", text: "B", marks: [{ type: "bold" }] }],
+        },
+      },
+    ]);
+  });
+
+  it("splits before and after inline mention atoms on the expected side", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [
+          { type: "text", text: "A" },
+          { type: "mention", id: "user-1", label: "Ada" },
+          { type: "text", text: "B" },
+        ],
+      },
+    ]);
+
+    const beforeMention = splitParagraph(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/1",
+        edge: "before",
+      }),
+    );
+    const afterMention = splitParagraph(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/1",
+        edge: "after",
+      }),
+    );
+
+    expectOk(beforeMention);
+    expectOk(afterMention);
+    expect(beforeMention.patch).toMatchObject([
+      {
+        value: { children: [{ type: "text", text: "A" }] },
+      },
+      {
+        value: {
+          children: [
+            { type: "mention", id: "user-1", label: "Ada" },
+            { type: "text", text: "B" },
+          ],
+        },
+      },
+    ]);
+    expect(beforeMention.selectionAfter.focus).toMatchObject({
+      path: "/blocks/1/children/0",
+      edge: "before",
+    });
+    expect(afterMention.patch).toMatchObject([
+      {
+        value: {
+          children: [
+            { type: "text", text: "A" },
+            { type: "mention", id: "user-1", label: "Ada" },
+          ],
+        },
+      },
+      {
+        value: { children: [{ type: "text", text: "B" }] },
+      },
+    ]);
+    expect(afterMention.selectionAfter.focus).toMatchObject({
+      path: "/blocks/1/children/0/text",
+      offset: 0,
+    });
+  });
+
+  it("creates a paragraph before or after a figure on split", () => {
+    const document = documentWithBlocks([
+      {
+        id: "figure-1",
+        type: "figure",
+        src: "/image.png",
+      },
+    ]);
+
+    const before = splitParagraph(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/0", edge: "before" }),
+    );
+    const after = splitParagraph(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/0", edge: "after" }),
+    );
+
+    expectOk(before);
+    expectOk(after);
+    expect(before.patch).toMatchObject([
+      { op: "add", path: "/blocks/0", value: { type: "paragraph" } },
+    ]);
+    expect(after.patch).toMatchObject([
+      { op: "add", path: "/blocks/1", value: { type: "paragraph" } },
+    ]);
+  });
+
+  it("merges with the previous paragraph on Backspace at paragraph start", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "A" }],
+      },
+      {
+        id: "block-2",
+        type: "paragraph",
+        children: [{ type: "text", text: "B" }],
+      },
+    ]);
+
+    const command = deleteBackward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/1/children/0/text",
+        offset: 0,
+      }),
+    );
+
+    expectOk(command);
+    expect(command.patch).toEqual([
+      {
+        op: "replace",
+        path: "/blocks/0/children",
+        value: [{ type: "text", text: "AB" }],
+      },
+      { op: "remove", path: "/blocks/1" },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+  });
+
+  it("merges with the next paragraph on Delete at paragraph end", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "A" }],
+      },
+      {
+        id: "block-2",
+        type: "paragraph",
+        children: [{ type: "text", text: "B" }],
+      },
+    ]);
+
+    const command = deleteForward(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 1,
+      }),
+    );
+
+    expectOk(command);
+    expect(command.patch).toEqual([
+      {
+        op: "replace",
+        path: "/blocks/0/children",
+        value: [{ type: "text", text: "AB" }],
+      },
+      { op: "remove", path: "/blocks/1" },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+  });
+
+  it("commits split selectionAfter with the patch", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB" }],
+      },
+    ]);
+    const jsonDocument = createJSONDocument(NoteDocumentSchema, document, {
+      history: 10,
+      selection: true,
+      trustedInitial: true,
+    });
+    const selection = selectionFromCursorPoint({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+    jsonDocument.selection?.restore(selection);
+
+    const command = splitParagraph(jsonDocument.value, selection);
+    expectOk(command);
+    jsonDocument.commit(command.patch, {
+      selectionAfter: command.selectionAfter,
+    });
+
+    expect(jsonDocument.value.blocks).toHaveLength(2);
+    expect(jsonDocument.selection?.focus).toMatchObject({
+      path: "/blocks/1/children/0/text",
+      offset: 0,
+    });
+  });
+
+  it("inserts a mention inline atom inside a paragraph", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB" }],
+      },
+    ]);
+
+    const command = insertMention(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 1,
+      }),
+      { type: "mention", id: "user-1", label: "Ada" },
+    );
+
+    expectOk(command);
+    expect(command.patch).toEqual([
+      {
+        op: "replace",
+        path: "/blocks/0/children",
+        value: [
+          { type: "text", text: "A" },
+          { type: "mention", id: "user-1", label: "Ada" },
+          { type: "text", text: "B" },
+        ],
+      },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/1",
+      edge: "after",
+    });
+  });
+
+  it("replaces selected atoms with typed text", () => {
+    const inlineDocument = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "mention", id: "user-1", label: "Ada" }],
+      },
+    ]);
+    const figureDocument = documentWithBlocks([
+      {
+        id: "figure-1",
+        type: "figure",
+        src: "/image.png",
+      },
+    ]);
+
+    const inline = insertText(
+      inlineDocument,
+      atomSelection("/blocks/0/children/0"),
+      "x",
+    );
+    const figure = insertText(figureDocument, atomSelection("/blocks/0"), "y");
+
+    expectOk(inline);
+    expectOk(figure);
+    expect(inline.patch).toEqual([
+      {
+        op: "replace",
+        path: "/blocks/0/children/0",
+        value: { type: "text", text: "x" },
+      },
+    ]);
+    expect(inline.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+    expect(figure.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/blocks/0",
+        value: {
+          type: "paragraph",
+          children: [{ type: "text", text: "y" }],
+        },
+      },
+    ]);
+    expect(figure.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+  });
+
+  it("preserves marks around inserted inline atoms", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB", marks: [{ type: "bold" }] }],
+      },
+    ]);
+
+    const command = insertMention(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 1,
+      }),
+      { type: "mention", id: "user-1", label: "Ada" },
+    );
+
+    expectOk(command);
+    expect(command.patch).toEqual([
+      {
+        op: "replace",
+        path: "/blocks/0/children",
+        value: [
+          { type: "text", text: "A", marks: [{ type: "bold" }] },
+          { type: "mention", id: "user-1", label: "Ada" },
+          { type: "text", text: "B", marks: [{ type: "bold" }] },
+        ],
+      },
+    ]);
+  });
+
+  it("inserts a figure block between split paragraph sides", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB" }],
+      },
+    ]);
+
+    const command = insertFigure(
+      document,
+      selectionFromCursorPoint({
+        path: "/blocks/0/children/0/text",
+        offset: 1,
+      }),
+      { id: "figure-1", type: "figure", src: "/image.png" },
+    );
+
+    expectOk(command);
+    expect(command.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/blocks/0",
+        value: {
+          type: "paragraph",
+          children: [{ type: "text", text: "A" }],
+        },
+      },
+      {
+        op: "add",
+        path: "/blocks/1",
+        value: { id: "figure-1", type: "figure", src: "/image.png" },
+      },
+      {
+        op: "add",
+        path: "/blocks/2",
+        value: {
+          type: "paragraph",
+          children: [{ type: "text", text: "B" }],
+        },
+      },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/1",
+      edge: "after",
+    });
+  });
+
+  it("replaces a selected text range with a mention atom", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "ABCD" }],
+      },
+    ]);
+    const selection = {
+      selectedPointers: ["/blocks/0/children/0/text"],
+      selectionRanges: [
+        {
+          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+          focus: { path: "/blocks/0/children/0/text", offset: 3 },
+        },
+      ],
+      primaryIndex: 0,
+      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+      focus: { path: "/blocks/0/children/0/text", offset: 3 },
+    };
+
+    const command = insertMention(document, selection, {
+      type: "mention",
+      id: "user-1",
+      label: "Ada",
+    });
+
+    expectOk(command);
+    expect(command.patch).toEqual([
+      {
+        op: "replace",
+        path: "/blocks/0/children",
+        value: [
+          { type: "text", text: "A" },
+          { type: "mention", id: "user-1", label: "Ada" },
+          { type: "text", text: "D" },
+        ],
+      },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0/children/1",
+      edge: "after",
+    });
+  });
+
+  it("replaces a selected text range with a figure block", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "ABCD" }],
+      },
+    ]);
+    const selection = {
+      selectedPointers: ["/blocks/0/children/0/text"],
+      selectionRanges: [
+        {
+          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+          focus: { path: "/blocks/0/children/0/text", offset: 3 },
+        },
+      ],
+      primaryIndex: 0,
+      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
+      focus: { path: "/blocks/0/children/0/text", offset: 3 },
+    };
+
+    const command = insertFigure(document, selection, {
+      id: "figure-1",
+      type: "figure",
+      src: "/image.png",
+    });
+
+    expectOk(command);
+    expect(command.patch).toMatchObject([
+      {
+        value: {
+          type: "paragraph",
+          children: [{ type: "text", text: "A" }],
+        },
+      },
+      {
+        value: { id: "figure-1", type: "figure", src: "/image.png" },
+      },
+      {
+        value: {
+          type: "paragraph",
+          children: [{ type: "text", text: "D" }],
+        },
+      },
+    ]);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/blocks/1",
+      edge: "after",
+    });
+  });
+
+  it("inserts mention around figure edges by creating or targeting paragraphs", () => {
+    const document = documentWithBlocks([
+      {
+        id: "figure-1",
+        type: "figure",
+        src: "/image.png",
+      },
+    ]);
+
+    const before = insertMention(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/0", edge: "before" }),
+      { type: "mention", id: "user-1", label: "Ada" },
+    );
+    const after = insertMention(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/0", edge: "after" }),
+      { type: "mention", id: "user-2", label: "Grace" },
+    );
+
+    expectOk(before);
+    expectOk(after);
+    expect(before.patch).toMatchObject([
+      {
+        op: "add",
+        path: "/blocks/0",
+        value: {
+          type: "paragraph",
+          children: [{ type: "mention", id: "user-1", label: "Ada" }],
+        },
+      },
+    ]);
+    expect(after.patch).toMatchObject([
+      {
+        op: "add",
+        path: "/blocks/1",
+        value: {
+          type: "paragraph",
+          children: [{ type: "mention", id: "user-2", label: "Grace" }],
+        },
+      },
+    ]);
+  });
+
+  it("inserts a figure before or after an existing figure edge", () => {
+    const document = documentWithBlocks([
+      {
+        id: "figure-1",
+        type: "figure",
+        src: "/one.png",
+      },
+    ]);
+
+    const before = insertFigure(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/0", edge: "before" }),
+      { id: "figure-2", type: "figure", src: "/two.png" },
+    );
+    const after = insertFigure(
+      document,
+      selectionFromCursorPoint({ path: "/blocks/0", edge: "after" }),
+      { id: "figure-3", type: "figure", src: "/three.png" },
+    );
+
+    expectOk(before);
+    expectOk(after);
+    expect(before.patch).toEqual([
+      {
+        op: "add",
+        path: "/blocks/0",
+        value: { id: "figure-2", type: "figure", src: "/two.png" },
+      },
+    ]);
+    expect(before.selectionAfter.focus).toMatchObject({
+      path: "/blocks/0",
+      edge: "after",
+    });
+    expect(after.patch).toEqual([
+      {
+        op: "add",
+        path: "/blocks/1",
+        value: { id: "figure-3", type: "figure", src: "/three.png" },
+      },
+    ]);
+    expect(after.selectionAfter.focus).toMatchObject({
+      path: "/blocks/1",
+      edge: "after",
+    });
+  });
+
+  it("restores previous selection across atom insert undo and redo", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB" }],
+      },
+    ]);
+    const jsonDocument = createJSONDocument(NoteDocumentSchema, document, {
+      history: 10,
+      selection: true,
+      trustedInitial: true,
+    });
+    const selection = selectionFromCursorPoint({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+    jsonDocument.selection?.restore(selection);
+
+    const command = insertMention(jsonDocument.value, selection, {
+      type: "mention",
+      id: "user-1",
+      label: "Ada",
+    });
+    expectOk(command);
+    jsonDocument.commit(command.patch, {
+      selectionAfter: command.selectionAfter,
+    });
+
+    expect(jsonDocument.selection?.focus).toMatchObject({
+      path: "/blocks/0/children/1",
+      edge: "after",
+    });
+
+    jsonDocument.undo();
+
+    expect(jsonDocument.value.blocks[0]).toMatchObject({
+      type: "paragraph",
+      children: [{ type: "text", text: "AB" }],
+    });
+    expect(jsonDocument.selection?.focus).toMatchObject({
+      path: "/blocks/0/children/0/text",
+      offset: 1,
+    });
+
+    jsonDocument.redo();
+
+    expect(jsonDocument.selection?.focus).toMatchObject({
+      path: "/blocks/0/children/1",
+      edge: "after",
+    });
+  });
+});
