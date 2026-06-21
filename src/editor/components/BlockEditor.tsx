@@ -13,6 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { plainTextFromSelection } from "../model/clipboard";
 import { firstCursorPoint, normalizeCursorPoint } from "../model/cursor";
 import { selectionFromCursorPoint } from "../model/cursorCommands";
 import {
@@ -39,6 +40,7 @@ import {
   type EditingHostInputSession,
   setEditingHostSelection,
 } from "./editingHostInputSession";
+import { resolveEditorKeyBinding } from "./editorKeymap";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { useDebugInteractionRecorder } from "./useDebugInteractionRecorder";
 
@@ -241,24 +243,24 @@ export function BlockEditor() {
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.metaKey || event.ctrlKey) {
-        const key = event.key.toLowerCase();
-        if (key === "z") {
-          event.preventDefault();
-          flushEditingHostInput();
-          if (event.shiftKey) {
-            document.redo();
-          } else {
-            document.undo();
-          }
-          return;
-        }
-        if (key === "y") {
-          event.preventDefault();
-          flushEditingHostInput();
+      const keyBinding = resolveEditorKeyBinding({
+        key: event.key,
+        shiftKey: event.shiftKey,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        isComposing: event.nativeEvent.isComposing,
+      });
+
+      if (keyBinding?.kind === "history") {
+        event.preventDefault();
+        flushEditingHostInput();
+        if (keyBinding.direction === "undo") {
+          document.undo();
+        } else {
           document.redo();
-          return;
         }
+        return;
       }
 
       if (event.nativeEvent.isComposing) {
@@ -266,6 +268,10 @@ export function BlockEditor() {
       }
       if (editingHostInput.shouldIgnoreKeyDown()) {
         event.preventDefault();
+        return;
+      }
+
+      if (keyBinding?.kind === "clipboard") {
         return;
       }
 
@@ -395,6 +401,39 @@ export function BlockEditor() {
     [flushEditingHostInput, runInput],
   );
 
+  const handleCopy = useCallback(
+    (event: ClipboardEvent<HTMLDivElement>) => {
+      flushEditingHostInput();
+      const text = plainTextFromSelection(document.value, selectionSnapshot());
+      if (text.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      event.clipboardData.setData("text/plain", text);
+    },
+    [document.value, flushEditingHostInput, selectionSnapshot],
+  );
+
+  const handleCut = useCallback(
+    (event: ClipboardEvent<HTMLDivElement>) => {
+      flushEditingHostInput();
+      const text = plainTextFromSelection(document.value, selectionSnapshot());
+      if (text.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      event.clipboardData.setData("text/plain", text);
+      runInput({
+        type: "beforeinput",
+        inputType: "deleteByCut",
+        isComposing: false,
+      });
+    },
+    [document.value, flushEditingHostInput, runInput, selectionSnapshot],
+  );
+
   const handleInsertMention = useCallback(() => {
     flushEditingHostInput();
     mentionCountRef.current += 1;
@@ -500,6 +539,8 @@ export function BlockEditor() {
             onBlur={handleBlur}
             onCompositionStart={handleCompositionStart}
             onCompositionEnd={handleCompositionEnd}
+            onCopy={handleCopy}
+            onCut={handleCut}
             onFocus={handleFocus}
             onInput={handleInput}
             onKeyDown={handleKeyDown}

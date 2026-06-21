@@ -69,6 +69,67 @@ describe("BlockEditor", () => {
     expect(editor.textContent).toContain("xPlain");
   });
 
+  it("copies selected document text without mutating the document", () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+    const clipboardData = createClipboardData();
+
+    selectFirstTextCharacter(editor);
+    fireEvent.copy(editor, { clipboardData });
+
+    expect(clipboardData.setData).toHaveBeenCalledWith("text/plain", "P");
+    expect(editor.textContent).toContain("Plain");
+  });
+
+  it("cuts selected document text through the deleteByCut command path", () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+    const clipboardData = createClipboardData();
+
+    selectFirstTextCharacter(editor);
+    fireEvent.cut(editor, { clipboardData });
+
+    expect(clipboardData.setData).toHaveBeenCalledWith("text/plain", "P");
+    expect(editor.textContent).toContain("lain bold");
+    expect(editor.textContent).not.toContain("Plain bold");
+  });
+
+  it("routes undo and redo command shortcuts through the keymap", () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    fireEvent.paste(editor, {
+      clipboardData: {
+        getData: () => "keymap ",
+      },
+    });
+    expect(editor.textContent).toContain("keymap Plain");
+
+    fireEvent.keyDown(editor, { key: "z", metaKey: true });
+    expect(editor.textContent).not.toContain("keymap Plain");
+
+    fireEvent.keyDown(editor, { key: "z", metaKey: true, shiftKey: true });
+    expect(editor.textContent).toContain("keymap Plain");
+  });
+
+  it("does not run keymap history while composition is active", () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    fireEvent.paste(editor, {
+      clipboardData: {
+        getData: () => "keymap ",
+      },
+    });
+    fireEvent.keyDown(editor, {
+      key: "z",
+      metaKey: true,
+      isComposing: true,
+    });
+
+    expect(editor.textContent).toContain("keymap Plain");
+  });
+
   it("records input, JSON, and DOM between Cmd+Shift+Backslash toggles", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
@@ -959,6 +1020,18 @@ function setDOMSelection(node: ChildNode, offset: number) {
   range.collapse(true);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function selectFirstTextCharacter(element: Element) {
+  fireEvent.keyDown(element, { key: "ArrowRight" });
+  fireEvent.keyDown(element, { key: "ArrowRight", shiftKey: true });
+}
+
+function createClipboardData() {
+  return {
+    getData: vi.fn(() => ""),
+    setData: vi.fn(),
+  };
 }
 
 function fireBeforeInput(
