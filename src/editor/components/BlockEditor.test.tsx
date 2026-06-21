@@ -24,6 +24,7 @@ describe("BlockEditor", () => {
     const editor = screen.getByRole("textbox", { name: "Document body" });
     const selection = document.getSelection();
 
+    expect(editor.getAttribute("contenteditable")).toBe("plaintext-only");
     expect(
       editor
         .querySelector(".document-view")
@@ -121,12 +122,12 @@ describe("BlockEditor", () => {
     expect(report).not.toContain('<main class="app-shell">');
   });
 
-  it("commits printable keydown through headless input when selection is open", () => {
+  it("commits text beforeinput through headless input when selection is open", () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
 
     fireEvent.keyDown(editor, { key: "ArrowRight", shiftKey: true });
-    fireEvent.keyDown(editor, { key: "x" });
+    fireBeforeInput(editor, { inputType: "insertText", data: "x" });
 
     expect(editor.textContent).toContain("xPlain");
     expect(
@@ -145,6 +146,25 @@ describe("BlockEditor", () => {
 
     expect(editor.textContent).toContain("Plain");
     expect(editor.textContent).not.toContain("ㅇPlain");
+  });
+
+  it("does not mutate text from editing keydown without beforeinput", () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+    const beforeText = editor.querySelector(".document-view")?.textContent;
+    const beforeBlockCount = editor.querySelectorAll(".paragraph-block").length;
+
+    fireEvent.keyDown(editor, { key: "x" });
+    fireEvent.keyDown(editor, { key: "Enter" });
+    fireEvent.keyDown(editor, { key: "Backspace" });
+    fireEvent.keyDown(editor, { key: "Delete" });
+
+    expect(editor.querySelector(".document-view")?.textContent).toBe(
+      beforeText,
+    );
+    expect(editor.querySelectorAll(".paragraph-block")).toHaveLength(
+      beforeBlockCount,
+    );
   });
 
   it("commits paste through headless input when selection is open", () => {
@@ -170,8 +190,8 @@ describe("BlockEditor", () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
 
-    fireEvent.keyDown(editor, { key: "Enter" });
-    fireEvent.keyDown(editor, { key: "Enter" });
+    fireBeforeInput(editor, { inputType: "insertParagraph" });
+    fireBeforeInput(editor, { inputType: "insertParagraph" });
 
     expect(editor.querySelectorAll(".paragraph-block")).toHaveLength(4);
     expect(
@@ -194,7 +214,7 @@ describe("BlockEditor", () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
 
-    fireEvent.keyDown(editor, { key: "Enter" });
+    fireBeforeInput(editor, { inputType: "insertParagraph" });
 
     expect(
       consoleError.mock.calls.some((call) =>
@@ -525,11 +545,11 @@ describe("BlockEditor", () => {
     ).toBe("/root/children/1");
   });
 
-  it("maps Alt/Option+Backspace and Delete through word deletion", () => {
+  it("maps browser word deletion beforeinput variants", () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
 
-    fireEvent.keyDown(editor, { key: "Delete", altKey: true });
+    fireBeforeInput(editor, { inputType: "deleteWordForward" });
 
     expect(editor.querySelector(".document-view")?.textContent).not.toContain(
       "Plain",
@@ -546,7 +566,7 @@ describe("BlockEditor", () => {
     ).toBe("0");
 
     fireEvent.keyDown(editor, { key: "ArrowRight", altKey: true });
-    fireEvent.keyDown(editor, { key: "Backspace", altKey: true });
+    fireBeforeInput(editor, { inputType: "deleteWordBackward" });
 
     expect(editor.querySelector(".document-view")?.textContent).not.toContain(
       "bold",
@@ -690,7 +710,7 @@ describe("BlockEditor", () => {
         ?.getAttribute("data-selection-selected-pointers"),
     ).toBe("/root/children/0/children/9 /root/children/1");
 
-    fireEvent.keyDown(editor, { key: "x" });
+    fireBeforeInput(editor, { inputType: "insertText", data: "x" });
 
     expect(editor.querySelector(".document-view")?.textContent).toBe("x");
     expect(
@@ -939,4 +959,27 @@ function setDOMSelection(node: ChildNode, offset: number) {
   range.collapse(true);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function fireBeforeInput(
+  element: Element,
+  init: {
+    inputType: string;
+    data?: string | null;
+    isComposing?: boolean;
+  },
+) {
+  const event = new InputEvent("beforeinput", {
+    bubbles: true,
+    cancelable: true,
+    data: init.data ?? null,
+    inputType: init.inputType,
+    isComposing: init.isComposing === true,
+  });
+
+  act(() => {
+    element.dispatchEvent(event);
+  });
+
+  return event;
 }

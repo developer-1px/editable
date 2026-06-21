@@ -12,12 +12,12 @@ import {
 } from "../model/noteDocument";
 import { selectionIsCollapsed } from "../model/richSelection";
 
-export type NativeTextPoint = {
+export type EditingHostTextPoint = {
   path: string;
   offset: number;
 };
 
-export type NativeTextFlushResult =
+export type EditingHostFlushResult =
   | {
       ok: false;
     }
@@ -33,80 +33,157 @@ export type NativeTextFlushResult =
       selectionAfter: SelectionSnap;
     };
 
-export type NativeTextBuffer = ReturnType<typeof createNativeTextBuffer>;
+export type EditingHostBeforeInput = {
+  inputType: string;
+  data?: string | null;
+  isComposing?: boolean;
+  targetRanges?: readonly StaticRange[];
+};
 
-export function createNativeTextBuffer() {
+export type EditingHostBeforeInputDecision =
+  | { kind: "history"; direction: "undo" | "redo" }
+  | { kind: "commitComposition" }
+  | { kind: "deferToEditingHost" }
+  | { kind: "runHeadless" };
+
+export type EditingHostInputSession = ReturnType<
+  typeof createEditingHostInputSession
+>;
+
+type EditingHostInputPhase = "idle" | "native" | "composing" | "awaitingCommit";
+
+export function createEditingHostInputSession() {
   let activePath: string | null = null;
-  let pendingCompositionCommit = false;
+  let phase: EditingHostInputPhase = "idle";
+  let lastCompositionText: string | null = null;
+  let finalCompositionCommitText: string | null = null;
+
+  const begin = (point: EditingHostTextPoint) => {
+    activePath = point.path;
+    if (phase === "idle") {
+      phase = "native";
+    }
+  };
+
+  const consumeCompositionCommit = (
+    inputType: string,
+    data?: string | null,
+  ) => {
+    if (phase !== "awaitingCommit" || !isCompositionCommitInput(inputType)) {
+      return false;
+    }
+
+    finalCompositionCommitText = data ?? null;
+    phase = activePath === null ? "idle" : "native";
+    return true;
+  };
+
+  const pointForInput = (
+    root: HTMLElement | null,
+    document: NoteDocument,
+    selection: SelectionSnap,
+    inputType: string,
+  ): EditingHostTextPoint | null => {
+    if (root === null || !isEditingHostTextMutationInputType(inputType)) {
+      return null;
+    }
+
+    const domPoint = textPointFromDOMSelection(root);
+    if (
+      !selectionIsCollapsed(selection) &&
+      !canUseEditingHostCompositionPoint(inputType, domPoint)
+    ) {
+      return null;
+    }
+    if (
+      selectionHasActiveTextMarks(selection) &&
+      isEditingHostTextInsertionInputType(inputType)
+    ) {
+      return null;
+    }
+
+    const point = domPoint ?? textPointFromSelection(document, selection);
+    if (point === null) {
+      return null;
+    }
+    if (activePath !== null && point.path !== activePath) {
+      return null;
+    }
+
+    const textLength =
+      findElementByDataPath(root, point.path)?.textContent?.length ??
+      readDocumentText(document, point.path).length;
+
+    if (inputType === "deleteContentBackward" && point.offset <= 0) {
+      return null;
+    }
+    if (inputType === "deleteContentForward" && point.offset >= textLength) {
+      return null;
+    }
+
+    return point;
+  };
 
   return {
     hasActiveEdit() {
-      return activePath !== null;
+      return activePath !== null || phase !== "idle";
     },
-    begin(point: NativeTextPoint) {
-      activePath = point.path;
-    },
-    markCompositionEnd() {
-      pendingCompositionCommit = activePath !== null;
-    },
-    clearCompositionCommit() {
-      pendingCompositionCommit = false;
-    },
-    consumeCompositionCommit(inputType: string) {
-      if (!pendingCompositionCommit || !isCompositionCommitInput(inputType)) {
-        return false;
-      }
-
-      pendingCompositionCommit = false;
-      return true;
-    },
-    pointForInput(
+    beginComposition(
       root: HTMLElement | null,
       document: NoteDocument,
       selection: SelectionSnap,
-      inputType: string,
-    ): NativeTextPoint | null {
-      if (root === null || !isNativeTextInputType(inputType)) {
-        return null;
+    ) {
+      phase = "composing";
+      const point =
+        root === null
+          ? null
+          : (textPointFromDOMSelection(root) ??
+            textPointFromSelection(document, selection));
+      if (point !== null) {
+        activePath = point.path;
+        lastCompositionText = readRootText(root, point.path);
       }
-
-      const nativePoint = textPointFromNativeSelection(root);
-      if (
-        !selectionIsCollapsed(selection) &&
-        !canUseNativeCompositionPoint(inputType, nativePoint)
-      ) {
-        return null;
-      }
-      if (
-        selectionHasActiveTextMarks(selection) &&
-        isNativeTextInsertionType(inputType)
-      ) {
-        return null;
-      }
-
-      const point = nativePoint ?? textPointFromSelection(document, selection);
-      if (point === null) {
-        return null;
-      }
-      if (activePath !== null && point.path !== activePath) {
-        return null;
-      }
-
-      const textLength =
-        findElementByDataPath(root, point.path)?.textContent?.length ??
-        readDocumentText(document, point.path).length;
-
-      if (inputType === "deleteContentBackward" && point.offset <= 0) {
-        return null;
-      }
-      if (inputType === "deleteContentForward" && point.offset >= textLength) {
-        return null;
-      }
-
-      return point;
     },
-    trackInput(root: HTMLElement | null): NativeTextPoint | null {
-      const point = root === null ? null : textPointFromNativeSelection(root);
+    planBeforeInput(
+      root: HTMLElement | null,
+      document: NoteDocument,
+      selection: SelectionSnap,
+      input: EditingHostBeforeInput,
+    ): EditingHostBeforeInputDecision {
+      if (input.inputType === "historyUndo") {
+        return { kind: "history", direction: "undo" };
+      }
+      if (input.inputType === "historyRedo") {
+        return { kind: "history", direction: "redo" };
+      }
+
+      if (consumeCompositionCommit(input.inputType, input.data)) {
+        return { kind: "commitComposition" };
+      }
+
+      const point = pointForInput(root, document, selection, input.inputType);
+      if (point !== null) {
+        begin(point);
+        return { kind: "deferToEditingHost" };
+      }
+
+      return { kind: "runHeadless" };
+    },
+    shouldIgnoreKeyDown() {
+      return phase === "composing" || phase === "awaitingCommit";
+    },
+    endComposition() {
+      if (phase === "composing" || activePath !== null) {
+        phase = "awaitingCommit";
+      }
+    },
+    clearCompositionCommit() {
+      if (phase === "awaitingCommit") {
+        phase = activePath === null ? "idle" : "native";
+      }
+    },
+    trackInput(root: HTMLElement | null): EditingHostTextPoint | null {
+      const point = root === null ? null : textPointFromDOMSelection(root);
       if (point === null) {
         return null;
       }
@@ -115,14 +192,21 @@ export function createNativeTextBuffer() {
       }
 
       activePath = point.path;
+      if (phase === "idle") {
+        phase = "native";
+      }
+      if (phase === "composing") {
+        lastCompositionText = readRootText(root, point.path);
+      }
       return point;
     },
     flush(
       root: HTMLElement | null,
       document: NoteDocument,
-    ): NativeTextFlushResult {
+    ): EditingHostFlushResult {
       const path = activePath;
       activePath = null;
+      phase = "idle";
 
       if (path === null || root === null) {
         return { ok: false };
@@ -133,11 +217,24 @@ export function createNativeTextBuffer() {
         return { ok: false };
       }
 
-      const nextText = textElement.textContent ?? "";
+      const rawNextText = textElement.textContent ?? "";
       const currentText = readDocumentText(document, path);
-      const domPoint = textPointFromNativeSelection(root);
-      const offset =
-        domPoint?.path === path ? domPoint.offset : nextText.length;
+      const domPoint = textPointFromDOMSelection(root);
+      const rawOffset =
+        domPoint?.path === path ? domPoint.offset : rawNextText.length;
+      const normalized = normalizeCompositionCommitText(
+        rawNextText,
+        rawOffset,
+        lastCompositionText,
+        finalCompositionCommitText,
+      );
+      const nextText = normalized.text;
+      const offset = normalized.offset;
+      lastCompositionText = null;
+      finalCompositionCommitText = null;
+      if (nextText !== rawNextText) {
+        textElement.textContent = nextText;
+      }
       const selectionAfter = selectionFromCursorPoint({
         path,
         offset: clamp(offset, 0, nextText.length),
@@ -157,14 +254,17 @@ export function createNativeTextBuffer() {
   };
 }
 
-export function setNativeSelection(
+export function setEditingHostSelection(
   root: HTMLElement,
   document: NoteDocument,
   point: CursorPoint,
 ) {
-  const nativeTextPoint = nativeTextPointFromCursorPoint(document, point);
-  const nativePoint = nativeTextPoint ?? point;
-  const element = findElementByDataPath(root, nativePoint.path);
+  const editingHostTextPoint = editingHostTextPointFromCursorPoint(
+    document,
+    point,
+  );
+  const editingHostPoint = editingHostTextPoint ?? point;
+  const element = findElementByDataPath(root, editingHostPoint.path);
   if (element === null) {
     return;
   }
@@ -175,13 +275,13 @@ export function setNativeSelection(
   }
 
   const range = root.ownerDocument.createRange();
-  if (nativePoint.offset !== undefined) {
-    const position = textPositionForOffset(element, nativePoint.offset);
+  if (editingHostPoint.offset !== undefined) {
+    const position = textPositionForOffset(element, editingHostPoint.offset);
     if (position === null) {
       return;
     }
     range.setStart(position.node, position.offset);
-  } else if (nativePoint.edge === "before") {
+  } else if (editingHostPoint.edge === "before") {
     range.setStartBefore(element);
   } else {
     range.setStartAfter(element);
@@ -192,7 +292,7 @@ export function setNativeSelection(
   selection.addRange(range);
 }
 
-function isNativeTextInputType(inputType: string): boolean {
+function isEditingHostTextMutationInputType(inputType: string): boolean {
   return (
     inputType === "insertText" ||
     inputType === "insertReplacementText" ||
@@ -203,7 +303,7 @@ function isNativeTextInputType(inputType: string): boolean {
   );
 }
 
-function isNativeTextInsertionType(inputType: string): boolean {
+function isEditingHostTextInsertionInputType(inputType: string): boolean {
   return inputType === "insertText" || inputType === "insertReplacementText";
 }
 
@@ -211,17 +311,65 @@ function isCompositionCommitInput(inputType: string): boolean {
   return inputType === "insertText" || inputType === "insertFromComposition";
 }
 
-function canUseNativeCompositionPoint(
+function canUseEditingHostCompositionPoint(
   inputType: string,
-  point: NativeTextPoint | null,
+  point: EditingHostTextPoint | null,
 ): boolean {
   return inputType === "insertCompositionText" && point !== null;
+}
+
+function normalizeCompositionCommitText(
+  text: string,
+  offset: number,
+  lastComposedText: string | null,
+  finalCommitText: string | null,
+): { text: string; offset: number } {
+  if (
+    lastComposedText === null ||
+    finalCommitText === null ||
+    finalCommitText.length === 0 ||
+    text === lastComposedText
+  ) {
+    return { text, offset };
+  }
+
+  for (
+    let index = 0;
+    index <= text.length - finalCommitText.length;
+    index += 1
+  ) {
+    if (text.slice(index, index + finalCommitText.length) !== finalCommitText) {
+      continue;
+    }
+
+    const withoutCommit =
+      text.slice(0, index) + text.slice(index + finalCommitText.length);
+    if (withoutCommit !== lastComposedText) {
+      continue;
+    }
+
+    return {
+      text: lastComposedText,
+      offset:
+        offset > index
+          ? Math.max(index, offset - finalCommitText.length)
+          : offset,
+    };
+  }
+
+  return { text, offset };
+}
+
+function readRootText(root: ParentNode | null, path: string): string | null {
+  return root === null
+    ? null
+    : (findElementByDataPath(root, path)?.textContent ?? null);
 }
 
 function textPointFromSelection(
   document: NoteDocument,
   selection: SelectionSnap,
-): NativeTextPoint | null {
+): EditingHostTextPoint | null {
   const point = selection.focus;
   if (point === null || typeof point === "string") {
     return null;
@@ -231,15 +379,15 @@ function textPointFromSelection(
     return { path: point.path, offset: point.offset };
   }
 
-  return nativeTextPointFromCursorPoint(document, {
+  return editingHostTextPointFromCursorPoint(document, {
     path: point.path,
     edge: point.edge === "after" ? "after" : "before",
   });
 }
 
-function textPointFromNativeSelection(
+function textPointFromDOMSelection(
   root: HTMLElement,
-): NativeTextPoint | null {
+): EditingHostTextPoint | null {
   const selection = root.ownerDocument.getSelection();
   if (
     selection === null ||
@@ -277,10 +425,10 @@ function closestTextRun(node: Node): Element | null {
   return element?.closest(".text-run[data-path]") ?? null;
 }
 
-function nativeTextPointFromCursorPoint(
+function editingHostTextPointFromCursorPoint(
   document: NoteDocument,
   point: CursorPoint,
-): NativeTextPoint | null {
+): EditingHostTextPoint | null {
   if (point.offset !== undefined) {
     return { path: point.path, offset: point.offset };
   }

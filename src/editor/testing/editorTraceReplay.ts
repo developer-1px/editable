@@ -67,7 +67,7 @@ export async function replayEditorTrace(
 
   for (const step of trace.steps) {
     if (step.kind === "event") {
-      await act(async () => {
+      act(() => {
         const event = createTraceEvent(root, step.event);
         root.dispatchEvent(event);
         events.push({

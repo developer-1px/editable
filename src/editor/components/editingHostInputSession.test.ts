@@ -10,7 +10,10 @@ import {
   type NoteBlockInput,
   type NoteDocument,
 } from "../model/noteDocument";
-import { createNativeTextBuffer, setNativeSelection } from "./nativeTextBuffer";
+import {
+  createEditingHostInputSession,
+  setEditingHostSelection,
+} from "./editingHostInputSession";
 
 const firstTextPath = "/root/children/0/children/0/text";
 const secondTextPath = "/root/children/1/children/0/text";
@@ -69,8 +72,8 @@ function setDOMSelection(element: HTMLElement, offset: number) {
   document.getSelection()?.addRange(range);
 }
 
-describe("createNativeTextBuffer", () => {
-  it("allows native input only inside the active text leaf", () => {
+describe("createEditingHostInputSession", () => {
+  it("allows browser editing only inside the active text leaf", () => {
     const note = documentWithBlocks([
       {
         id: "block-1",
@@ -84,32 +87,28 @@ describe("createNativeTextBuffer", () => {
       },
     ]);
     const { root, first, second } = setupTextRoot();
-    const buffer = createNativeTextBuffer();
+    const session = createEditingHostInputSession();
 
     setDOMSelection(first, 2);
-    const point = buffer.pointForInput(
-      root,
-      note,
-      selectionFromCursorPoint({ path: firstTextPath, offset: 2 }),
-      "insertText",
-    );
-
-    expect(point).toEqual({ path: firstTextPath, offset: 2 });
-    if (point === null) {
-      throw new Error("Expected native point.");
-    }
-    buffer.begin(point);
+    expect(
+      session.planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({ path: firstTextPath, offset: 2 }),
+        { inputType: "insertText" },
+      ),
+    ).toEqual({ kind: "deferToEditingHost" });
 
     setDOMSelection(second, 1);
 
     expect(
-      buffer.pointForInput(
+      session.planBeforeInput(
         root,
         note,
         selectionFromCursorPoint({ path: firstTextPath, offset: 2 }),
-        "insertText",
+        { inputType: "insertText" },
       ),
-    ).toBeNull();
+    ).toEqual({ kind: "runHeadless" });
   });
 
   it("allows replacement text input inside a collapsed text leaf", () => {
@@ -125,13 +124,13 @@ describe("createNativeTextBuffer", () => {
     setDOMSelection(first, 2);
 
     expect(
-      createNativeTextBuffer().pointForInput(
+      createEditingHostInputSession().planBeforeInput(
         root,
         note,
         selectionFromCursorPoint({ path: firstTextPath, offset: 2 }),
-        "insertReplacementText",
+        { inputType: "insertReplacementText" },
       ),
-    ).toEqual({ path: firstTextPath, offset: 2 });
+    ).toEqual({ kind: "deferToEditingHost" });
   });
 
   it("allows composition text input from the native caret even if model selection is open", () => {
@@ -147,7 +146,7 @@ describe("createNativeTextBuffer", () => {
     setDOMSelection(first, 2);
 
     expect(
-      createNativeTextBuffer().pointForInput(
+      createEditingHostInputSession().planBeforeInput(
         root,
         note,
         selectionFromCursorRange(
@@ -155,9 +154,9 @@ describe("createNativeTextBuffer", () => {
           { path: firstTextPath, offset: 1 },
           { path: firstTextPath, offset: 3 },
         ),
-        "insertCompositionText",
+        { inputType: "insertCompositionText", isComposing: true },
       ),
-    ).toEqual({ path: firstTextPath, offset: 2 });
+    ).toEqual({ kind: "deferToEditingHost" });
   });
 
   it("does not hand active-mark text insertion to native DOM editing", () => {
@@ -173,16 +172,16 @@ describe("createNativeTextBuffer", () => {
     setDOMSelection(first, 2);
 
     expect(
-      createNativeTextBuffer().pointForInput(
+      createEditingHostInputSession().planBeforeInput(
         root,
         note,
         selectionFromCursorPoint(
           { path: firstTextPath, offset: 2 },
           { activeMarks: [{ type: "bold" }] },
         ),
-        "insertText",
+        { inputType: "insertText" },
       ),
-    ).toBeNull();
+    ).toEqual({ kind: "runHeadless" });
   });
 
   it("flushes native text mutations into one replace patch", () => {
@@ -194,14 +193,21 @@ describe("createNativeTextBuffer", () => {
       },
     ]);
     const { root, first } = setupTextRoot();
-    const buffer = createNativeTextBuffer();
-    const point = { path: firstTextPath, offset: 5 };
+    const session = createEditingHostInputSession();
 
-    buffer.begin(point);
+    setDOMSelection(first, 5);
+    expect(
+      session.planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({ path: firstTextPath, offset: 5 }),
+        { inputType: "insertText" },
+      ),
+    ).toEqual({ kind: "deferToEditingHost" });
     first.textContent = "Alpha!";
     setDOMSelection(first, 6);
 
-    const result = buffer.flush(root, note);
+    const result = session.flush(root, note);
 
     expect(result.ok).toBe(true);
     if (!result.ok || !result.changed) {
@@ -214,22 +220,87 @@ describe("createNativeTextBuffer", () => {
       path: firstTextPath,
       offset: 6,
     });
-    expect(buffer.hasActiveEdit()).toBe(false);
+    expect(session.hasActiveEdit()).toBe(false);
   });
 
   it("consumes the final composition commit once after composition ends", () => {
-    const buffer = createNativeTextBuffer();
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "Alpha" }],
+      },
+    ]);
+    const { root, first } = setupTextRoot();
+    const session = createEditingHostInputSession();
 
-    expect(buffer.consumeCompositionCommit("insertText")).toBe(false);
+    setDOMSelection(first, 0);
+    expect(
+      session.planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({ path: firstTextPath, offset: 0 }),
+        { inputType: "insertText", data: "A" },
+      ),
+    ).toEqual({ kind: "deferToEditingHost" });
 
-    buffer.begin({ path: firstTextPath, offset: 0 });
-    buffer.markCompositionEnd();
+    session.endComposition();
 
-    expect(buffer.consumeCompositionCommit("insertText")).toBe(true);
-    expect(buffer.consumeCompositionCommit("insertText")).toBe(false);
+    expect(
+      session.planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({ path: firstTextPath, offset: 0 }),
+        { inputType: "insertText", data: "한" },
+      ),
+    ).toEqual({ kind: "commitComposition" });
+    expect(
+      session.planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({ path: firstTextPath, offset: 0 }),
+        { inputType: "insertText", data: "한" },
+      ),
+    ).toEqual({ kind: "deferToEditingHost" });
 
-    buffer.markCompositionEnd();
-    expect(buffer.consumeCompositionCommit("insertFromComposition")).toBe(true);
+    session.endComposition();
+    expect(
+      session.planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({ path: firstTextPath, offset: 0 }),
+        { inputType: "insertFromComposition", data: "한" },
+      ),
+    ).toEqual({ kind: "commitComposition" });
+  });
+
+  it("maps browser history inputTypes to editor history decisions", () => {
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "Alpha" }],
+      },
+    ]);
+    const { root } = setupTextRoot();
+    const session = createEditingHostInputSession();
+
+    expect(
+      session.planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({ path: firstTextPath, offset: 0 }),
+        { inputType: "historyUndo" },
+      ),
+    ).toEqual({ kind: "history", direction: "undo" });
+    expect(
+      session.planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({ path: firstTextPath, offset: 0 }),
+        { inputType: "historyRedo" },
+      ),
+    ).toEqual({ kind: "history", direction: "redo" });
   });
 
   it("maps code block edges to the backing text leaf", () => {
@@ -249,14 +320,14 @@ describe("createNativeTextBuffer", () => {
     ].join("");
     document.body.append(root);
 
-    const point = createNativeTextBuffer().pointForInput(
-      root,
-      note,
-      selectionFromCursorPoint({ path: "/root/children/0", edge: "after" }),
-      "insertText",
-    );
-
-    expect(point).toEqual({ path: "/root/children/0/text", offset: 3 });
+    expect(
+      createEditingHostInputSession().planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({ path: "/root/children/0", edge: "after" }),
+        { inputType: "insertText" },
+      ),
+    ).toEqual({ kind: "deferToEditingHost" });
   });
 
   it("places the native caret inside an empty text run", () => {
@@ -275,7 +346,7 @@ describe("createNativeTextBuffer", () => {
     ].join("");
     document.body.append(root);
 
-    setNativeSelection(root, note, { path: firstTextPath, offset: 0 });
+    setEditingHostSelection(root, note, { path: firstTextPath, offset: 0 });
 
     const selection = document.getSelection();
     expect(selection?.focusNode).toBeInstanceOf(Text);

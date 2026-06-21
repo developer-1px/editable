@@ -1061,7 +1061,7 @@ describe("translateEditorInput", () => {
     });
   });
 
-  it("translates Backspace, Delete, and Enter to edit commands", () => {
+  it("translates browser character deletion and paragraph insertion beforeinput", () => {
     const document = documentWithText("AB");
     const selection = selectionFromCursorPoint({
       path: "/root/children/0/children/0/text",
@@ -1069,16 +1069,16 @@ describe("translateEditorInput", () => {
     });
 
     const backspace = translateEditorInput(document, selection, {
-      type: "keydown",
-      key: "Backspace",
+      type: "beforeinput",
+      inputType: "deleteContentBackward",
     });
     const deleteKey = translateEditorInput(document, selection, {
-      type: "keydown",
-      key: "Delete",
+      type: "beforeinput",
+      inputType: "deleteContentForward",
     });
     const enter = translateEditorInput(document, selection, {
-      type: "keydown",
-      key: "Enter",
+      type: "beforeinput",
+      inputType: "insertParagraph",
     });
 
     expectHandled(backspace);
@@ -1096,7 +1096,7 @@ describe("translateEditorInput", () => {
     ]);
   });
 
-  it("translates Alt/Option+Backspace and Delete to word delete commands", () => {
+  it("translates browser word deletion beforeinput to word delete commands", () => {
     const document = documentWithBlocks([
       {
         id: "block-1",
@@ -1121,19 +1121,16 @@ describe("translateEditorInput", () => {
     });
 
     const backward = translateEditorInput(document, textEnd, {
-      type: "keydown",
-      key: "Backspace",
-      altKey: true,
+      type: "beforeinput",
+      inputType: "deleteWordBackward",
     });
     const forward = translateEditorInput(document, textStart, {
-      type: "keydown",
-      key: "Delete",
-      altKey: true,
+      type: "beforeinput",
+      inputType: "deleteWordForward",
     });
     const atom = translateEditorInput(document, beforeMention, {
-      type: "keydown",
-      key: "Delete",
-      altKey: true,
+      type: "beforeinput",
+      inputType: "deleteWordForward",
     });
 
     expectHandled(backward);
@@ -1229,8 +1226,8 @@ describe("translateEditorInput", () => {
     );
 
     const result = translateEditorInput(document, selection, {
-      type: "keydown",
-      key: "Delete",
+      type: "beforeinput",
+      inputType: "deleteContentForward",
     });
 
     expectHandled(result);
@@ -1269,8 +1266,8 @@ describe("translateEditorInput", () => {
     );
 
     const result = translateEditorInput(document, selection, {
-      type: "keydown",
-      key: "Enter",
+      type: "beforeinput",
+      inputType: "insertParagraph",
     });
 
     expectHandled(result);

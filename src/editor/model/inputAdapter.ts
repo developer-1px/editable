@@ -272,22 +272,6 @@ function translateKeyDown(
       moveEnd(document, selection, { extend: shiftKey }).selectionAfter,
     );
   }
-  if (!commandKey && altKey && key === "Backspace") {
-    return textCommandResult(deleteWordBackward(document, selection));
-  }
-  if (!commandKey && altKey && key === "Delete") {
-    return textCommandResult(deleteWordForward(document, selection));
-  }
-  if (key === "Backspace") {
-    return textCommandResult(deleteBackward(document, selection));
-  }
-  if (key === "Delete") {
-    return textCommandResult(deleteForward(document, selection));
-  }
-  if (key === "Enter") {
-    return textCommandResult(splitParagraph(document, selection));
-  }
-
   return notHandled();
 }
 

@@ -813,6 +813,11 @@ function splitTextBlockChildren(
   beforeChildren: InlineNode[],
   afterChildren: InlineNode[],
 ): TextCommandResult {
+  const selectionAfter =
+    inlineUnitLength(beforeChildren) === 0 &&
+    inlineUnitLength(afterChildren) > 0
+      ? selectionAtChildrenStart(blockIndex, beforeChildren)
+      : selectionAtChildrenStart(blockIndex + 1, afterChildren);
   const beforeBlock = {
     ...block,
     children: normalizeInlineChildren(beforeChildren),
@@ -836,10 +841,7 @@ function splitTextBlockChildren(
         value: afterBlock,
       },
     ],
-    selectionAfter: selectionAtChildrenStart(
-      blockIndex + 1,
-      afterBlock.children,
-    ),
+    selectionAfter,
   };
 }
 

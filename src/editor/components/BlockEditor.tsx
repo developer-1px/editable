@@ -25,10 +25,7 @@ import {
   type NoteDocument,
   NoteDocumentSchema,
 } from "../model/noteDocument";
-import {
-  selectionForRender,
-  selectionIsCollapsed,
-} from "../model/richSelection";
+import { selectionForRender } from "../model/richSelection";
 import {
   insertFigure,
   insertMention,
@@ -38,10 +35,10 @@ import { createDOMCursorGeometry } from "./cursorGeometry";
 import { DebugRecordingInspector } from "./DebugRecordingInspector";
 import { DocumentRenderer } from "./DocumentRenderer";
 import {
-  createNativeTextBuffer,
-  type NativeTextBuffer,
-  setNativeSelection,
-} from "./nativeTextBuffer";
+  createEditingHostInputSession,
+  type EditingHostInputSession,
+  setEditingHostSelection,
+} from "./editingHostInputSession";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { useDebugInteractionRecorder } from "./useDebugInteractionRecorder";
 
@@ -56,7 +53,7 @@ export function BlockEditor() {
     document.selection?.snapshot(),
   );
   const editorSurfaceRef = useRef<HTMLDivElement>(null);
-  const nativeTextBufferRef = useRef<NativeTextBuffer | null>(null);
+  const editingHostInputRef = useRef<EditingHostInputSession | null>(null);
   const measuredLayoutKeyRef = useRef<string | null>(null);
   const mentionCountRef = useRef(0);
   const figureCountRef = useRef(1);
@@ -66,10 +63,10 @@ export function BlockEditor() {
   const [editorSurfaceElement, setEditorSurfaceElement] =
     useState<HTMLDivElement | null>(null);
   const [layoutVersion, setLayoutVersion] = useState(0);
-  if (nativeTextBufferRef.current === null) {
-    nativeTextBufferRef.current = createNativeTextBuffer();
+  if (editingHostInputRef.current === null) {
+    editingHostInputRef.current = createEditingHostInputSession();
   }
-  const nativeTextBuffer = nativeTextBufferRef.current;
+  const editingHostInput = editingHostInputRef.current;
   const setEditorSurfaceRef = useCallback((node: HTMLDivElement | null) => {
     editorSurfaceRef.current = node;
     setEditorSurfaceElement(node);
@@ -100,7 +97,7 @@ export function BlockEditor() {
   }, [document, document.value]);
 
   useLayoutEffect(() => {
-    if (nativeTextBuffer.hasActiveEdit()) {
+    if (editingHostInput.hasActiveEdit()) {
       return;
     }
 
@@ -111,7 +108,7 @@ export function BlockEditor() {
       point !== null &&
       root.ownerDocument.activeElement === root
     ) {
-      setNativeSelection(root, document.value, point);
+      setEditingHostSelection(root, document.value, point);
     }
   });
 
@@ -144,8 +141,8 @@ export function BlockEditor() {
     editorSurfaceRef.current?.focus();
   }, []);
 
-  const flushNativeTextEdit = useCallback(() => {
-    const result = nativeTextBuffer.flush(
+  const flushEditingHostInput = useCallback(() => {
+    const result = editingHostInput.flush(
       editorSurfaceRef.current,
       document.value,
     );
@@ -162,7 +159,7 @@ export function BlockEditor() {
       selectionAfter: result.selectionAfter,
     });
     return true;
-  }, [document, nativeTextBuffer]);
+  }, [document, editingHostInput]);
 
   const applyInputResult = useCallback(
     (result: EditorInputResult) => {
@@ -197,17 +194,6 @@ export function BlockEditor() {
     [applyInputResult, document.value, geometry, selectionSnapshot],
   );
 
-  const nativeTextPointForInput = useCallback(
-    (inputType: string) =>
-      nativeTextBuffer.pointForInput(
-        editorSurfaceRef.current,
-        document.value,
-        selectionSnapshot(),
-        inputType,
-      ),
-    [document.value, nativeTextBuffer, selectionSnapshot],
-  );
-
   const applyTextCommand = useCallback(
     (result: TextCommandResult) => {
       if (!result.ok) {
@@ -233,21 +219,21 @@ export function BlockEditor() {
         return;
       }
 
-      flushNativeTextEdit();
+      flushEditingHostInput();
       event.preventDefault();
       const normalized = normalizeCursorPoint(document.value, point);
       document.selection?.restore(selectionFromCursorPoint(normalized));
       focusEditor();
-      setNativeSelection(event.currentTarget, document.value, normalized);
+      setEditingHostSelection(event.currentTarget, document.value, normalized);
     },
-    [document, flushNativeTextEdit, focusEditor, geometry],
+    [document, flushEditingHostInput, focusEditor, geometry],
   );
 
   const handleFocus = useCallback(
     (event: FocusEvent<HTMLDivElement>) => {
       const point = selectionSnapshotPoint(document.selection?.snapshot());
       if (point !== null) {
-        setNativeSelection(event.currentTarget, document.value, point);
+        setEditingHostSelection(event.currentTarget, document.value, point);
       }
     },
     [document.selection, document.value],
@@ -259,7 +245,7 @@ export function BlockEditor() {
         const key = event.key.toLowerCase();
         if (key === "z") {
           event.preventDefault();
-          flushNativeTextEdit();
+          flushEditingHostInput();
           if (event.shiftKey) {
             document.redo();
           } else {
@@ -269,7 +255,7 @@ export function BlockEditor() {
         }
         if (key === "y") {
           event.preventDefault();
-          flushNativeTextEdit();
+          flushEditingHostInput();
           document.redo();
           return;
         }
@@ -278,37 +264,8 @@ export function BlockEditor() {
       if (event.nativeEvent.isComposing) {
         return;
       }
-
-      if (
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        (event.key === "Backspace" || event.key === "Delete")
-      ) {
-        const inputType =
-          event.key === "Backspace"
-            ? "deleteContentBackward"
-            : "deleteContentForward";
-        if (nativeTextPointForInput(inputType) !== null) {
-          return;
-        }
-      }
-
-      if (
-        isDirectPrintableTextKey(event) &&
-        !selectionIsCollapsed(selectionSnapshot())
-      ) {
-        flushNativeTextEdit();
-        if (
-          runInput({
-            type: "beforeinput",
-            inputType: "insertText",
-            data: event.key,
-            isComposing: event.nativeEvent.isComposing,
-          })
-        ) {
-          event.preventDefault();
-        }
+      if (editingHostInput.shouldIgnoreKeyDown()) {
+        event.preventDefault();
         return;
       }
 
@@ -316,7 +273,7 @@ export function BlockEditor() {
         return;
       }
 
-      flushNativeTextEdit();
+      flushEditingHostInput();
       if (
         runInput({
           type: "keydown",
@@ -331,45 +288,46 @@ export function BlockEditor() {
         event.preventDefault();
       }
     },
-    [
-      document,
-      flushNativeTextEdit,
-      nativeTextPointForInput,
-      runInput,
-      selectionSnapshot,
-    ],
+    [document, flushEditingHostInput, editingHostInput, runInput],
   );
 
   const handleBeforeInput = useCallback(
     (event: InputEvent) => {
-      if (event.inputType === "historyUndo") {
+      const decision = editingHostInput.planBeforeInput(
+        editorSurfaceRef.current,
+        document.value,
+        selectionSnapshot(),
+        {
+          inputType: event.inputType,
+          data: beforeInputText(event),
+          isComposing: event.isComposing,
+          targetRanges: beforeInputTargetRanges(event),
+        },
+      );
+
+      if (decision.kind === "history") {
         event.preventDefault();
-        flushNativeTextEdit();
-        document.undo();
-        return;
-      }
-      if (event.inputType === "historyRedo") {
-        event.preventDefault();
-        flushNativeTextEdit();
-        document.redo();
+        flushEditingHostInput();
+        if (decision.direction === "undo") {
+          document.undo();
+        } else {
+          document.redo();
+        }
         return;
       }
 
-      if (nativeTextBuffer.consumeCompositionCommit(event.inputType)) {
+      if (decision.kind === "commitComposition") {
         event.preventDefault();
-        flushNativeTextEdit();
+        flushEditingHostInput();
         return;
       }
 
-      const nativePoint = nativeTextPointForInput(event.inputType);
-
-      if (nativePoint !== null) {
-        nativeTextBuffer.begin(nativePoint);
+      if (decision.kind === "deferToEditingHost") {
         return;
       }
 
       event.preventDefault();
-      flushNativeTextEdit();
+      flushEditingHostInput();
       runInput({
         type: "beforeinput",
         inputType: event.inputType,
@@ -379,10 +337,10 @@ export function BlockEditor() {
     },
     [
       document,
-      flushNativeTextEdit,
-      nativeTextBuffer,
-      nativeTextPointForInput,
+      flushEditingHostInput,
+      editingHostInput,
       runInput,
+      selectionSnapshot,
     ],
   );
 
@@ -398,39 +356,47 @@ export function BlockEditor() {
     };
   }, [editorSurfaceElement, handleBeforeInput]);
 
+  const handleCompositionStart = useCallback(() => {
+    editingHostInput.beginComposition(
+      editorSurfaceRef.current,
+      document.value,
+      selectionSnapshot(),
+    );
+  }, [document.value, editingHostInput, selectionSnapshot]);
+
   const handleCompositionEnd = useCallback(
     (_event: CompositionEvent<HTMLDivElement>) => {
-      nativeTextBuffer.markCompositionEnd();
+      editingHostInput.endComposition();
       window.setTimeout(() => {
-        nativeTextBuffer.clearCompositionCommit();
-        flushNativeTextEdit();
+        editingHostInput.clearCompositionCommit();
+        flushEditingHostInput();
       }, 0);
     },
-    [flushNativeTextEdit, nativeTextBuffer],
+    [flushEditingHostInput, editingHostInput],
   );
 
   const handleInput = useCallback(() => {
-    nativeTextBuffer.trackInput(editorSurfaceRef.current);
-  }, [nativeTextBuffer]);
+    editingHostInput.trackInput(editorSurfaceRef.current);
+  }, [editingHostInput]);
 
   const handleBlur = useCallback(() => {
-    flushNativeTextEdit();
-  }, [flushNativeTextEdit]);
+    flushEditingHostInput();
+  }, [flushEditingHostInput]);
 
   const handlePaste = useCallback(
     (event: ClipboardEvent<HTMLDivElement>) => {
       event.preventDefault();
-      flushNativeTextEdit();
+      flushEditingHostInput();
       runInput({
         type: "paste",
         text: event.clipboardData.getData("text/plain"),
       });
     },
-    [flushNativeTextEdit, runInput],
+    [flushEditingHostInput, runInput],
   );
 
   const handleInsertMention = useCallback(() => {
-    flushNativeTextEdit();
+    flushEditingHostInput();
     mentionCountRef.current += 1;
     applyTextCommand(
       insertMention(document.value, selectionSnapshot(), {
@@ -442,12 +408,12 @@ export function BlockEditor() {
   }, [
     applyTextCommand,
     document.value,
-    flushNativeTextEdit,
+    flushEditingHostInput,
     selectionSnapshot,
   ]);
 
   const handleInsertFigure = useCallback(() => {
-    flushNativeTextEdit();
+    flushEditingHostInput();
     figureCountRef.current += 1;
     applyTextCommand(
       insertFigure(document.value, selectionSnapshot(), {
@@ -460,7 +426,7 @@ export function BlockEditor() {
   }, [
     applyTextCommand,
     document.value,
-    flushNativeTextEdit,
+    flushEditingHostInput,
     selectionSnapshot,
   ]);
 
@@ -483,7 +449,7 @@ export function BlockEditor() {
             aria-label="Undo"
             className="icon-button"
             onClick={() => {
-              flushNativeTextEdit();
+              flushEditingHostInput();
               document.undo();
               focusEditor();
             }}
@@ -496,7 +462,7 @@ export function BlockEditor() {
             aria-label="Redo"
             className="icon-button"
             onClick={() => {
-              flushNativeTextEdit();
+              flushEditingHostInput();
               document.redo();
               focusEditor();
             }}
@@ -530,8 +496,9 @@ export function BlockEditor() {
             aria-label="Document body"
             aria-multiline={true}
             className="editor-surface"
-            contentEditable={true}
+            contentEditable="plaintext-only"
             onBlur={handleBlur}
+            onCompositionStart={handleCompositionStart}
             onCompositionEnd={handleCompositionEnd}
             onFocus={handleFocus}
             onInput={handleInput}
@@ -601,21 +568,7 @@ function isHeadlessNavigationKey(key: string): boolean {
     key === "PageDown" ||
     key === "Home" ||
     key === "End" ||
-    key === "Escape" ||
-    key === "Backspace" ||
-    key === "Delete" ||
-    key === "Enter"
-  );
-}
-
-function isDirectPrintableTextKey(
-  event: KeyboardEvent<HTMLDivElement>,
-): boolean {
-  return (
-    /^[\u0020-\u007e]$/.test(event.key) &&
-    !event.metaKey &&
-    !event.ctrlKey &&
-    !event.altKey
+    key === "Escape"
   );
 }
 
@@ -628,6 +581,12 @@ function beforeInputText(event: InputEvent): string | null {
   }
 
   return event.data;
+}
+
+function beforeInputTargetRanges(event: InputEvent): readonly StaticRange[] {
+  return typeof event.getTargetRanges === "function"
+    ? event.getTargetRanges()
+    : [];
 }
 
 function selectionSnapshotPoint(selection: SelectionSnap | undefined) {
