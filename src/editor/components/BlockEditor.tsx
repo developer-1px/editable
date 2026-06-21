@@ -241,6 +241,29 @@ export function BlockEditor() {
     [document.selection, document.value],
   );
 
+  const handleClipboardWriteShortcut = useCallback(
+    (action: "copy" | "cut") => {
+      flushEditingHostInput();
+      const text = plainTextFromSelection(document.value, selectionSnapshot());
+      if (text.length === 0) {
+        return;
+      }
+
+      void writePlainTextToClipboard(text).then((written) => {
+        if (!written || action !== "cut") {
+          return;
+        }
+
+        runInput({
+          type: "beforeinput",
+          inputType: "deleteByCut",
+          isComposing: false,
+        });
+      });
+    },
+    [document.value, flushEditingHostInput, runInput, selectionSnapshot],
+  );
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       const keyBinding = resolveEditorKeyBinding({
@@ -272,6 +295,12 @@ export function BlockEditor() {
       }
 
       if (keyBinding?.kind === "clipboard") {
+        if (keyBinding.preventDefault) {
+          event.preventDefault();
+        }
+        if (keyBinding.action === "copy" || keyBinding.action === "cut") {
+          handleClipboardWriteShortcut(keyBinding.action);
+        }
         return;
       }
 
@@ -294,7 +323,13 @@ export function BlockEditor() {
         event.preventDefault();
       }
     },
-    [document, flushEditingHostInput, editingHostInput, runInput],
+    [
+      document,
+      flushEditingHostInput,
+      editingHostInput,
+      handleClipboardWriteShortcut,
+      runInput,
+    ],
   );
 
   const handleBeforeInput = useCallback(
@@ -628,6 +663,22 @@ function beforeInputTargetRanges(event: InputEvent): readonly StaticRange[] {
   return typeof event.getTargetRanges === "function"
     ? event.getTargetRanges()
     : [];
+}
+
+async function writePlainTextToClipboard(text: string): Promise<boolean> {
+  if (
+    typeof navigator === "undefined" ||
+    navigator.clipboard?.writeText === undefined
+  ) {
+    return false;
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function selectionSnapshotPoint(selection: SelectionSnap | undefined) {

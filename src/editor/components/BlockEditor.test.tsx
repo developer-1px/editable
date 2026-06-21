@@ -81,6 +81,23 @@ describe("BlockEditor", () => {
     expect(editor.textContent).toContain("Plain");
   });
 
+  it("copies selected document text from the command keymap", async () => {
+    const writeText = mockClipboardWriteText();
+
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    selectFirstTextCharacter(editor);
+    const notCanceled = fireEvent.keyDown(editor, {
+      key: "c",
+      metaKey: true,
+    });
+
+    expect(notCanceled).toBe(false);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("P"));
+    expect(editor.textContent).toContain("Plain");
+  });
+
   it("cuts selected document text through the deleteByCut command path", () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
@@ -91,6 +108,24 @@ describe("BlockEditor", () => {
 
     expect(clipboardData.setData).toHaveBeenCalledWith("text/plain", "P");
     expect(editor.textContent).toContain("lain bold");
+    expect(editor.textContent).not.toContain("Plain bold");
+  });
+
+  it("cuts selected document text from the command keymap", async () => {
+    const writeText = mockClipboardWriteText();
+
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    selectFirstTextCharacter(editor);
+    const notCanceled = fireEvent.keyDown(editor, {
+      key: "x",
+      metaKey: true,
+    });
+
+    expect(notCanceled).toBe(false);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("P"));
+    await waitFor(() => expect(editor.textContent).toContain("lain bold"));
     expect(editor.textContent).not.toContain("Plain bold");
   });
 
@@ -1032,6 +1067,16 @@ function createClipboardData() {
     getData: vi.fn(() => ""),
     setData: vi.fn(),
   };
+}
+
+function mockClipboardWriteText() {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+
+  return writeText;
 }
 
 function fireBeforeInput(

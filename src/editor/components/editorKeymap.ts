@@ -15,7 +15,12 @@ export type EditorKeyBinding =
     }
   | {
       kind: "clipboard";
-      action: "copy" | "cut" | "paste";
+      action: "copy" | "cut";
+      preventDefault: true;
+    }
+  | {
+      kind: "clipboard";
+      action: "paste";
       preventDefault: false;
     };
 
@@ -44,12 +49,12 @@ const editorKeymapEntries: readonly EditorKeymapEntry[] = [
   {
     key: "c",
     shiftKey: false,
-    binding: { kind: "clipboard", action: "copy", preventDefault: false },
+    binding: { kind: "clipboard", action: "copy", preventDefault: true },
   },
   {
     key: "x",
     shiftKey: false,
-    binding: { kind: "clipboard", action: "cut", preventDefault: false },
+    binding: { kind: "clipboard", action: "cut", preventDefault: true },
   },
   {
     key: "v",

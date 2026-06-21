@@ -22,17 +22,20 @@ describe("resolveEditorKeyBinding", () => {
     });
   });
 
-  it("maps clipboard shortcuts without claiming clipboard payload", () => {
+  it("maps copy and cut shortcuts to explicit clipboard commands", () => {
     expect(resolveEditorKeyBinding({ key: "c", metaKey: true })).toEqual({
       kind: "clipboard",
       action: "copy",
-      preventDefault: false,
+      preventDefault: true,
     });
     expect(resolveEditorKeyBinding({ key: "x", ctrlKey: true })).toEqual({
       kind: "clipboard",
       action: "cut",
-      preventDefault: false,
+      preventDefault: true,
     });
+  });
+
+  it("lets paste keep flowing to the paste event for payload access", () => {
     expect(resolveEditorKeyBinding({ key: "v", metaKey: true })).toEqual({
       kind: "clipboard",
       action: "paste",
