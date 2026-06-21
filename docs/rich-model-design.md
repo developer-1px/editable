@@ -180,18 +180,27 @@ Command rules:
 - Commands normalize the result or only emit patches that preserve normal form.
 - Undo/redo stores both document patches and selection.
 - Horizontal movement is headless.
-- Enter, Backspace, Delete, paste, mark toggles, atom insertion are headless.
+- Paragraph split, deletion, paste, mark toggles, and atom insertion are
+  headless commands. Their browser input entrypoint is `beforeinput`, paste, or
+  an explicit UI command, not physical text/deletion keydown.
 - Vertical movement asks the view for geometry, then normalizes the returned point through headless code.
 
 ## Contenteditable Policy
 
 Keep `contenteditable`, but reduce its authority.
 
+- The editor root uses `contenteditable="plaintext-only"` so the browser can
+  provide text input, spellcheck, IME, and selection plumbing without owning
+  rich formatting.
 - Native DOM editing is allowed only inside the active text leaf.
+- Physical `keydown` events are not document mutation signals for text,
+  deletion, or paragraph insertion. The mutation signal is `beforeinput`
+  `inputType`, paste/drop, or an explicit command.
 - During native text input and IME composition, do not sync every `input` event into `json-document`.
 - Flush the active text leaf on `compositionend`, `blur`, paste, toolbar command, undo/redo, arrow movement out of text, or any headless command.
 - DOM mutation outside the active text leaf is prevented or reverted.
 - Atom and block selection is rendered by our overlay, not trusted from browser selection drawing.
+- Detailed browser input policy lives in `docs/browser-input-policy.md`.
 
 ## Implementation Order
 
@@ -217,3 +226,4 @@ Keep `contenteditable`, but reduce its authority.
 - Lexical Editor State: https://lexical.dev/docs/concepts/editor-state
 - W3C Input Events Level 2: https://www.w3.org/TR/input-events-2/
 - W3C ContentEditable Draft: https://w3c.github.io/contentEditable/
+- Browser Input Policy: `docs/browser-input-policy.md`

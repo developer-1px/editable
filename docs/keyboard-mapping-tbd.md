@@ -3,6 +3,12 @@
 Rule:
 Every editor-owned key maps browser input to a headless command first, then render reads canonical selection/document state.
 
+Mutation rule:
+Physical text/deletion/paragraph keys are not the mutation source. Browser
+editing intent enters through `beforeinput.inputType`, `paste`, or explicit UI
+commands. This avoids treating IME confirmation keys and mobile virtual-keyboard
+events as ordinary desktop keydown.
+
 ## Text Input
 
 - TBD-KEY-001 [done] Printable character on collapsed native text leaf -> native text buffer, flush to `insertText` on release.
@@ -61,20 +67,20 @@ Every editor-owned key maps browser input to a headless command first, then rend
 
 ## Deletion
 
-- TBD-KEY-070 [done] `Backspace` -> delete backward.
-- TBD-KEY-071 [done] `Delete` -> delete forward.
+- TBD-KEY-070 [done] Physical `Backspace` keydown -> no direct document mutation; wait for `beforeinput deleteContentBackward`.
+- TBD-KEY-071 [done] Physical `Delete` keydown -> no direct document mutation; wait for `beforeinput deleteContentForward`.
 - TBD-KEY-072 [done] `beforeinput deleteContentBackward` -> delete backward.
 - TBD-KEY-073 [done] `beforeinput deleteContentForward` -> delete forward.
 - TBD-KEY-074 [done] `beforeinput deleteContent` -> delete selected range.
 - TBD-KEY-075 [done] `beforeinput deleteByCut` -> delete selected range.
-- TBD-KEY-076 [done] `Alt/Option+Backspace` -> delete word/atom unit backward.
-- TBD-KEY-077 [done] `Alt/Option+Delete` -> delete word/atom unit forward.
+- TBD-KEY-076 [done] Physical `Alt/Option+Backspace` keydown -> no direct document mutation; wait for `beforeinput deleteWordBackward`.
+- TBD-KEY-077 [done] Physical `Alt/Option+Delete` keydown -> no direct document mutation; wait for `beforeinput deleteWordForward`.
 - TBD-KEY-078 [done] `beforeinput deleteWordBackward` -> delete word/atom unit backward.
 - TBD-KEY-079 [done] `beforeinput deleteWordForward` -> delete word/atom unit forward.
 
 ## Block Editing
 
-- TBD-KEY-080 [done] `Enter` -> split paragraph/block text.
+- TBD-KEY-080 [done] Physical `Enter` keydown -> no direct document mutation; wait for `beforeinput insertParagraph` or IME composition commit.
 - TBD-KEY-081 [done] `beforeinput insertParagraph` -> split paragraph/block text.
 - TBD-KEY-082 [done] `beforeinput insertLineBreak` -> split paragraph until soft break model exists.
 - TBD-KEY-083 [done] `Tab` in list selection -> indent selected list items.

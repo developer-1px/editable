@@ -164,8 +164,9 @@ Acceptance criteria:
 - [x] Ctrl/Cmd+A calls headless select-all.
 - [x] ArrowUp/Down call vertical cursor commands.
 - [x] Plain text input calls `insertText`.
-- [x] Backspace/Delete call delete commands.
-- [x] Enter calls split command.
+- [x] Browser deletion `beforeinput` variants call delete commands.
+- [x] Browser paragraph/line break `beforeinput` variants call split command.
+- [x] Physical Backspace/Delete/Enter keydown does not directly mutate the document.
 - [x] Plain text paste inserts text through command layer.
 - [x] Composition input does not corrupt selection.
 - [x] Browser `beforeinput` variants for replacement text, paste, drop, line break, generic delete, and cut map to headless commands.
@@ -408,8 +409,7 @@ What to build:
 Map word-sized deletion keys and browser word-delete beforeinput variants through headless commands.
 
 Acceptance criteria:
-- [x] `Alt/Option+Backspace` deletes the previous word or atom unit.
-- [x] `Alt/Option+Delete` deletes the next word or atom unit.
+- [x] Physical `Alt/Option+Backspace` and `Alt/Option+Delete` keydown do not directly mutate the document.
 - [x] `beforeinput deleteWordBackward` and `deleteWordForward` use the same command path.
 - [x] Mention and figure atoms delete as one unit.
 - [x] Modifier deletion does not fall through to native contenteditable mutation while a text leaf is active.
