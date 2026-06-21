@@ -32,7 +32,7 @@ export function adjustSelectedListDepth(
 
   const delta = direction === "indent" ? 1 : -1;
   const patch = blockIndexes.flatMap((blockIndex) => {
-    const block = document.blocks[blockIndex];
+    const block = document.root.children[blockIndex];
     if (block?.type !== "listItem") {
       return [];
     }
@@ -43,7 +43,7 @@ export function adjustSelectedListDepth(
       : [
           {
             op: "replace" as const,
-            path: `/blocks/${blockIndex}/depth`,
+            path: `/root/children/${blockIndex}/depth`,
             value: depth,
           },
         ];
@@ -70,7 +70,7 @@ function selectedListItemIndexes(
       cursorPointInputFromSelectionPoint(point).path,
     );
     return blockIndex !== null &&
-      document.blocks[blockIndex]?.type === "listItem"
+      document.root.children[blockIndex]?.type === "listItem"
       ? [blockIndex]
       : [];
   }
@@ -91,12 +91,12 @@ function selectedListItemIndexes(
   const start = Math.min(anchor, focus);
   const end = Math.max(anchor, focus);
 
-  return document.blocks.flatMap((block, blockIndex) => {
+  return document.root.children.flatMap((block, blockIndex) => {
     if (block.type !== "listItem") {
       return [];
     }
 
-    const path = `/blocks/${blockIndex}`;
+    const path = `/root/children/${blockIndex}`;
     const blockStart = resolveCursorIndex(document, { path, edge: "before" });
     const blockEnd = resolveCursorIndex(document, { path, edge: "after" });
 
@@ -107,7 +107,7 @@ function selectedListItemIndexes(
 }
 
 function blockIndexFromPath(path: string): number | null {
-  const match = /^\/blocks\/(\d+)(?:\/|$)/.exec(path);
+  const match = /^\/root\/children\/(\d+)(?:\/|$)/.exec(path);
   if (match === null) {
     return null;
   }

@@ -86,7 +86,7 @@ export function moveCursorByBlockBoundary(
 ): CursorPoint {
   const cursorMap = createCursorMap(document);
   const blockIndex = blockIndexFromCursorPath(point.path);
-  const lastBlockIndex = Math.max(document.blocks.length - 1, 0);
+  const lastBlockIndex = Math.max(document.root.children.length - 1, 0);
   if (blockIndex === null) {
     return direction === "backward"
       ? firstCursorPoint(document)
@@ -94,7 +94,9 @@ export function moveCursorByBlockBoundary(
   }
 
   const currentBlockIndex = clampOffset(blockIndex, lastBlockIndex);
-  const currentBlockEdge = cursorMap.edges.get(`/blocks/${currentBlockIndex}`);
+  const currentBlockEdge = cursorMap.edges.get(
+    `/root/children/${currentBlockIndex}`,
+  );
   if (currentBlockEdge === undefined) {
     return direction === "backward"
       ? firstCursorPoint(document)
@@ -110,7 +112,9 @@ export function moveCursorByBlockBoundary(
       : current >= currentBlockEdge.after
         ? Math.min(currentBlockIndex + 1, lastBlockIndex)
         : currentBlockIndex;
-  const targetBlockEdge = cursorMap.edges.get(`/blocks/${targetBlockIndex}`);
+  const targetBlockEdge = cursorMap.edges.get(
+    `/root/children/${targetBlockIndex}`,
+  );
   if (targetBlockEdge === undefined) {
     return direction === "backward"
       ? firstCursorPoint(document)
@@ -222,7 +226,7 @@ export function cursorPointAt(
     };
   }
 
-  return { path: "/blocks/0", edge: "before", affinity: "forward" };
+  return { path: "/root/children/0", edge: "before", affinity: "forward" };
 }
 
 function createCursorMap(document: NoteDocument): CursorMap {
@@ -234,8 +238,8 @@ function createCursorMap(document: NoteDocument): CursorMap {
   const edges = new Map<string, { before: number; after: number }>();
   const atoms = new Map<string, { before: number; after: number }>();
 
-  for (const [blockIndex, block] of document.blocks.entries()) {
-    const blockPath = `/blocks/${blockIndex}`;
+  for (const [blockIndex, block] of document.root.children.entries()) {
+    const blockPath = `/root/children/${blockIndex}`;
 
     if (isFigureBlock(block)) {
       atoms.set(blockPath, appendEdgePositions(positions, edges, blockPath));
@@ -405,11 +409,15 @@ function isWordCharacter(character: string | undefined): boolean {
 
 function blockIndexFromCursorPath(path: string): number | null {
   const segments = tryParsePointer(path);
-  if (segments === null || segments[0] !== "blocks") {
+  if (
+    segments === null ||
+    segments[0] !== "root" ||
+    segments[1] !== "children"
+  ) {
     return null;
   }
 
-  return arrayIndexFromSegment(segments[1]);
+  return arrayIndexFromSegment(segments[2]);
 }
 
 function arrayIndexFromSegment(segment: string | undefined): number | null {

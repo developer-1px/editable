@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { selectionFromCursorPoint } from "./cursorCommands";
 import { exportMarkdown, importMarkdown } from "./markdown";
-import type { NoteDocument } from "./noteDocument";
+import { createNoteDocument } from "./noteDocument";
 import { insertText } from "./textCommands";
 
 function expectOk<T extends { ok: boolean }>(
@@ -33,61 +33,60 @@ describe("markdown adapter", () => {
 
     expect(note).toMatchObject({
       title: "Imported",
-      blocks: [
-        {
-          type: "heading",
-          level: 1,
-          children: [{ type: "text", text: "Title" }],
-        },
-        {
-          type: "paragraph",
-          children: [
-            { type: "text", text: "A " },
-            { type: "text", text: "bold", marks: [{ type: "bold" }] },
-            { type: "text", text: " " },
-            { type: "text", text: "italic", marks: [{ type: "italic" }] },
-            { type: "text", text: " " },
-            { type: "text", text: "code", marks: [{ type: "code" }] },
-            { type: "text", text: " " },
-            {
-              type: "text",
-              text: "link",
-              marks: [{ type: "link", href: "https://example.com" }],
-            },
-            { type: "text", text: " " },
-            { type: "mention", id: "user-ada", label: "Ada" },
-          ],
-        },
-        {
-          type: "quote",
-          children: [{ type: "text", text: "Quote" }],
-        },
-        {
-          type: "listItem",
-          ordered: false,
-          depth: 0,
-          children: [{ type: "text", text: "Item" }],
-        },
-        {
-          type: "codeBlock",
-          language: "ts",
-          text: "const value = 1;",
-        },
-        {
-          type: "figure",
-          src: "https://example.com/figure.png",
-          alt: "Figure",
-        },
-      ],
+      root: {
+        children: [
+          {
+            type: "heading",
+            level: 1,
+            children: [{ type: "text", text: "Title" }],
+          },
+          {
+            type: "paragraph",
+            children: [
+              { type: "text", text: "A " },
+              { type: "text", text: "bold", marks: [{ type: "bold" }] },
+              { type: "text", text: " " },
+              { type: "text", text: "italic", marks: [{ type: "italic" }] },
+              { type: "text", text: " " },
+              { type: "text", text: "code", marks: [{ type: "code" }] },
+              { type: "text", text: " " },
+              {
+                type: "text",
+                text: "link",
+                marks: [{ type: "link", href: "https://example.com" }],
+              },
+              { type: "text", text: " " },
+              { type: "mention", id: "user-ada", label: "Ada" },
+            ],
+          },
+          {
+            type: "quote",
+            children: [{ type: "text", text: "Quote" }],
+          },
+          {
+            type: "listItem",
+            ordered: false,
+            depth: 0,
+            children: [{ type: "text", text: "Item" }],
+          },
+          {
+            type: "codeBlock",
+            language: "ts",
+            text: "const value = 1;",
+          },
+          {
+            type: "figure",
+            src: "https://example.com/figure.png",
+            alt: "Figure",
+          },
+        ],
+      },
     });
   });
 
   it("exports supported rich model shapes to stable markdown", () => {
-    const note: NoteDocument = {
-      id: "note-1",
-      title: "Export",
-      tags: [],
-      blocks: [
+    const note = createNoteDocument(
+      [
         {
           id: "heading-1",
           type: "heading",
@@ -130,7 +129,8 @@ describe("markdown adapter", () => {
           alt: "Figure",
         },
       ],
-    };
+      { id: "note-1", title: "Export", tags: [] },
+    );
 
     const markdown = exportMarkdown(note);
 
@@ -154,24 +154,24 @@ describe("markdown adapter", () => {
 
   it("uses deterministic markdown fallback syntax for mention and figure atoms", () => {
     expect(
-      exportMarkdown({
-        id: "note-1",
-        title: "Atoms",
-        tags: [],
-        blocks: [
-          {
-            id: "paragraph-1",
-            type: "paragraph",
-            children: [{ type: "mention", id: "user-ada", label: "Ada" }],
-          },
-          {
-            id: "figure-1",
-            type: "figure",
-            src: "/logo192.png",
-            alt: "Figure",
-          },
-        ],
-      }),
+      exportMarkdown(
+        createNoteDocument(
+          [
+            {
+              id: "paragraph-1",
+              type: "paragraph",
+              children: [{ type: "mention", id: "user-ada", label: "Ada" }],
+            },
+            {
+              id: "figure-1",
+              type: "figure",
+              src: "/logo192.png",
+              alt: "Figure",
+            },
+          ],
+          { id: "note-1", title: "Atoms", tags: [] },
+        ),
+      ),
     ).toBe("@[Ada](mention:user-ada)\n\n![Figure](/logo192.png)");
   });
 
@@ -181,18 +181,22 @@ describe("markdown adapter", () => {
     const command = insertText(
       note,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 2,
       }),
       "x",
     );
 
     expectOk(command);
-    expect(command.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "boxld" },
+    expect(command.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0/children/0/text",
+        value: "boxld",
+      },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 3,
     });
   });

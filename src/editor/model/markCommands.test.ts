@@ -9,17 +9,20 @@ import {
   toggleLink,
   toggleMark,
 } from "./markCommands";
-import type { NoteDocument } from "./noteDocument";
-import { NoteDocumentSchema } from "./noteDocument";
+import {
+  createNoteDocument,
+  type NoteBlockInput,
+  type NoteDocument,
+  NoteDocumentSchema,
+} from "./noteDocument";
 import { insertText } from "./textCommands";
 
-function documentWithBlocks(blocks: NoteDocument["blocks"]): NoteDocument {
-  return {
+function documentWithBlocks(blocks: NoteBlockInput[]): NoteDocument {
+  return createNoteDocument(blocks, {
     id: "note-test",
     title: "Marks",
     tags: [],
-    blocks,
-  };
+  });
 }
 
 function expectOk<T extends { ok: boolean }>(
@@ -39,17 +42,17 @@ describe("mark commands", () => {
     ]);
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/0/children/0/text", offset: 3 },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/0/children/0/text", offset: 3 },
     );
 
     const command = toggleMark(document, selection, "bold");
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [
           { type: "text", text: "A" },
           { type: "text", text: "BC", marks: [{ type: "bold" }] },
@@ -58,11 +61,11 @@ describe("mark commands", () => {
       },
     ]);
     expect(command.selectionAfter.anchor).toMatchObject({
-      path: "/blocks/0/children/1/text",
+      path: "/root/children/0/children/1/text",
       offset: 0,
     });
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/1/text",
+      path: "/root/children/0/children/1/text",
       offset: 2,
     });
   });
@@ -81,26 +84,26 @@ describe("mark commands", () => {
     ]);
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/1/text", offset: 0 },
-      { path: "/blocks/0/children/1/text", offset: 2 },
+      { path: "/root/children/0/children/1/text", offset: 0 },
+      { path: "/root/children/0/children/1/text", offset: 2 },
     );
 
     const command = toggleMark(document, selection, "bold");
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [{ type: "text", text: "ABCD" }],
       },
     ]);
     expect(command.selectionAfter.anchor).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 3,
     });
   });
@@ -115,17 +118,17 @@ describe("mark commands", () => {
     ]);
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/0/children/0/text", offset: 3 },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/0/children/0/text", offset: 3 },
     );
 
     const command = toggleMark(document, selection, "code");
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [
           { type: "text", text: "A" },
           { type: "text", text: "BC", marks: [{ type: "code" }] },
@@ -145,18 +148,18 @@ describe("mark commands", () => {
     ]);
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/0/children/0/text", offset: 3 },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/0/children/0/text", offset: 3 },
       { pendingLinkHref: "https://openai.com" },
     );
 
     const command = toggleLink(document, selection);
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [
           { type: "text", text: "A" },
           {
@@ -169,9 +172,8 @@ describe("mark commands", () => {
       },
     ]);
 
-    const linkedDocument: NoteDocument = {
-      ...document,
-      blocks: [
+    const linkedDocument = createNoteDocument(
+      [
         {
           id: "block-1",
           type: "paragraph",
@@ -186,21 +188,22 @@ describe("mark commands", () => {
           ],
         },
       ],
-    };
+      { id: document.id, title: document.title, tags: document.tags },
+    );
     const remove = toggleLink(
       linkedDocument,
       selectionFromCursorRange(
         linkedDocument,
-        { path: "/blocks/0/children/1/text", offset: 0 },
-        { path: "/blocks/0/children/1/text", offset: 2 },
+        { path: "/root/children/0/children/1/text", offset: 0 },
+        { path: "/root/children/0/children/1/text", offset: 2 },
       ),
     );
 
     expectOk(remove);
-    expect(remove.patch).toEqual([
+    expect(remove.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [{ type: "text", text: "ABCD" }],
       },
     ]);
@@ -219,7 +222,7 @@ describe("mark commands", () => {
       { history: 10, selection: true, trustedInitial: true },
     );
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
@@ -237,10 +240,10 @@ describe("mark commands", () => {
     );
 
     expectOk(insert);
-    expect(insert.patch).toEqual([
+    expect(insert.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [
           { type: "text", text: "A" },
           { type: "text", text: "BC", marks: [{ type: "italic" }] },
@@ -264,7 +267,7 @@ describe("mark commands", () => {
     );
     const selection = selectionFromCursorPoint(
       {
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       },
       { pendingLinkHref: "https://openai.com" },
@@ -291,10 +294,10 @@ describe("mark commands", () => {
     );
 
     expectOk(insert);
-    expect(insert.patch).toEqual([
+    expect(insert.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [
           { type: "text", text: "A" },
           {

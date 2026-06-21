@@ -80,6 +80,9 @@ describe("BlockEditor", () => {
 
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
+    const inspector = screen.getByRole("status", { name: "Debug recorder" });
+
+    expect(inspector.textContent).toContain("IDLE");
 
     fireEvent.keyDown(window, {
       code: "Backslash",
@@ -87,6 +90,8 @@ describe("BlockEditor", () => {
       metaKey: true,
       shiftKey: true,
     });
+    expect(inspector.textContent).toContain("REC");
+
     fireEvent.paste(editor, {
       clipboardData: {
         getData: () => "recorded ",
@@ -100,42 +105,20 @@ describe("BlockEditor", () => {
     });
 
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(inspector.textContent).toContain("DONE");
 
     const report = writeText.mock.calls[0]?.[0];
     expect(typeof report).toBe("string");
     expect(consoleLog).toHaveBeenCalledWith(report);
 
-    const parsed = JSON.parse(report as string) as {
-      entries: Array<{
-        dom?: string | null;
-        event?: { clipboardText?: string; type: string };
-        json?: string;
-        kind: string;
-      }>;
-      schema: string;
-    };
-
-    expect(parsed.schema).toBe("editable-debug-recording@1");
-    expect(
-      parsed.entries.some(
-        (entry) =>
-          entry.kind === "input" &&
-          entry.event?.type === "paste" &&
-          entry.event.clipboardText === "recorded ",
-      ),
-    ).toBe(true);
-    expect(
-      parsed.entries.some(
-        (entry) =>
-          entry.kind === "state" && entry.json?.includes("recorded Plain"),
-      ),
-    ).toBe(true);
-    expect(
-      parsed.entries.some(
-        (entry) =>
-          entry.kind === "state" && entry.dom?.includes("recorded Plain"),
-      ),
-    ).toBe(true);
+    expect(report).toContain("EDITABLE DEBUG TRACE");
+    expect(report).toContain("schema: editable-debug-trace@3");
+    expect(report).toContain("DIAGNOSTICS\n  none");
+    expect(report).toContain('paste "recorded "');
+    expect(report).toContain("recorded Plain");
+    expect(report).toContain("full JSON/DOM omitted from clipboard");
+    expect(report).not.toContain("rawEntries");
+    expect(report).not.toContain('<main class="app-shell">');
   });
 
   it("commits printable keydown through headless input when selection is open", () => {
@@ -151,6 +134,17 @@ describe("BlockEditor", () => {
         .querySelector(".document-view")
         ?.getAttribute("data-selection-offset"),
     ).toBe("1");
+  });
+
+  it("does not commit IME starter keydown before composition input", () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    fireEvent.keyDown(editor, { key: "ArrowRight", shiftKey: true });
+    fireEvent.keyDown(editor, { key: "ㅇ" });
+
+    expect(editor.textContent).toContain("Plain");
+    expect(editor.textContent).not.toContain("ㅇPlain");
   });
 
   it("commits paste through headless input when selection is open", () => {
@@ -184,12 +178,33 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/1/children/0/text");
+    ).toBe("/root/children/1/children/0/text");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-offset"),
     ).toBe("0");
+  });
+
+  it("does not create duplicate React block keys when inserting a paragraph", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {
+      return;
+    });
+
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    fireEvent.keyDown(editor, { key: "Enter" });
+
+    expect(
+      consoleError.mock.calls.some((call) =>
+        call.some(
+          (value) =>
+            typeof value === "string" &&
+            value.includes("Encountered two children with the same key"),
+        ),
+      ),
+    ).toBe(false);
   });
 
   it("moves Home and End through the headless adapter", () => {
@@ -202,7 +217,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/6");
+    ).toBe("/root/children/6");
     expect(
       editor
         .querySelector(".document-view")
@@ -215,17 +230,17 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/6");
+    ).toBe("/root/children/6");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-focus-path"),
-    ).toBe("/blocks/0");
+    ).toBe("/root/children/0");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-selected-pointers"),
-    ).toBe("/blocks/0/children/9 /blocks/1");
+    ).toBe("/root/children/0/children/9 /root/children/1");
 
     fireEvent.keyDown(editor, { key: "Home" });
 
@@ -233,7 +248,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/0");
+    ).toBe("/root/children/0");
     expect(
       editor
         .querySelector(".document-view")
@@ -246,17 +261,17 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/0");
+    ).toBe("/root/children/0");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-focus-path"),
-    ).toBe("/blocks/6");
+    ).toBe("/root/children/6");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-selected-pointers"),
-    ).toBe("/blocks/0/children/9 /blocks/1");
+    ).toBe("/root/children/0/children/9 /root/children/1");
 
     fireEvent.keyDown(editor, { key: "ArrowLeft", ctrlKey: true });
 
@@ -264,7 +279,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/6/text");
+    ).toBe("/root/children/6/text");
     expect(
       editor
         .querySelector(".document-view")
@@ -281,7 +296,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/6/text");
+    ).toBe("/root/children/6/text");
     expect(
       editor
         .querySelector(".document-view")
@@ -291,7 +306,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-focus-path"),
-    ).toBe("/blocks/6/text");
+    ).toBe("/root/children/6/text");
     expect(
       editor
         .querySelector(".document-view")
@@ -314,7 +329,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/0/children/9");
+    ).toBe("/root/children/0/children/9");
     expect(
       editor
         .querySelector(".document-view")
@@ -331,7 +346,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/0/children/9");
+    ).toBe("/root/children/0/children/9");
     expect(
       editor
         .querySelector(".document-view")
@@ -341,7 +356,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-focus-path"),
-    ).toBe("/blocks/0/children/0/text");
+    ).toBe("/root/children/0/children/0/text");
     expect(
       editor
         .querySelector(".document-view")
@@ -351,7 +366,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-selected-pointers"),
-    ).toBe("/blocks/0/children/9");
+    ).toBe("/root/children/0/children/9");
 
     fireEvent.keyDown(editor, { key: "ArrowLeft", metaKey: true });
 
@@ -359,7 +374,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/0/children/0/text");
+    ).toBe("/root/children/0/children/0/text");
     expect(
       editor
         .querySelector(".document-view")
@@ -376,7 +391,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/0/children/0/text");
+    ).toBe("/root/children/0/children/0/text");
     expect(
       editor
         .querySelector(".document-view")
@@ -386,7 +401,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-focus-path"),
-    ).toBe("/blocks/0/children/9");
+    ).toBe("/root/children/0/children/9");
     expect(
       editor
         .querySelector(".document-view")
@@ -396,7 +411,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-selected-pointers"),
-    ).toBe("/blocks/0/children/9");
+    ).toBe("/root/children/0/children/9");
   });
 
   it("maps Alt/Option+ArrowLeft and ArrowRight through word navigation", () => {
@@ -409,7 +424,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/0/children/0/text");
+    ).toBe("/root/children/0/children/0/text");
     expect(
       editor
         .querySelector(".document-view")
@@ -426,7 +441,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/0/children/0/text");
+    ).toBe("/root/children/0/children/0/text");
     expect(
       editor
         .querySelector(".document-view")
@@ -436,7 +451,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-focus-path"),
-    ).toBe("/blocks/0/children/1/text");
+    ).toBe("/root/children/0/children/1/text");
     expect(
       editor
         .querySelector(".document-view")
@@ -449,7 +464,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/0/children/0/text");
+    ).toBe("/root/children/0/children/0/text");
     expect(
       editor
         .querySelector(".document-view")
@@ -467,7 +482,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/0");
+    ).toBe("/root/children/0");
     expect(
       editor
         .querySelector(".document-view")
@@ -480,7 +495,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/1");
+    ).toBe("/root/children/1");
     expect(
       editor
         .querySelector(".document-view")
@@ -497,17 +512,17 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/1");
+    ).toBe("/root/children/1");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-focus-path"),
-    ).toBe("/blocks/1");
+    ).toBe("/root/children/1");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-selected-pointers"),
-    ).toBe("/blocks/1");
+    ).toBe("/root/children/1");
   });
 
   it("maps Alt/Option+Backspace and Delete through word deletion", () => {
@@ -523,7 +538,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/0/children/0/text");
+    ).toBe("/root/children/0/children/0/text");
     expect(
       editor
         .querySelector(".document-view")
@@ -548,7 +563,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/6");
+    ).toBe("/root/children/6");
     expect(
       editor
         .querySelector(".document-view")
@@ -565,17 +580,17 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/6");
+    ).toBe("/root/children/6");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-focus-path"),
-    ).toBe("/blocks/0");
+    ).toBe("/root/children/0");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-selected-pointers"),
-    ).toBe("/blocks/0/children/9 /blocks/1");
+    ).toBe("/root/children/0/children/9 /root/children/1");
 
     fireEvent.keyDown(editor, { key: "ArrowUp", ctrlKey: true });
 
@@ -583,7 +598,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/0");
+    ).toBe("/root/children/0");
     expect(
       editor
         .querySelector(".document-view")
@@ -600,17 +615,17 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/0");
+    ).toBe("/root/children/0");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-focus-path"),
-    ).toBe("/blocks/6");
+    ).toBe("/root/children/6");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-selected-pointers"),
-    ).toBe("/blocks/0/children/9 /blocks/1");
+    ).toBe("/root/children/0/children/9 /root/children/1");
   });
 
   it("maps PageUp and PageDown through the headless adapter", () => {
@@ -623,7 +638,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/blocks/6");
+    ).toBe("/root/children/6");
     expect(
       editor
         .querySelector(".document-view")
@@ -640,17 +655,17 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/6");
+    ).toBe("/root/children/6");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-focus-path"),
-    ).toBe("/blocks/0");
+    ).toBe("/root/children/0");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-selected-pointers"),
-    ).toBe("/blocks/0/children/9 /blocks/1");
+    ).toBe("/root/children/0/children/9 /root/children/1");
   });
 
   it("maps Ctrl+A to headless select-all before replacement input", () => {
@@ -663,17 +678,17 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/0");
+    ).toBe("/root/children/0");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-focus-path"),
-    ).toBe("/blocks/6");
+    ).toBe("/root/children/6");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-selected-pointers"),
-    ).toBe("/blocks/0/children/9 /blocks/1");
+    ).toBe("/root/children/0/children/9 /root/children/1");
 
     fireEvent.keyDown(editor, { key: "x" });
 
@@ -699,7 +714,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-selected-pointers"),
-    ).toBe("/blocks/0/children/9 /blocks/1");
+    ).toBe("/root/children/0/children/9 /root/children/1");
 
     fireEvent.keyDown(editor, { key: "Tab", shiftKey: true });
 
@@ -725,12 +740,12 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/0/children/0/text");
+    ).toBe("/root/children/0/children/0/text");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-focus-path"),
-    ).toBe("/blocks/0/children/0/text");
+    ).toBe("/root/children/0/children/0/text");
   });
 
   it("maps Ctrl+E over a selected text range to inline code render output", () => {
@@ -750,7 +765,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/0/children/0/text");
+    ).toBe("/root/children/0/children/0/text");
   });
 
   it("maps Ctrl+K over a selected text range to link render output", () => {
@@ -770,7 +785,7 @@ describe("BlockEditor", () => {
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-anchor-path"),
-    ).toBe("/blocks/0/children/0/text");
+    ).toBe("/root/children/0/children/0/text");
   });
 
   it("keeps Escape, F-keys, and unsupported command shortcuts non-mutating in the demo", () => {
@@ -897,11 +912,11 @@ describe("BlockEditor", () => {
   });
 
   it("maps render selected pointers from the headless range only", () => {
-    const anchor = { path: "/blocks/0/children/0/text", offset: 3 };
-    const focus = { path: "/blocks/2", edge: "before" as const };
+    const anchor = { path: "/root/children/0/children/0/text", offset: 3 };
+    const focus = { path: "/root/children/2", edge: "before" as const };
     const selection = {
       ...selectionFromCursorPoint(focus),
-      selectedPointers: ["/blocks/2"],
+      selectedPointers: ["/root/children/2"],
       selectionRanges: [{ anchor, focus }],
       anchor,
       focus,
@@ -909,7 +924,7 @@ describe("BlockEditor", () => {
 
     expect(
       selectionForView(initialNoteDocument, selection)?.selectedPointers,
-    ).toEqual(["/blocks/0/children/9", "/blocks/1"]);
+    ).toEqual(["/root/children/0/children/9", "/root/children/1"]);
   });
 });
 

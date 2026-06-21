@@ -40,33 +40,40 @@ This keeps cursor offsets over visible text and atoms, not delimiter syntax.
 
 ```ts
 type Mark =
-  | { type: "bold" }
-  | { type: "italic" }
-  | { type: "code" }
-  | { type: "link"; href: string; title?: string };
+  | { type: "bold"; attrs?: Record<string, JSONValue> }
+  | { type: "italic"; attrs?: Record<string, JSONValue> }
+  | { type: "code"; attrs?: Record<string, JSONValue> }
+  | { type: "link"; href: string; title?: string; attrs?: Record<string, JSONValue> };
 
 type InlineNode =
-  | { type: "text"; text: string; marks?: Mark[] }
-  | { type: "mention"; id: string; label: string }
-  | { type: "hardBreak" };
+  | { kind: "text"; type: "text"; text: string; marks?: Mark[] }
+  | { kind: "atom"; flow: "inline"; type: "mention"; id: string; label: string; attrs?: Record<string, JSONValue> };
 
 type TextBlock =
-  | { id: string; type: "paragraph"; children: InlineNode[] }
-  | { id: string; type: "heading"; level: 1 | 2 | 3; children: InlineNode[] }
-  | { id: string; type: "quote"; children: InlineNode[] }
-  | { id: string; type: "listItem"; ordered: boolean; depth: number; children: InlineNode[] }
-  | { id: string; type: "codeBlock"; language?: string; text: string };
+  | { kind: "element"; flow: "block"; id: string; type: "paragraph"; children: InlineNode[] }
+  | { kind: "element"; flow: "block"; id: string; type: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; children: InlineNode[] }
+  | { kind: "element"; flow: "block"; id: string; type: "quote"; children: InlineNode[] }
+  | { kind: "element"; flow: "block"; id: string; type: "listItem"; ordered: boolean; depth: number; children: InlineNode[] }
+  | { kind: "element"; flow: "block"; id: string; type: "codeBlock"; language?: string; text: string };
 
 type BlockAtom =
-  | { id: string; type: "figure"; src: string; alt?: string };
+  | { kind: "atom"; flow: "block"; id: string; type: "figure"; src: string; alt?: string; attrs?: Record<string, JSONValue> };
 
 type BlockNode = TextBlock | BlockAtom;
 
 type RichDocument = {
+  schemaVersion: 1;
   id: string;
   title: string;
   tags: string[];
-  blocks: BlockNode[];
+  root: {
+    kind: "element";
+    flow: "block";
+    id: "root";
+    type: "doc";
+    children: BlockNode[];
+    attrs?: Record<string, JSONValue>;
+  };
 };
 ```
 
@@ -85,8 +92,8 @@ type FigureWithCaption = {
 
 The document must always normalize to one canonical shape:
 
-- Top level contains only blocks.
-- Document has at least one block.
+- `root.children` contains only blocks.
+- Empty imported documents normalize to one paragraph.
 - Text blocks have at least one inline child.
 - Empty text nodes exist only as the placeholder of an otherwise empty text block.
 - Adjacent text nodes with identical marks are merged.

@@ -5,7 +5,6 @@ import {
   type ClipboardEvent,
   type CompositionEvent,
   type FocusEvent,
-  type FormEvent,
   type KeyboardEvent,
   type PointerEvent,
   useCallback,
@@ -36,6 +35,7 @@ import {
   type TextCommandResult,
 } from "../model/textCommands";
 import { createDOMCursorGeometry } from "./cursorGeometry";
+import { DebugRecordingInspector } from "./DebugRecordingInspector";
 import { DocumentRenderer } from "./DocumentRenderer";
 import {
   createNativeTextBuffer,
@@ -85,7 +85,7 @@ export function BlockEditor() {
     selection: visibleSelection,
   });
 
-  useDebugInteractionRecorder({
+  const debugRecording = useDebugInteractionRecorder({
     note: document.value,
     rootElement: appShellElement,
     selection: visibleSelection,
@@ -295,7 +295,7 @@ export function BlockEditor() {
       }
 
       if (
-        isPrintableTextKey(event) &&
+        isDirectPrintableTextKey(event) &&
         !selectionIsCollapsed(selectionSnapshot())
       ) {
         flushNativeTextEdit();
@@ -341,28 +341,27 @@ export function BlockEditor() {
   );
 
   const handleBeforeInput = useCallback(
-    (event: FormEvent<HTMLDivElement>) => {
-      const nativeEvent = event.nativeEvent as InputEvent;
-      if (nativeEvent.inputType === "historyUndo") {
+    (event: InputEvent) => {
+      if (event.inputType === "historyUndo") {
         event.preventDefault();
         flushNativeTextEdit();
         document.undo();
         return;
       }
-      if (nativeEvent.inputType === "historyRedo") {
+      if (event.inputType === "historyRedo") {
         event.preventDefault();
         flushNativeTextEdit();
         document.redo();
         return;
       }
 
-      if (nativeTextBuffer.consumeCompositionCommit(nativeEvent.inputType)) {
+      if (nativeTextBuffer.consumeCompositionCommit(event.inputType)) {
         event.preventDefault();
         flushNativeTextEdit();
         return;
       }
 
-      const nativePoint = nativeTextPointForInput(nativeEvent.inputType);
+      const nativePoint = nativeTextPointForInput(event.inputType);
 
       if (nativePoint !== null) {
         nativeTextBuffer.begin(nativePoint);
@@ -373,9 +372,9 @@ export function BlockEditor() {
       flushNativeTextEdit();
       runInput({
         type: "beforeinput",
-        inputType: nativeEvent.inputType,
-        data: beforeInputText(nativeEvent),
-        isComposing: nativeEvent.isComposing,
+        inputType: event.inputType,
+        data: beforeInputText(event),
+        isComposing: event.isComposing,
       });
     },
     [
@@ -386,6 +385,18 @@ export function BlockEditor() {
       runInput,
     ],
   );
+
+  useEffect(() => {
+    const root = editorSurfaceElement;
+    if (root === null) {
+      return;
+    }
+
+    root.addEventListener("beforeinput", handleBeforeInput);
+    return () => {
+      root.removeEventListener("beforeinput", handleBeforeInput);
+    };
+  }, [editorSurfaceElement, handleBeforeInput]);
 
   const handleCompositionEnd = useCallback(
     (_event: CompositionEvent<HTMLDivElement>) => {
@@ -455,6 +466,7 @@ export function BlockEditor() {
 
   return (
     <main className="app-shell" ref={setAppShellElement}>
+      <DebugRecordingInspector state={debugRecording} />
       <section className="editor-pane" aria-label="Editor">
         <input
           aria-label="Title"
@@ -520,7 +532,6 @@ export function BlockEditor() {
             className="editor-surface"
             contentEditable={true}
             onBlur={handleBlur}
-            onBeforeInput={handleBeforeInput}
             onCompositionEnd={handleCompositionEnd}
             onFocus={handleFocus}
             onInput={handleInput}
@@ -597,9 +608,14 @@ function isHeadlessNavigationKey(key: string): boolean {
   );
 }
 
-function isPrintableTextKey(event: KeyboardEvent<HTMLDivElement>): boolean {
+function isDirectPrintableTextKey(
+  event: KeyboardEvent<HTMLDivElement>,
+): boolean {
   return (
-    event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey
+    /^[\u0020-\u007e]$/.test(event.key) &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey
   );
 }
 

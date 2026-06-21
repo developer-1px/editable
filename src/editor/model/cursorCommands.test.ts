@@ -18,16 +18,19 @@ import {
   selectAll,
   selectionFromCursorPoint,
 } from "./cursorCommands";
-import type { NoteDocument } from "./noteDocument";
+import {
+  createNoteDocument,
+  type NoteBlockInput,
+  type NoteDocument,
+} from "./noteDocument";
 import { selectionForRender } from "./richSelection";
 
-function documentWithBlocks(blocks: NoteDocument["blocks"]): NoteDocument {
-  return {
+function documentWithBlocks(blocks: NoteBlockInput[]): NoteDocument {
+  return createNoteDocument(blocks, {
     id: "note-test",
     title: "Cursor",
     tags: [],
-    blocks,
-  };
+  });
 }
 
 function rect(
@@ -61,16 +64,16 @@ describe("cursor commands", () => {
       },
     ]);
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
     expect(moveLeft(document, selection).selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 0,
     });
     expect(moveRight(document, selection).selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
     });
   });
@@ -87,7 +90,7 @@ describe("cursor commands", () => {
       rectForPoint: () => rect(30, 10, 1, 20),
       pointFromCoordinates: () => null,
       pointForHorizontalMovement: (_origin, direction) => ({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 2,
         affinity: direction === "forward" ? "forward" : "backward",
       }),
@@ -96,7 +99,7 @@ describe("cursor commands", () => {
     const right = moveVisualRight(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 2,
         affinity: "backward",
       }),
@@ -105,7 +108,7 @@ describe("cursor commands", () => {
     const left = moveVisualLeft(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 2,
         affinity: "forward",
       }),
@@ -113,12 +116,12 @@ describe("cursor commands", () => {
     ).selectionAfter;
 
     expect(right.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
       affinity: "forward",
     });
     expect(left.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
       affinity: "backward",
     });
@@ -137,20 +140,20 @@ describe("cursor commands", () => {
       },
     ]);
     const beforeMention = selectionFromCursorPoint({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "before",
     });
     const afterMention = selectionFromCursorPoint({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
 
     expect(
       moveRight(document, beforeMention).selectionAfter.focus,
-    ).toMatchObject({ path: "/blocks/0/children/1", edge: "after" });
+    ).toMatchObject({ path: "/root/children/0/children/1", edge: "after" });
     expect(moveLeft(document, afterMention).selectionAfter.focus).toMatchObject(
       {
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         edge: "before",
       },
     );
@@ -175,22 +178,22 @@ describe("cursor commands", () => {
       },
     ]);
     const beforeFigure = selectionFromCursorPoint({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
     const afterFigure = selectionFromCursorPoint({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
 
     expect(
       moveRight(document, beforeFigure).selectionAfter.focus,
     ).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
     expect(moveLeft(document, afterFigure).selectionAfter.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
   });
@@ -213,36 +216,36 @@ describe("cursor commands", () => {
     ]);
 
     const start = selectionFromCursorPoint({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     const textEnd = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 7,
     });
     const beforeFigure = selectionFromCursorPoint({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
 
     expect(moveWordRight(document, start).selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 3,
     });
     expect(moveWordLeft(document, textEnd).selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 4,
     });
     expect(moveWordRight(document, textEnd).selectionAfter.focus).toMatchObject(
       {
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         edge: "after",
       },
     );
     expect(
       moveWordRight(document, beforeFigure).selectionAfter.focus,
     ).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
   });
@@ -266,46 +269,46 @@ describe("cursor commands", () => {
       },
     ]);
     const insideText = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     const firstBlockEnd = selectionFromCursorPoint({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "after",
     });
     const figureAfter = selectionFromCursorPoint({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
 
     expect(
       moveBlockStart(document, insideText).selectionAfter.focus,
     ).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     expect(
       moveBlockEnd(document, insideText).selectionAfter.focus,
     ).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "after",
     });
     expect(
       moveBlockEnd(document, firstBlockEnd).selectionAfter.focus,
     ).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
     expect(
       moveBlockStart(document, figureAfter).selectionAfter.focus,
     ).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
     expect(
       moveBlockEnd(document, figureAfter).selectionAfter.focus,
     ).toMatchObject({
-      path: "/blocks/2",
+      path: "/root/children/2",
       edge: "after",
     });
   });
@@ -324,7 +327,7 @@ describe("cursor commands", () => {
       },
     ]);
     const beforeFigure = selectionFromCursorPoint({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
 
@@ -336,19 +339,19 @@ describe("cursor commands", () => {
     }).selectionAfter;
 
     expect(selected.anchor).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
     expect(selected.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
     expect(selected.selectedPointers).toEqual([]);
     expect(selectionForRender(document, selected)?.selectedPointers).toEqual([
-      "/blocks/1",
+      "/root/children/1",
     ]);
     expect(collapsed.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
     expect(collapsed.selectedPointers).toEqual([]);
@@ -367,7 +370,7 @@ describe("cursor commands", () => {
       },
     ]);
     const afterMention = selectionFromCursorPoint({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
 
@@ -376,16 +379,16 @@ describe("cursor commands", () => {
     }).selectionAfter;
 
     expect(selected.anchor).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
     expect(selected.focus).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "before",
     });
     expect(selected.selectedPointers).toEqual([]);
     expect(selectionForRender(document, selected)?.selectedPointers).toEqual([
-      "/blocks/0/children/1",
+      "/root/children/0/children/1",
     ]);
   });
 
@@ -406,11 +409,11 @@ describe("cursor commands", () => {
       },
     ]);
     const beforeMention = selectionFromCursorPoint({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "before",
     });
     const beforeFigure = selectionFromCursorPoint({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
 
@@ -422,27 +425,27 @@ describe("cursor commands", () => {
     }).selectionAfter;
 
     expect(mentionSelection.anchor).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "before",
     });
     expect(mentionSelection.focus).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
     expect(
       selectionForRender(document, mentionSelection)?.selectedPointers,
-    ).toEqual(["/blocks/0/children/1"]);
+    ).toEqual(["/root/children/0/children/1"]);
     expect(figureSelection.anchor).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
     expect(figureSelection.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
     expect(
       selectionForRender(document, figureSelection)?.selectedPointers,
-    ).toEqual(["/blocks/1"]);
+    ).toEqual(["/root/children/1"]);
   });
 
   it("extends block boundary selection through block atoms", () => {
@@ -459,7 +462,7 @@ describe("cursor commands", () => {
       },
     ]);
     const afterFigure = selectionFromCursorPoint({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
 
@@ -468,15 +471,15 @@ describe("cursor commands", () => {
     }).selectionAfter;
 
     expect(selected.anchor).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
     expect(selected.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
     expect(selectionForRender(document, selected)?.selectedPointers).toEqual([
-      "/blocks/1",
+      "/root/children/1",
     ]);
   });
 
@@ -517,7 +520,7 @@ describe("cursor commands", () => {
       },
     ]);
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
@@ -529,21 +532,21 @@ describe("cursor commands", () => {
     }).selectionAfter;
 
     expect(toStart.anchor).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     expect(toStart.focus).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     expect(toStart.selectedPointers).toEqual([]);
     expect(toEnd.focus).toMatchObject({
-      path: "/blocks/2",
+      path: "/root/children/2",
       edge: "after",
     });
     expect(selectionForRender(document, toEnd)?.selectedPointers).toEqual([
-      "/blocks/0/children/1",
-      "/blocks/1",
+      "/root/children/0/children/1",
+      "/root/children/1",
     ]);
   });
 
@@ -572,17 +575,17 @@ describe("cursor commands", () => {
     const selection = selectAll(document).selectionAfter;
 
     expect(selection.anchor).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     expect(selection.focus).toMatchObject({
-      path: "/blocks/2",
+      path: "/root/children/2",
       edge: "after",
     });
     expect(selection.selectedPointers).toEqual([]);
     expect(selectionForRender(document, selection)?.selectedPointers).toEqual([
-      "/blocks/0/children/1",
-      "/blocks/1",
+      "/root/children/0/children/1",
+      "/root/children/1",
     ]);
   });
 
@@ -595,7 +598,7 @@ describe("cursor commands", () => {
       },
     ]);
     const selection = selectionFromCursorPoint(
-      { path: "/blocks/0/children/0/text", offset: 1 },
+      { path: "/root/children/0/children/0/text", offset: 1 },
       { preferredX: 120 },
     );
 
@@ -620,11 +623,11 @@ describe("cursor commands", () => {
       rectForPoint: () => rect(10, 20, 4, 18),
       pointFromCoordinates(x, y) {
         calls.push({ x, y });
-        return { path: "/blocks/0/children/0/text", offset: 6 };
+        return { path: "/root/children/0/children/0/text", offset: 6 };
       },
     };
     const selection = selectionFromCursorPoint(
-      { path: "/blocks/0/children/0/text", offset: 2 },
+      { path: "/root/children/0/children/0/text", offset: 2 },
       { preferredX: 42 },
     );
 
@@ -632,7 +635,7 @@ describe("cursor commands", () => {
 
     expect(calls).toEqual([{ x: 42, y: 39 }]);
     expect(result.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 6,
     });
     expect(result.context).toEqual({ preferredX: 42 });
@@ -652,17 +655,17 @@ describe("cursor commands", () => {
       },
     ]);
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     const geometry = {
       rectForPoint: () => rect(10, 20, 1, 18),
       pointFromCoordinates: () => ({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       pointForVerticalMovement: () => ({
-        path: "/blocks/1/children/0/text",
+        path: "/root/children/1/children/0/text",
         offset: 1,
       }),
     };
@@ -670,7 +673,7 @@ describe("cursor commands", () => {
     const result = moveDown(document, selection, geometry).selectionAfter;
 
     expect(result.focus).toMatchObject({
-      path: "/blocks/1/children/0/text",
+      path: "/root/children/1/children/0/text",
       offset: 1,
     });
   });
@@ -689,14 +692,14 @@ describe("cursor commands", () => {
       pointFromCoordinates(x, y) {
         calls.push({ x, y });
         return {
-          path: "/blocks/0/children/0/text",
+          path: "/root/children/0/children/0/text",
           offset: y < 100 ? 0 : 10,
         };
       },
       pageStep: () => 240,
     };
     const selection = selectionFromCursorPoint(
-      { path: "/blocks/0/children/0/text", offset: 5 },
+      { path: "/root/children/0/children/0/text", offset: 5 },
       { preferredX: 42 },
     );
 
@@ -708,11 +711,11 @@ describe("cursor commands", () => {
       { x: 42, y: 358 },
     ]);
     expect(up.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 0,
     });
     expect(down.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 10,
     });
     expect(down.context).toEqual({ preferredX: 42 });
@@ -731,14 +734,14 @@ describe("cursor commands", () => {
       rectForPoint: () => rect(10, 20, 6, 18),
       pointFromCoordinates(x, y) {
         calls.push({ x, y });
-        return { path: "/blocks/0/children/0/text", offset: 0 };
+        return { path: "/root/children/0/children/0/text", offset: 0 };
       },
     };
 
     const result = moveUp(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       geometry,
@@ -762,7 +765,7 @@ describe("cursor commands", () => {
     const geometry: CursorGeometryAdapter = {
       rectForPoint: () => rect(10, 20, 1, 18),
       pointFromCoordinates: () => ({
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         edge: "after",
       }),
     };
@@ -770,14 +773,14 @@ describe("cursor commands", () => {
     const result = moveDown(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       geometry,
     ).selectionAfter;
 
     expect(result.focus).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
   });
@@ -797,20 +800,23 @@ describe("cursor commands", () => {
     ]);
     const geometry: CursorGeometryAdapter = {
       rectForPoint: () => rect(10, 20, 1, 18),
-      pointFromCoordinates: () => ({ path: "/blocks/1", edge: "before" }),
+      pointFromCoordinates: () => ({
+        path: "/root/children/1",
+        edge: "before",
+      }),
     };
 
     const result = moveDown(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       geometry,
     ).selectionAfter;
 
     expect(result.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
   });
@@ -825,13 +831,13 @@ describe("cursor commands", () => {
     ]);
     const geometry: CursorGeometryAdapter = {
       rectForPoint: () => rect(10, 20, 100, 1),
-      pointFromCoordinates: () => ({ path: "/blocks/0", edge: "after" }),
+      pointFromCoordinates: () => ({ path: "/root/children/0", edge: "after" }),
     };
 
     const result = moveDown(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0",
+        path: "/root/children/0",
         edge: "before",
       }),
       geometry,
@@ -839,16 +845,16 @@ describe("cursor commands", () => {
     ).selectionAfter;
 
     expect(result.anchor).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     expect(result.focus).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "after",
     });
     expect(result.selectedPointers).toEqual([]);
     expect(selectionForRender(document, result)?.selectedPointers).toEqual([
-      "/blocks/0",
+      "/root/children/0",
     ]);
   });
 
@@ -865,20 +871,20 @@ describe("cursor commands", () => {
       pointFromCoordinates: () => null,
     };
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
     expect(
       moveUp(document, selection, geometry).selectionAfter.focus,
     ).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     expect(
       moveDown(document, selection, geometry).selectionAfter.focus,
     ).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "after",
     });
   });

@@ -69,7 +69,12 @@ export function createNativeTextBuffer() {
       if (root === null || !isNativeTextInputType(inputType)) {
         return null;
       }
-      if (!selectionIsCollapsed(selection)) {
+
+      const nativePoint = textPointFromNativeSelection(root);
+      if (
+        !selectionIsCollapsed(selection) &&
+        !canUseNativeCompositionPoint(inputType, nativePoint)
+      ) {
         return null;
       }
       if (
@@ -79,9 +84,7 @@ export function createNativeTextBuffer() {
         return null;
       }
 
-      const point =
-        textPointFromNativeSelection(root) ??
-        textPointFromSelection(document, selection);
+      const point = nativePoint ?? textPointFromSelection(document, selection);
       if (point === null) {
         return null;
       }
@@ -208,6 +211,13 @@ function isCompositionCommitInput(inputType: string): boolean {
   return inputType === "insertText" || inputType === "insertFromComposition";
 }
 
+function canUseNativeCompositionPoint(
+  inputType: string,
+  point: NativeTextPoint | null,
+): boolean {
+  return inputType === "insertCompositionText" && point !== null;
+}
+
 function textPointFromSelection(
   document: NoteDocument,
   selection: SelectionSnap,
@@ -275,13 +285,13 @@ function nativeTextPointFromCursorPoint(
     return { path: point.path, offset: point.offset };
   }
 
-  const match = /^\/blocks\/(\d+)$/.exec(point.path);
+  const match = /^\/root\/children\/(\d+)$/.exec(point.path);
   if (match === null) {
     return null;
   }
 
   const blockIndex = Number(match[1]);
-  const block = document.blocks[blockIndex];
+  const block = document.root.children[blockIndex];
   if (isCodeBlock(block)) {
     return {
       path: `${point.path}/text`,
@@ -384,9 +394,9 @@ function findElementByDataPath(root: ParentNode, path: string): Element | null {
 }
 
 function readDocumentText(document: NoteDocument, path: string) {
-  const match = /^\/blocks\/(\d+)\/children\/(\d+)\/text$/.exec(path);
+  const match = /^\/root\/children\/(\d+)\/children\/(\d+)\/text$/.exec(path);
   if (match !== null) {
-    const block = document.blocks[Number(match[1])];
+    const block = document.root.children[Number(match[1])];
     if (!isInlineTextBlock(block)) {
       return "";
     }
@@ -395,9 +405,9 @@ function readDocumentText(document: NoteDocument, path: string) {
     return child?.type === "text" ? child.text : "";
   }
 
-  const codeMatch = /^\/blocks\/(\d+)\/text$/.exec(path);
+  const codeMatch = /^\/root\/children\/(\d+)\/text$/.exec(path);
   if (codeMatch !== null) {
-    const block = document.blocks[Number(codeMatch[1])];
+    const block = document.root.children[Number(codeMatch[1])];
     return isCodeBlock(block) ? block.text : "";
   }
 
@@ -405,7 +415,7 @@ function readDocumentText(document: NoteDocument, path: string) {
 }
 
 function textPath(blockIndex: number, childIndex: number): string {
-  return `/blocks/${blockIndex}/children/${childIndex}/text`;
+  return `/root/children/${blockIndex}/children/${childIndex}/text`;
 }
 
 function clamp(value: number, min: number, max: number): number {

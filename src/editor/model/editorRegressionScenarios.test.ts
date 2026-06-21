@@ -7,7 +7,12 @@ import {
   selectionFromCursorPoint,
 } from "./cursorCommands";
 import { type EditorInputResult, translateEditorInput } from "./inputAdapter";
-import { type NoteDocument, NoteDocumentSchema } from "./noteDocument";
+import {
+  createNoteDocument,
+  type NoteBlockInput,
+  type NoteDocument,
+  NoteDocumentSchema,
+} from "./noteDocument";
 import {
   deleteBackward,
   insertMention,
@@ -15,13 +20,12 @@ import {
   splitParagraph,
 } from "./textCommands";
 
-function documentWithBlocks(blocks: NoteDocument["blocks"]): NoteDocument {
-  return {
+function documentWithBlocks(blocks: NoteBlockInput[]): NoteDocument {
+  return createNoteDocument(blocks, {
     id: "note-test",
     title: "Regression",
     tags: [],
-    blocks,
-  };
+  });
 }
 
 function expectOk<T extends { ok: boolean }>(
@@ -78,7 +82,7 @@ describe("editor regression scenarios", () => {
     const insertAfterMention = insertText(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         edge: "after",
       }),
       "x",
@@ -86,25 +90,25 @@ describe("editor regression scenarios", () => {
     const removeMention = deleteBackward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         edge: "after",
       }),
     );
 
     expectOk(insertAfterMention);
     expectOk(removeMention);
-    expect(insertAfterMention.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/2/text", value: "xB" },
+    expect(insertAfterMention.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/2/text", value: "xB" },
     ]);
     expect(insertAfterMention.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/2/text",
+      path: "/root/children/0/children/2/text",
       offset: 1,
     });
-    expect(removeMention.patch).toEqual([
-      { op: "remove", path: "/blocks/0/children/1" },
+    expect(removeMention.patch).toMatchObject([
+      { op: "remove", path: "/root/children/0/children/1" },
     ]);
     expect(removeMention.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/1/text",
+      path: "/root/children/0/children/1/text",
       offset: 0,
     });
   });
@@ -130,22 +134,22 @@ describe("editor regression scenarios", () => {
 
     const beforeFigure = insertText(
       document,
-      selectionFromCursorPoint({ path: "/blocks/1", edge: "before" }),
+      selectionFromCursorPoint({ path: "/root/children/1", edge: "before" }),
       "x",
     );
     const afterFigure = insertText(
       document,
-      selectionFromCursorPoint({ path: "/blocks/1", edge: "after" }),
+      selectionFromCursorPoint({ path: "/root/children/1", edge: "after" }),
       "y",
     );
 
     expectOk(beforeFigure);
     expectOk(afterFigure);
-    expect(beforeFigure.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "Ax" },
+    expect(beforeFigure.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "Ax" },
     ]);
-    expect(afterFigure.patch).toEqual([
-      { op: "replace", path: "/blocks/2/children/0/text", value: "yB" },
+    expect(afterFigure.patch).toMatchObject([
+      { op: "replace", path: "/root/children/2/children/0/text", value: "yB" },
     ]);
   });
 
@@ -162,7 +166,7 @@ describe("editor regression scenarios", () => {
       { history: 10, selection: true, trustedInitial: true },
     );
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     document.selection?.restore(selection);
@@ -175,14 +179,14 @@ describe("editor regression scenarios", () => {
     expectOk(merge);
     document.commit(merge.patch, { selectionAfter: merge.selectionAfter });
 
-    expect(document.value.blocks).toMatchObject([
+    expect(document.value.root.children).toMatchObject([
       {
         type: "paragraph",
         children: [{ type: "text", text: "AB" }],
       },
     ]);
     expect(document.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
   });
@@ -210,16 +214,16 @@ describe("editor regression scenarios", () => {
       },
       pointFromCoordinates(_x, y) {
         if (y < 53) {
-          return { path: "/blocks/0/children/0/text", offset: 6 };
+          return { path: "/root/children/0/children/0/text", offset: 6 };
         }
-        return { path: "/blocks/0/children/1", edge: "after" };
+        return { path: "/root/children/0/children/1", edge: "after" };
       },
     };
 
     const secondLine = moveDown(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       geometry,
@@ -231,11 +235,11 @@ describe("editor regression scenarios", () => {
     ).selectionAfter;
 
     expect(secondLine.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 6,
     });
     expect(afterMention.focus).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
     expect(afterMention.context).toEqual({ preferredX: 11 });
@@ -254,7 +258,7 @@ describe("editor regression scenarios", () => {
       { history: 10, selection: true, trustedInitial: true },
     );
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     document.selection?.restore(selection);
@@ -268,21 +272,21 @@ describe("editor regression scenarios", () => {
     document.commit(command.patch, { selectionAfter: command.selectionAfter });
 
     expect(document.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
 
     document.undo();
 
     expect(document.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
     document.redo();
 
     expect(document.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
   });
@@ -304,16 +308,16 @@ describe("editor regression scenarios", () => {
       { history: 10, selection: true, trustedInitial: true },
     );
     const selection = {
-      selectedPointers: ["/blocks/0/children/1"],
+      selectedPointers: ["/root/children/0/children/1"],
       selectionRanges: [
         {
-          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-          focus: { path: "/blocks/0/children/2/text", offset: 1 },
+          anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+          focus: { path: "/root/children/0/children/2/text", offset: 1 },
         },
       ],
       primaryIndex: 0,
-      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-      focus: { path: "/blocks/0/children/2/text", offset: 1 },
+      anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+      focus: { path: "/root/children/0/children/2/text", offset: 1 },
     };
     document.selection?.restore(selection);
 
@@ -321,20 +325,20 @@ describe("editor regression scenarios", () => {
     expectOk(command);
     document.commit(command.patch, { selectionAfter: command.selectionAfter });
 
-    expect(document.value.blocks).toMatchObject([
+    expect(document.value.root.children).toMatchObject([
       {
         type: "paragraph",
         children: [{ type: "text", text: "AxD" }],
       },
     ]);
     expect(document.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
     });
 
     document.undo();
 
-    expect(document.value.blocks).toMatchObject([
+    expect(document.value.root.children).toMatchObject([
       {
         type: "paragraph",
         children: [
@@ -345,28 +349,28 @@ describe("editor regression scenarios", () => {
       },
     ]);
     expect(document.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/2/text",
+      path: "/root/children/0/children/2/text",
       offset: 1,
     });
     expect(document.selection?.snapshot().selectionRanges[0]).toMatchObject({
-      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-      focus: { path: "/blocks/0/children/2/text", offset: 1 },
+      anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+      focus: { path: "/root/children/0/children/2/text", offset: 1 },
     });
     expect(
       selectionForView(document.value, document.selection?.snapshot())
         ?.selectedPointers,
-    ).toEqual(["/blocks/0/children/1"]);
+    ).toEqual(["/root/children/0/children/1"]);
 
     document.redo();
 
-    expect(document.value.blocks).toMatchObject([
+    expect(document.value.root.children).toMatchObject([
       {
         type: "paragraph",
         children: [{ type: "text", text: "AxD" }],
       },
     ]);
     expect(document.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
     });
   });
@@ -410,16 +414,16 @@ describe("editor regression scenarios", () => {
       { history: 10, selection: true, trustedInitial: true },
     );
     const selection = {
-      selectedPointers: ["/blocks/0/children/9", "/blocks/1"],
+      selectedPointers: ["/root/children/0/children/9", "/root/children/1"],
       selectionRanges: [
         {
-          anchor: { path: "/blocks/0/children/0/text", offset: 3 },
-          focus: { path: "/blocks/2", edge: "before" as const },
+          anchor: { path: "/root/children/0/children/0/text", offset: 3 },
+          focus: { path: "/root/children/2", edge: "before" as const },
         },
       ],
       primaryIndex: 0,
-      anchor: { path: "/blocks/0/children/0/text", offset: 3 },
-      focus: { path: "/blocks/2", edge: "before" as const },
+      anchor: { path: "/root/children/0/children/0/text", offset: 3 },
+      focus: { path: "/root/children/2", edge: "before" as const },
     };
     document.selection?.restore(selection);
 
@@ -427,7 +431,7 @@ describe("editor regression scenarios", () => {
     expectOk(command);
     document.commit(command.patch, { selectionAfter: command.selectionAfter });
 
-    expect(document.value.blocks).toMatchObject([
+    expect(document.value.root.children).toMatchObject([
       {
         type: "paragraph",
         children: [{ type: "text", text: "Plax" }],
@@ -440,15 +444,15 @@ describe("editor regression scenarios", () => {
 
     document.undo();
 
-    expect(document.value.blocks).toHaveLength(3);
+    expect(document.value.root.children).toHaveLength(3);
     expect(document.selection?.snapshot().selectionRanges[0]).toMatchObject({
-      anchor: { path: "/blocks/0/children/0/text", offset: 3 },
-      focus: { path: "/blocks/2", edge: "before" },
+      anchor: { path: "/root/children/0/children/0/text", offset: 3 },
+      focus: { path: "/root/children/2", edge: "before" },
     });
     expect(
       selectionForView(document.value, document.selection?.snapshot())
         ?.selectedPointers,
-    ).toEqual(["/blocks/0/children/9", "/blocks/1"]);
+    ).toEqual(["/root/children/0/children/9", "/root/children/1"]);
   });
 
   it("restores an open range selection built by repeated Shift+ArrowRight after undo", () => {
@@ -491,7 +495,7 @@ describe("editor regression scenarios", () => {
     );
     document.selection?.restore(
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 3,
       }),
     );
@@ -501,7 +505,7 @@ describe("editor regression scenarios", () => {
         document.value,
         document.selection?.snapshot() ??
           selectionFromCursorPoint({
-            path: "/blocks/0/children/0/text",
+            path: "/root/children/0/children/0/text",
             offset: 3,
           }),
         { type: "keydown", key: "ArrowRight", shiftKey: true },
@@ -513,13 +517,13 @@ describe("editor regression scenarios", () => {
     const selection = document.selection?.snapshot();
     expect(
       selectionForView(document.value, selection)?.selectedPointers,
-    ).toEqual(["/blocks/0/children/9", "/blocks/1"]);
+    ).toEqual(["/root/children/0/children/9", "/root/children/1"]);
 
     const command = insertText(
       document.value,
       selection ??
         selectionFromCursorPoint({
-          path: "/blocks/0/children/0/text",
+          path: "/root/children/0/children/0/text",
           offset: 3,
         }),
       "x",
@@ -530,12 +534,12 @@ describe("editor regression scenarios", () => {
     document.undo();
 
     expect(document.selection?.snapshot().selectionRanges[0]).toMatchObject({
-      anchor: { path: "/blocks/0/children/0/text", offset: 3 },
-      focus: { path: "/blocks/2", edge: "before" },
+      anchor: { path: "/root/children/0/children/0/text", offset: 3 },
+      focus: { path: "/root/children/2", edge: "before" },
     });
     expect(
       selectionForView(document.value, document.selection?.snapshot())
         ?.selectedPointers,
-    ).toEqual(["/blocks/0/children/9", "/blocks/1"]);
+    ).toEqual(["/root/children/0/children/9", "/root/children/1"]);
   });
 });

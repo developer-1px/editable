@@ -26,12 +26,16 @@ import {
 } from "./normalizer";
 import {
   createParagraphBlock,
+  type FigureBlockInput,
+  FigureBlockSchema,
   type InlineNode,
   type InlineTextBlock,
   isCodeBlock,
   isFigureBlock,
   isInlineTextBlock,
   isTextBlock,
+  type MentionInlineInput,
+  MentionInlineSchema,
   type NoteBlock,
   type NoteDocument,
 } from "./noteDocument";
@@ -171,8 +175,9 @@ export function insertText(
 export function insertMention(
   document: NoteDocument,
   selection: SelectionSnap,
-  mention: MentionInline,
+  mention: MentionInlineInput,
 ): TextCommandResult {
+  const canonicalMention = MentionInlineSchema.parse(mention);
   const selectedTextRange = selectedSingleTextRange(document, selection);
   if (selectedTextRange !== null) {
     return insertInlineAtomAtTextRange(
@@ -180,13 +185,17 @@ export function insertMention(
       selectedTextRange.location,
       selectedTextRange.startOffset,
       selectedTextRange.endOffset,
-      mention,
+      canonicalMention,
     );
   }
 
   const selectedAtom = selectedSingleAtom(document, selection);
   if (selectedAtom !== null) {
-    return replaceSelectedAtomWithMention(document, selectedAtom, mention);
+    return replaceSelectedAtomWithMention(
+      document,
+      selectedAtom,
+      canonicalMention,
+    );
   }
 
   const point = normalizeCursorPoint(
@@ -205,18 +214,19 @@ export function insertMention(
       location,
       point.offset,
       point.offset,
-      mention,
+      canonicalMention,
     );
   }
 
-  return insertMentionAtAtomEdge(document, point, mention);
+  return insertMentionAtAtomEdge(document, point, canonicalMention);
 }
 
 export function insertFigure(
   document: NoteDocument,
   selection: SelectionSnap,
-  figure: FigureBlock,
+  figure: FigureBlockInput,
 ): TextCommandResult {
+  const canonicalFigure = FigureBlockSchema.parse(figure);
   const selectedTextRange = selectedSingleTextRange(document, selection);
   if (selectedTextRange !== null) {
     return insertFigureAtTextRange(
@@ -224,13 +234,17 @@ export function insertFigure(
       selectedTextRange.location,
       selectedTextRange.startOffset,
       selectedTextRange.endOffset,
-      figure,
+      canonicalFigure,
     );
   }
 
   const selectedAtom = selectedSingleAtom(document, selection);
   if (selectedAtom !== null) {
-    return replaceSelectedAtomWithFigure(document, selectedAtom, figure);
+    return replaceSelectedAtomWithFigure(
+      document,
+      selectedAtom,
+      canonicalFigure,
+    );
   }
 
   const point = normalizeCursorPoint(
@@ -249,11 +263,11 @@ export function insertFigure(
       location,
       point.offset,
       point.offset,
-      figure,
+      canonicalFigure,
     );
   }
 
-  return insertFigureAtAtomEdge(document, point, figure);
+  return insertFigureAtAtomEdge(document, point, canonicalFigure);
 }
 
 export function deleteBackward(
@@ -312,7 +326,7 @@ export function splitParagraph(
 
   const blockIndex = blockLocationFromPath(document, point.path);
   if (blockIndex !== null) {
-    const block = document.blocks[blockIndex];
+    const block = document.root.children[blockIndex];
     if (isTextBlock(block)) {
       return splitParagraphAtBlockEdge(blockIndex, point.edge);
     }
@@ -424,7 +438,9 @@ function deleteFromAtomPoint(
 ): TextCommandResult {
   const edgeBlockIndex = blockLocationFromPath(document, point.path);
   const block =
-    edgeBlockIndex === null ? undefined : document.blocks[edgeBlockIndex];
+    edgeBlockIndex === null
+      ? undefined
+      : document.root.children[edgeBlockIndex];
   if (edgeBlockIndex !== null && isTextBlock(block)) {
     if (direction === "backward" && point.edge === "before") {
       return mergeWithPreviousTextBlock(document, edgeBlockIndex);
@@ -449,7 +465,7 @@ function deleteFromAtomPoint(
       ) {
         return mergeWithPreviousTextBlock(document, inline.blockIndex);
       }
-      const block = document.blocks[inline.blockIndex];
+      const block = document.root.children[inline.blockIndex];
       if (
         direction === "forward" &&
         point.edge === "after" &&
@@ -486,7 +502,7 @@ function deleteTextRange(
     location.text.slice(0, startOffset),
     location.text.slice(endOffset),
   ].join("");
-  const block = document.blocks[location.blockIndex];
+  const block = document.root.children[location.blockIndex];
 
   if (
     nextText.length > 0 ||
@@ -518,7 +534,7 @@ function deleteInlineAtom(
   blockIndex: number,
   childIndex: number,
 ): TextCommandResult {
-  const block = document.blocks[blockIndex];
+  const block = document.root.children[blockIndex];
   if (!isInlineTextBlock(block)) {
     return { ok: false, reason: "Inline atom must belong to a paragraph." };
   }
@@ -531,7 +547,7 @@ function deleteInlineAtom(
       patch: [
         {
           op: "replace",
-          path: `/blocks/${blockIndex}/children`,
+          path: `/root/children/${blockIndex}/children`,
           value: [{ type: "text", text: "" }],
         },
       ],
@@ -554,14 +570,14 @@ function deleteFigureBlock(
   document: NoteDocument,
   blockIndex: number,
 ): TextCommandResult {
-  if (document.blocks.length === 1) {
+  if (document.root.children.length === 1) {
     const block = createParagraphBlock("");
 
     return {
       ok: true,
-      patch: [{ op: "replace", path: "/blocks/0", value: block }],
+      patch: [{ op: "replace", path: "/root/children/0", value: block }],
       selectionAfter: selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 0,
       }),
     };
@@ -569,7 +585,7 @@ function deleteFigureBlock(
 
   return {
     ok: true,
-    patch: [{ op: "remove", path: `/blocks/${blockIndex}` }],
+    patch: [{ op: "remove", path: `/root/children/${blockIndex}` }],
     selectionAfter: selectionAfterBlockRemoval(document, blockIndex),
   };
 }
@@ -610,7 +626,11 @@ function replaceSelectedAtomWithText(
   return {
     ok: true,
     patch: [
-      { op: "replace", path: `/blocks/${atom.blockIndex}`, value: block },
+      {
+        op: "replace",
+        path: `/root/children/${atom.blockIndex}`,
+        value: block,
+      },
     ],
     selectionAfter: selectionFromCursorPoint({
       path: textPath(atom.blockIndex, 0),
@@ -649,7 +669,11 @@ function replaceSelectedAtomWithMention(
   return {
     ok: true,
     patch: [
-      { op: "replace", path: `/blocks/${atom.blockIndex}`, value: block },
+      {
+        op: "replace",
+        path: `/root/children/${atom.blockIndex}`,
+        value: block,
+      },
     ],
     selectionAfter: selectionFromCursorPoint({
       path: inlinePath(atom.blockIndex, 0),
@@ -669,18 +693,18 @@ function replaceSelectedAtomWithFigure(
       patch: [
         {
           op: "replace",
-          path: `/blocks/${atom.blockIndex}`,
+          path: `/root/children/${atom.blockIndex}`,
           value: figure,
         },
       ],
       selectionAfter: selectionFromCursorPoint({
-        path: `/blocks/${atom.blockIndex}`,
+        path: `/root/children/${atom.blockIndex}`,
         edge: "after",
       }),
     };
   }
 
-  const block = document.blocks[atom.blockIndex];
+  const block = document.root.children[atom.blockIndex];
   if (!isInlineTextBlock(block)) {
     return { ok: false, reason: "Inline atom must belong to a paragraph." };
   }
@@ -703,7 +727,7 @@ function splitParagraphAtTextPoint(
     return { ok: false, reason: "Cursor text path does not exist." };
   }
 
-  const block = document.blocks[location.blockIndex];
+  const block = document.root.children[location.blockIndex];
   if (location.kind === "code") {
     return replaceTextRange(location, point.offset, point.offset, "\n");
   }
@@ -733,7 +757,7 @@ function splitParagraphAtInlineAtom(
   location: { blockIndex: number; childIndex: number },
   edge: "before" | "after",
 ): TextCommandResult {
-  const block = document.blocks[location.blockIndex];
+  const block = document.root.children[location.blockIndex];
   if (!isInlineTextBlock(block)) {
     return { ok: false, reason: "Expected text block." };
   }
@@ -758,7 +782,7 @@ function splitParagraphAtFigure(
 
   return {
     ok: true,
-    patch: [{ op: "add", path: `/blocks/${insertIndex}`, value: block }],
+    patch: [{ op: "add", path: `/root/children/${insertIndex}`, value: block }],
     selectionAfter: selectionFromCursorPoint({
       path: textPath(insertIndex, 0),
       offset: 0,
@@ -775,7 +799,7 @@ function splitParagraphAtBlockEdge(
 
   return {
     ok: true,
-    patch: [{ op: "add", path: `/blocks/${insertIndex}`, value: block }],
+    patch: [{ op: "add", path: `/root/children/${insertIndex}`, value: block }],
     selectionAfter: selectionFromCursorPoint({
       path: textPath(insertIndex, 0),
       offset: 0,
@@ -801,8 +825,16 @@ function splitTextBlockChildren(
   return {
     ok: true,
     patch: [
-      { op: "replace", path: `/blocks/${blockIndex}`, value: beforeBlock },
-      { op: "add", path: `/blocks/${blockIndex + 1}`, value: afterBlock },
+      {
+        op: "replace",
+        path: `/root/children/${blockIndex}`,
+        value: beforeBlock,
+      },
+      {
+        op: "add",
+        path: `/root/children/${blockIndex + 1}`,
+        value: afterBlock,
+      },
     ],
     selectionAfter: selectionAtChildrenStart(
       blockIndex + 1,
@@ -816,11 +848,11 @@ function mergeWithPreviousTextBlock(
   blockIndex: number,
 ): TextCommandResult {
   if (blockIndex <= 0) {
-    return noOp({ path: `/blocks/${blockIndex}`, edge: "before" });
+    return noOp({ path: `/root/children/${blockIndex}`, edge: "before" });
   }
 
-  const previous = document.blocks[blockIndex - 1];
-  const current = document.blocks[blockIndex];
+  const previous = document.root.children[blockIndex - 1];
+  const current = document.root.children[blockIndex];
   if (isCodeBlock(previous) && isCodeBlock(current)) {
     const selectionAfter = selectionAtBlockEnd(document, blockIndex - 1);
 
@@ -829,17 +861,17 @@ function mergeWithPreviousTextBlock(
       patch: [
         {
           op: "replace",
-          path: `/blocks/${blockIndex - 1}/text`,
+          path: `/root/children/${blockIndex - 1}/text`,
           value: previous.text + current.text,
         },
-        { op: "remove", path: `/blocks/${blockIndex}` },
+        { op: "remove", path: `/root/children/${blockIndex}` },
       ],
       selectionAfter,
     };
   }
 
   if (!isInlineTextBlock(previous) || !isInlineTextBlock(current)) {
-    return noOp({ path: `/blocks/${blockIndex}`, edge: "before" });
+    return noOp({ path: `/root/children/${blockIndex}`, edge: "before" });
   }
 
   const selectionAfter = selectionAtBlockEnd(document, blockIndex - 1);
@@ -853,10 +885,10 @@ function mergeWithPreviousTextBlock(
     patch: [
       {
         op: "replace",
-        path: `/blocks/${blockIndex - 1}/children`,
+        path: `/root/children/${blockIndex - 1}/children`,
         value: mergedChildren,
       },
-      { op: "remove", path: `/blocks/${blockIndex}` },
+      { op: "remove", path: `/root/children/${blockIndex}` },
     ],
     selectionAfter,
   };
@@ -866,8 +898,8 @@ function mergeWithNextTextBlock(
   document: NoteDocument,
   blockIndex: number,
 ): TextCommandResult {
-  const current = document.blocks[blockIndex];
-  const next = document.blocks[blockIndex + 1];
+  const current = document.root.children[blockIndex];
+  const next = document.root.children[blockIndex + 1];
   if (isCodeBlock(current) && isCodeBlock(next)) {
     const selectionAfter = selectionAtBlockEnd(document, blockIndex);
 
@@ -876,17 +908,17 @@ function mergeWithNextTextBlock(
       patch: [
         {
           op: "replace",
-          path: `/blocks/${blockIndex}/text`,
+          path: `/root/children/${blockIndex}/text`,
           value: current.text + next.text,
         },
-        { op: "remove", path: `/blocks/${blockIndex + 1}` },
+        { op: "remove", path: `/root/children/${blockIndex + 1}` },
       ],
       selectionAfter,
     };
   }
 
   if (!isInlineTextBlock(current) || !isInlineTextBlock(next)) {
-    return noOp({ path: `/blocks/${blockIndex}`, edge: "after" });
+    return noOp({ path: `/root/children/${blockIndex}`, edge: "after" });
   }
 
   const selectionAfter = selectionAtBlockEnd(document, blockIndex);
@@ -900,10 +932,10 @@ function mergeWithNextTextBlock(
     patch: [
       {
         op: "replace",
-        path: `/blocks/${blockIndex}/children`,
+        path: `/root/children/${blockIndex}/children`,
         value: mergedChildren,
       },
-      { op: "remove", path: `/blocks/${blockIndex + 1}` },
+      { op: "remove", path: `/root/children/${blockIndex + 1}` },
     ],
     selectionAfter,
   };
@@ -940,7 +972,7 @@ function replaceInlineTextRangeWithMarks(
   replacement: string,
   replacementMarks: Extract<InlineNode, { type: "text" }>["marks"],
 ): TextCommandResult {
-  const block = document.blocks[location.blockIndex];
+  const block = document.root.children[location.blockIndex];
   if (!isInlineTextBlock(block)) {
     return { ok: false, reason: "Expected inline text block." };
   }
@@ -965,7 +997,7 @@ function replaceInlineTextRangeWithMarks(
     patch: [
       {
         op: "replace",
-        path: `/blocks/${location.blockIndex}/children`,
+        path: `/root/children/${location.blockIndex}/children`,
         value: children,
       },
     ],
@@ -996,7 +1028,7 @@ function insertInlineAtomAtTextRange(
   endOffset: number,
   atom: MentionInline,
 ): TextCommandResult {
-  const block = document.blocks[location.blockIndex];
+  const block = document.root.children[location.blockIndex];
   if (location.kind === "code") {
     return {
       ok: false,
@@ -1028,7 +1060,7 @@ function insertInlineAtomAtTextRange(
     patch: [
       {
         op: "replace",
-        path: `/blocks/${location.blockIndex}/children`,
+        path: `/root/children/${location.blockIndex}/children`,
         value: nextChildren,
       },
     ],
@@ -1053,7 +1085,7 @@ function insertMentionAtAtomEdge(
 
   const blockIndex = blockLocationFromPath(document, point.path);
   if (blockIndex !== null) {
-    const block = document.blocks[blockIndex];
+    const block = document.root.children[blockIndex];
     if (isInlineTextBlock(block)) {
       return addInlineAtom(
         blockIndex,
@@ -1076,7 +1108,7 @@ function insertMentionAtFigureEdge(
 ): TextCommandResult {
   if (edge === "before") {
     const previousBlockIndex = blockIndex - 1;
-    const previous = document.blocks[previousBlockIndex];
+    const previous = document.root.children[previousBlockIndex];
     if (isInlineTextBlock(previous)) {
       return addInlineAtom(
         previousBlockIndex,
@@ -1089,7 +1121,7 @@ function insertMentionAtFigureEdge(
   }
 
   const nextBlockIndex = blockIndex + 1;
-  const next = document.blocks[nextBlockIndex];
+  const next = document.root.children[nextBlockIndex];
   if (isInlineTextBlock(next)) {
     return addInlineAtom(nextBlockIndex, 0, mention);
   }
@@ -1129,7 +1161,7 @@ function addParagraphWithInlineAtom(
 
   return {
     ok: true,
-    patch: [{ op: "add", path: `/blocks/${blockIndex}`, value: block }],
+    patch: [{ op: "add", path: `/root/children/${blockIndex}`, value: block }],
     selectionAfter: selectionFromCursorPoint({
       path: inlinePath(blockIndex, 0),
       edge: "after",
@@ -1144,7 +1176,7 @@ function insertFigureAtTextRange(
   endOffset: number,
   figure: FigureBlock,
 ): TextCommandResult {
-  const block = document.blocks[location.blockIndex];
+  const block = document.root.children[location.blockIndex];
   if (location.kind === "code") {
     return addFigureBlock(location.blockIndex + 1, figure);
   }
@@ -1178,7 +1210,7 @@ function insertFigureAtAtomEdge(
 ): TextCommandResult {
   const inline = inlineAtomLocationFromPath(document, point.path);
   if (inline !== null) {
-    const block = document.blocks[inline.blockIndex];
+    const block = document.root.children[inline.blockIndex];
     if (!isInlineTextBlock(block)) {
       return { ok: false, reason: "Expected text block." };
     }
@@ -1225,12 +1257,20 @@ function insertFigureBetweenParagraphChildren(
   return {
     ok: true,
     patch: [
-      { op: "replace", path: `/blocks/${blockIndex}`, value: beforeBlock },
-      { op: "add", path: `/blocks/${figureIndex}`, value: figure },
-      { op: "add", path: `/blocks/${figureIndex + 1}`, value: afterBlock },
+      {
+        op: "replace",
+        path: `/root/children/${blockIndex}`,
+        value: beforeBlock,
+      },
+      { op: "add", path: `/root/children/${figureIndex}`, value: figure },
+      {
+        op: "add",
+        path: `/root/children/${figureIndex + 1}`,
+        value: afterBlock,
+      },
     ],
     selectionAfter: selectionFromCursorPoint({
-      path: `/blocks/${figureIndex}`,
+      path: `/root/children/${figureIndex}`,
       edge: "after",
     }),
   };
@@ -1242,9 +1282,9 @@ function addFigureBlock(
 ): TextCommandResult {
   return {
     ok: true,
-    patch: [{ op: "add", path: `/blocks/${blockIndex}`, value: figure }],
+    patch: [{ op: "add", path: `/root/children/${blockIndex}`, value: figure }],
     selectionAfter: selectionFromCursorPoint({
-      path: `/blocks/${blockIndex}`,
+      path: `/root/children/${blockIndex}`,
       edge: "after",
     }),
   };
@@ -1269,7 +1309,7 @@ function insertTextAtAtomEdge(
 
   const block = blockLocationFromPath(document, point.path);
   if (block !== null) {
-    const blockNode = document.blocks[block];
+    const blockNode = document.root.children[block];
     if (isTextBlock(blockNode)) {
       return point.edge === "before"
         ? insertTextAtParagraphStart(document, block, text, activeMarks)
@@ -1295,7 +1335,7 @@ function insertTextAtInlineAtomEdge(
   text: string,
   activeMarks: Extract<InlineNode, { type: "text" }>["marks"] = [],
 ): TextCommandResult {
-  const block = document.blocks[location.blockIndex];
+  const block = document.root.children[location.blockIndex];
   if (!isInlineTextBlock(block)) {
     return { ok: false, reason: "Inline atom must belong to a paragraph." };
   }
@@ -1393,7 +1433,7 @@ function insertTextAtBlockAtomEdge(
 ): TextCommandResult {
   if (edge === "before") {
     const previousBlockIndex = blockIndex - 1;
-    const previous = document.blocks[previousBlockIndex];
+    const previous = document.root.children[previousBlockIndex];
     if (isTextBlock(previous)) {
       return insertTextAtParagraphEnd(
         document,
@@ -1407,7 +1447,7 @@ function insertTextAtBlockAtomEdge(
   }
 
   const nextBlockIndex = blockIndex + 1;
-  const next = document.blocks[nextBlockIndex];
+  const next = document.root.children[nextBlockIndex];
   if (isTextBlock(next)) {
     return insertTextAtParagraphStart(
       document,
@@ -1426,7 +1466,7 @@ function insertTextAtParagraphEnd(
   text: string,
   activeMarks: Extract<InlineNode, { type: "text" }>["marks"] = [],
 ): TextCommandResult {
-  const block = document.blocks[blockIndex];
+  const block = document.root.children[blockIndex];
   if (isCodeBlock(block)) {
     return replaceTextRange(
       {
@@ -1484,7 +1524,7 @@ function insertTextAtParagraphStart(
   text: string,
   activeMarks: Extract<InlineNode, { type: "text" }>["marks"] = [],
 ): TextCommandResult {
-  const block = document.blocks[blockIndex];
+  const block = document.root.children[blockIndex];
   if (isCodeBlock(block)) {
     return replaceTextRange(
       {
@@ -1549,7 +1589,7 @@ function addInlineText(
     patch: [
       {
         op: "add",
-        path: `/blocks/${blockIndex}/children/${childIndex}`,
+        path: `/root/children/${blockIndex}/children/${childIndex}`,
         value: child,
       },
     ],
@@ -1572,7 +1612,7 @@ function addParagraph(
 
   return {
     ok: true,
-    patch: [{ op: "add", path: `/blocks/${blockIndex}`, value: block }],
+    patch: [{ op: "add", path: `/root/children/${blockIndex}`, value: block }],
     selectionAfter: selectionFromCursorPoint({
       path: textPath(blockIndex, 0),
       offset: text.length,
@@ -1688,10 +1728,10 @@ function splitSelectedRangeFromParagraphStart(
       : createParagraphBlock("");
   const tailBlocks =
     end.kind === "paragraph"
-      ? document.blocks.slice(end.blockIndex + 1)
-      : document.blocks.slice(end.insertIndex);
+      ? document.root.children.slice(end.blockIndex + 1)
+      : document.root.children.slice(end.insertIndex);
   const blocks = normalizeBlocks([
-    ...document.blocks.slice(0, start.blockIndex),
+    ...document.root.children.slice(0, start.blockIndex),
     beforeBlock,
     afterBlock,
     ...tailBlocks,
@@ -1700,7 +1740,7 @@ function splitSelectedRangeFromParagraphStart(
 
   return {
     ok: true,
-    patch: [{ op: "replace", path: "/blocks", value: blocks }],
+    patch: [{ op: "replace", path: "/root/children", value: blocks }],
     selectionAfter: selectionAtChildrenStart(
       selectionBlockIndex,
       (blocks[selectionBlockIndex] as InlineTextBlock).children,
@@ -1721,18 +1761,18 @@ function splitSelectedRangeFromBlockStart(
             ...end.block,
             children: normalizeInlineChildren(end.afterChildren),
           },
-          ...document.blocks.slice(end.blockIndex + 1),
+          ...document.root.children.slice(end.blockIndex + 1),
         ]
-      : document.blocks.slice(end.insertIndex);
+      : document.root.children.slice(end.insertIndex);
   const blocks = normalizeBlocks([
-    ...document.blocks.slice(0, start.insertIndex),
+    ...document.root.children.slice(0, start.insertIndex),
     emptyBlock,
     ...afterBlocks,
   ]);
 
   return {
     ok: true,
-    patch: [{ op: "replace", path: "/blocks", value: blocks }],
+    patch: [{ op: "replace", path: "/root/children", value: blocks }],
     selectionAfter: selectionAtChildrenStart(
       start.insertIndex,
       (blocks[start.insertIndex] as InlineTextBlock).children,
@@ -1756,7 +1796,11 @@ function replaceSameParagraphRange(
   return {
     ok: true,
     patch: [
-      { op: "replace", path: `/blocks/${start.blockIndex}`, value: block },
+      {
+        op: "replace",
+        path: `/root/children/${start.blockIndex}`,
+        value: block,
+      },
     ],
     selectionAfter: selectionAfterInlinePrefix(
       start.blockIndex,
@@ -1785,14 +1829,14 @@ function replaceParagraphToParagraphRange(
       children: normalizeInlineChildren(replacementPrefix),
     };
     const blocks = normalizeBlocks([
-      ...document.blocks.slice(0, start.blockIndex),
+      ...document.root.children.slice(0, start.blockIndex),
       startBlock,
-      ...document.blocks.slice(end.blockIndex),
+      ...document.root.children.slice(end.blockIndex),
     ]);
 
     return {
       ok: true,
-      patch: [{ op: "replace", path: "/blocks", value: blocks }],
+      patch: [{ op: "replace", path: "/root/children", value: blocks }],
       selectionAfter: selectionAfterInlinePrefix(
         start.blockIndex,
         startBlock.children,
@@ -1807,14 +1851,14 @@ function replaceParagraphToParagraphRange(
     children: normalizeInlineChildren(rawChildren),
   };
   const blocks = normalizeBlocks([
-    ...document.blocks.slice(0, start.blockIndex),
+    ...document.root.children.slice(0, start.blockIndex),
     mergedBlock,
-    ...document.blocks.slice(end.blockIndex + 1),
+    ...document.root.children.slice(end.blockIndex + 1),
   ]);
 
   return {
     ok: true,
-    patch: [{ op: "replace", path: "/blocks", value: blocks }],
+    patch: [{ op: "replace", path: "/root/children", value: blocks }],
     selectionAfter: selectionAfterInlinePrefix(
       start.blockIndex,
       mergedBlock.children,
@@ -1838,14 +1882,14 @@ function replaceParagraphToBlockRange(
     children: normalizeInlineChildren(replacementPrefix),
   };
   const blocks = normalizeBlocks([
-    ...document.blocks.slice(0, start.blockIndex),
+    ...document.root.children.slice(0, start.blockIndex),
     startBlock,
-    ...document.blocks.slice(end.insertIndex),
+    ...document.root.children.slice(end.insertIndex),
   ]);
 
   return {
     ok: true,
-    patch: [{ op: "replace", path: "/blocks", value: blocks }],
+    patch: [{ op: "replace", path: "/root/children", value: blocks }],
     selectionAfter: selectionAfterInlinePrefix(
       start.blockIndex,
       startBlock.children,
@@ -1865,14 +1909,14 @@ function replaceBlockToBlockRange(
       ? []
       : [{ ...createParagraphBlock(""), children: [replacement] }];
   const blocks = normalizeBlocks([
-    ...document.blocks.slice(0, start.insertIndex),
+    ...document.root.children.slice(0, start.insertIndex),
     ...replacementBlock,
-    ...document.blocks.slice(end.insertIndex),
+    ...document.root.children.slice(end.insertIndex),
   ]);
 
   return {
     ok: true,
-    patch: [{ op: "replace", path: "/blocks", value: blocks }],
+    patch: [{ op: "replace", path: "/root/children", value: blocks }],
     selectionAfter:
       replacement === null
         ? selectionAtReplacementBlockBoundary(blocks, start.insertIndex)
@@ -1898,14 +1942,14 @@ function replaceBlockToParagraphRange(
     children: normalizeInlineChildren(rawChildren),
   };
   const blocks = normalizeBlocks([
-    ...document.blocks.slice(0, start.insertIndex),
+    ...document.root.children.slice(0, start.insertIndex),
     endBlock,
-    ...document.blocks.slice(end.blockIndex + 1),
+    ...document.root.children.slice(end.blockIndex + 1),
   ]);
 
   return {
     ok: true,
-    patch: [{ op: "replace", path: "/blocks", value: blocks }],
+    patch: [{ op: "replace", path: "/root/children", value: blocks }],
     selectionAfter:
       replacement === null
         ? selectionAtChildrenStart(start.insertIndex, endBlock.children)
@@ -1925,7 +1969,7 @@ function splitPositionFromCursorPoint(
       return null;
     }
 
-    const block = document.blocks[location.blockIndex];
+    const block = document.root.children[location.blockIndex];
     if (location.kind === "code") {
       if (!isCodeBlock(block)) {
         return null;
@@ -1969,7 +2013,7 @@ function splitPositionFromCursorPoint(
 
   const inline = inlineAtomLocationFromPath(document, point.path);
   if (inline !== null) {
-    const block = document.blocks[inline.blockIndex];
+    const block = document.root.children[inline.blockIndex];
     if (!isInlineTextBlock(block)) {
       return null;
     }
@@ -1991,7 +2035,7 @@ function splitPositionFromCursorPoint(
     return null;
   }
 
-  const block = document.blocks[blockIndex];
+  const block = document.root.children[blockIndex];
   if (isInlineTextBlock(block)) {
     const splitIndex = point.edge === "before" ? 0 : block.children.length;
 
@@ -2136,7 +2180,7 @@ function selectionAtReplacementBlockBoundary(
   }
   if (isFigureBlock(next)) {
     return selectionFromCursorPoint({
-      path: `/blocks/${insertIndex}`,
+      path: `/root/children/${insertIndex}`,
       edge: "before",
     });
   }
@@ -2154,7 +2198,7 @@ function selectionAtReplacementBlockBoundary(
   }
 
   return selectionFromCursorPoint({
-    path: "/blocks/0/children/0/text",
+    path: "/root/children/0/children/0/text",
     offset: 0,
   });
 }
@@ -2276,7 +2320,7 @@ function textLocationFromPath(
 ): TextLocation | null {
   const indexes = textIndexesFromPath(path);
   if (indexes !== null) {
-    const block = document.blocks[indexes.blockIndex];
+    const block = document.root.children[indexes.blockIndex];
     const child = isInlineTextBlock(block)
       ? block.children[indexes.childIndex]
       : undefined;
@@ -2299,7 +2343,7 @@ function textLocationFromPath(
     return null;
   }
 
-  const block = document.blocks[codeIndex.blockIndex];
+  const block = document.root.children[codeIndex.blockIndex];
   return isCodeBlock(block)
     ? {
         blockIndex: codeIndex.blockIndex,
@@ -2319,7 +2363,7 @@ function inlineAtomLocationFromPath(
     return null;
   }
 
-  const block = document.blocks[indexes.blockIndex];
+  const block = document.root.children[indexes.blockIndex];
   const child = isInlineTextBlock(block)
     ? block.children[indexes.childIndex]
     : undefined;
@@ -2331,7 +2375,8 @@ function blockAtomLocationFromPath(
   path: string,
 ): number | null {
   const blockIndex = blockIndexFromPath(path);
-  const block = blockIndex === null ? undefined : document.blocks[blockIndex];
+  const block =
+    blockIndex === null ? undefined : document.root.children[blockIndex];
 
   return isFigureBlock(block) ? blockIndex : null;
 }
@@ -2341,7 +2386,7 @@ function blockLocationFromPath(
   path: string,
 ): number | null {
   const blockIndex = blockIndexFromPath(path);
-  return blockIndex !== null && document.blocks[blockIndex] !== undefined
+  return blockIndex !== null && document.root.children[blockIndex] !== undefined
     ? blockIndex
     : null;
 }
@@ -2352,16 +2397,17 @@ function textIndexesFromPath(
   const segments = tryParsePointer(path);
   if (
     segments === null ||
-    segments.length !== 5 ||
-    segments[0] !== "blocks" ||
-    segments[2] !== "children" ||
-    segments[4] !== "text"
+    segments.length !== 6 ||
+    segments[0] !== "root" ||
+    segments[1] !== "children" ||
+    segments[3] !== "children" ||
+    segments[5] !== "text"
   ) {
     return null;
   }
 
-  const blockIndex = arrayIndexFromSegment(segments[1]);
-  const childIndex = arrayIndexFromSegment(segments[3]);
+  const blockIndex = arrayIndexFromSegment(segments[2]);
+  const childIndex = arrayIndexFromSegment(segments[4]);
 
   return blockIndex === null || childIndex === null
     ? null
@@ -2372,14 +2418,15 @@ function codeTextIndexFromPath(path: string): { blockIndex: number } | null {
   const segments = tryParsePointer(path);
   if (
     segments === null ||
-    segments.length !== 3 ||
-    segments[0] !== "blocks" ||
-    segments[2] !== "text"
+    segments.length !== 4 ||
+    segments[0] !== "root" ||
+    segments[1] !== "children" ||
+    segments[3] !== "text"
   ) {
     return null;
   }
 
-  const blockIndex = arrayIndexFromSegment(segments[1]);
+  const blockIndex = arrayIndexFromSegment(segments[2]);
 
   return blockIndex === null ? null : { blockIndex };
 }
@@ -2390,15 +2437,16 @@ function inlineIndexesFromPath(
   const segments = tryParsePointer(path);
   if (
     segments === null ||
-    segments.length !== 4 ||
-    segments[0] !== "blocks" ||
-    segments[2] !== "children"
+    segments.length !== 5 ||
+    segments[0] !== "root" ||
+    segments[1] !== "children" ||
+    segments[3] !== "children"
   ) {
     return null;
   }
 
-  const blockIndex = arrayIndexFromSegment(segments[1]);
-  const childIndex = arrayIndexFromSegment(segments[3]);
+  const blockIndex = arrayIndexFromSegment(segments[2]);
+  const childIndex = arrayIndexFromSegment(segments[4]);
 
   return blockIndex === null || childIndex === null
     ? null
@@ -2407,23 +2455,28 @@ function inlineIndexesFromPath(
 
 function blockIndexFromPath(path: string): number | null {
   const segments = tryParsePointer(path);
-  if (segments === null || segments.length !== 2 || segments[0] !== "blocks") {
+  if (
+    segments === null ||
+    segments.length !== 3 ||
+    segments[0] !== "root" ||
+    segments[1] !== "children"
+  ) {
     return null;
   }
 
-  return arrayIndexFromSegment(segments[1]);
+  return arrayIndexFromSegment(segments[2]);
 }
 
 function textPath(blockIndex: number, childIndex: number): string {
-  return `/blocks/${blockIndex}/children/${childIndex}/text`;
+  return `/root/children/${blockIndex}/children/${childIndex}/text`;
 }
 
 function codeTextPath(blockIndex: number): string {
-  return `/blocks/${blockIndex}/text`;
+  return `/root/children/${blockIndex}/text`;
 }
 
 function inlinePath(blockIndex: number, childIndex: number): string {
-  return `/blocks/${blockIndex}/children/${childIndex}`;
+  return `/root/children/${blockIndex}/children/${childIndex}`;
 }
 
 function textInline(
@@ -2431,8 +2484,8 @@ function textInline(
   marks?: Extract<InlineNode, { type: "text" }>["marks"],
 ): InlineNode {
   return marks === undefined || marks.length === 0
-    ? { type: "text", text }
-    : { type: "text", text, marks };
+    ? { kind: "text", type: "text", text }
+    : { kind: "text", type: "text", text, marks };
 }
 
 function selectionAfterInlineRemoval(
@@ -2440,10 +2493,10 @@ function selectionAfterInlineRemoval(
   blockIndex: number,
   removedChildIndex: number,
 ): SelectionSnap {
-  const block = document.blocks[blockIndex];
+  const block = document.root.children[blockIndex];
   if (!isInlineTextBlock(block)) {
     return selectionFromCursorPoint({
-      path: `/blocks/${blockIndex}`,
+      path: `/root/children/${blockIndex}`,
       edge: "before",
     });
   }
@@ -2487,7 +2540,7 @@ function selectionAfterBlockRemoval(
   document: NoteDocument,
   removedBlockIndex: number,
 ): SelectionSnap {
-  const next = document.blocks[removedBlockIndex + 1];
+  const next = document.root.children[removedBlockIndex + 1];
   if (next !== undefined) {
     return selectionAtBlockStart(
       document,
@@ -2497,13 +2550,13 @@ function selectionAfterBlockRemoval(
   }
 
   const previousIndex = removedBlockIndex - 1;
-  const previous = document.blocks[previousIndex];
+  const previous = document.root.children[previousIndex];
   if (previous !== undefined) {
     return selectionAtBlockEnd(document, previousIndex);
   }
 
   return selectionFromCursorPoint({
-    path: "/blocks/0/children/0/text",
+    path: "/root/children/0/children/0/text",
     offset: 0,
   });
 }
@@ -2513,10 +2566,10 @@ function selectionAtBlockStart(
   sourceBlockIndex: number,
   targetBlockIndex: number,
 ): SelectionSnap {
-  const block = document.blocks[sourceBlockIndex];
+  const block = document.root.children[sourceBlockIndex];
   if (isFigureBlock(block)) {
     return selectionFromCursorPoint({
-      path: `/blocks/${targetBlockIndex}`,
+      path: `/root/children/${targetBlockIndex}`,
       edge: "before",
     });
   }
@@ -2564,10 +2617,10 @@ function selectionAtBlockEnd(
   document: NoteDocument,
   blockIndex: number,
 ): SelectionSnap {
-  const block = document.blocks[blockIndex];
+  const block = document.root.children[blockIndex];
   if (isFigureBlock(block)) {
     return selectionFromCursorPoint({
-      path: `/blocks/${blockIndex}`,
+      path: `/root/children/${blockIndex}`,
       edge: "after",
     });
   }
@@ -2610,7 +2663,7 @@ function isTextLocationAtBlockStart(
     return true;
   }
 
-  const block = document.blocks[location.blockIndex];
+  const block = document.root.children[location.blockIndex];
 
   return isInlineTextBlock(block) && location.childIndex === 0;
 }
@@ -2623,7 +2676,7 @@ function isTextLocationAtBlockEnd(
     return true;
   }
 
-  const block = document.blocks[location.blockIndex];
+  const block = document.root.children[location.blockIndex];
 
   return (
     isInlineTextBlock(block) &&

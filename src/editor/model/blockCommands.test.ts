@@ -4,15 +4,18 @@ import {
   selectionFromCursorPoint,
   selectionFromCursorRange,
 } from "./cursorCommands";
-import type { NoteDocument } from "./noteDocument";
+import {
+  createNoteDocument,
+  type NoteBlockInput,
+  type NoteDocument,
+} from "./noteDocument";
 
-function documentWithBlocks(blocks: NoteDocument["blocks"]): NoteDocument {
-  return {
+function documentWithBlocks(blocks: NoteBlockInput[]): NoteDocument {
+  return createNoteDocument(blocks, {
     id: "note-test",
     title: "Blocks",
     tags: [],
-    blocks,
-  };
+  });
 }
 
 function expectOk<T extends { ok: boolean }>(
@@ -33,7 +36,7 @@ describe("block commands", () => {
       },
     ]);
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
     });
 
@@ -42,11 +45,11 @@ describe("block commands", () => {
 
     expectOk(indent);
     expectOk(outdent);
-    expect(indent.patch).toEqual([
-      { op: "replace", path: "/blocks/0/depth", value: 2 },
+    expect(indent.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/depth", value: 2 },
     ]);
-    expect(outdent.patch).toEqual([
-      { op: "replace", path: "/blocks/0/depth", value: 0 },
+    expect(outdent.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/depth", value: 0 },
     ]);
     expect(indent.selectionAfter).toBe(selection);
   });
@@ -80,16 +83,16 @@ describe("block commands", () => {
     ]);
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/3", edge: "before" },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/3", edge: "before" },
     );
 
     const command = adjustSelectedListDepth(document, selection, "indent");
 
     expectOk(command);
-    expect(command.patch).toEqual([
-      { op: "replace", path: "/blocks/1/depth", value: 1 },
-      { op: "replace", path: "/blocks/2/depth", value: 3 },
+    expect(command.patch).toMatchObject([
+      { op: "replace", path: "/root/children/1/depth", value: 1 },
+      { op: "replace", path: "/root/children/2/depth", value: 3 },
     ]);
     expect(command.selectionAfter).toBe(selection);
   });
@@ -107,7 +110,7 @@ describe("block commands", () => {
       adjustSelectedListDepth(
         document,
         selectionFromCursorPoint({
-          path: "/blocks/0/children/0/text",
+          path: "/root/children/0/children/0/text",
           offset: 1,
         }),
         "indent",

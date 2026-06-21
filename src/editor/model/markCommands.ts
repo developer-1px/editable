@@ -111,7 +111,7 @@ function toggleInlineMark(
     };
   }
 
-  const block = document.blocks[range.blockIndex];
+  const block = document.root.children[range.blockIndex];
   if (!isInlineTextBlock(block)) {
     return {
       ok: false,
@@ -161,11 +161,14 @@ function toggleInlineMark(
   );
   const nextDocument = {
     ...document,
-    blocks: document.blocks.map((candidate, index) =>
-      index === range.blockIndex
-        ? { ...block, children: nextChildren }
-        : candidate,
-    ),
+    root: {
+      ...document.root,
+      children: document.root.children.map((candidate, index) =>
+        index === range.blockIndex
+          ? { ...block, children: nextChildren }
+          : candidate,
+      ),
+    },
   };
 
   return {
@@ -173,7 +176,7 @@ function toggleInlineMark(
     patch: [
       {
         op: "replace",
-        path: `/blocks/${range.blockIndex}/children`,
+        path: `/root/children/${range.blockIndex}/children`,
         value: nextChildren,
       },
     ],
@@ -254,11 +257,13 @@ function inlinePositionFromCursorPoint(
   document: NoteDocument,
   point: CursorPoint,
 ): InlinePosition | null {
-  const text = /^\/blocks\/(\d+)\/children\/(\d+)\/text$/.exec(point.path);
+  const text = /^\/root\/children\/(\d+)\/children\/(\d+)\/text$/.exec(
+    point.path,
+  );
   if (text !== null && point.offset !== undefined) {
     const blockIndex = Number(text[1]);
     const childIndex = Number(text[2]);
-    const block = document.blocks[blockIndex];
+    const block = document.root.children[blockIndex];
     if (!isInlineTextBlock(block)) {
       return null;
     }
@@ -270,11 +275,11 @@ function inlinePositionFromCursorPoint(
     };
   }
 
-  const inline = /^\/blocks\/(\d+)\/children\/(\d+)$/.exec(point.path);
+  const inline = /^\/root\/children\/(\d+)\/children\/(\d+)$/.exec(point.path);
   if (inline !== null && point.edge !== undefined) {
     const blockIndex = Number(inline[1]);
     const childIndex = Number(inline[2]);
-    const block = document.blocks[blockIndex];
+    const block = document.root.children[blockIndex];
     if (!isInlineTextBlock(block)) {
       return null;
     }
@@ -287,10 +292,10 @@ function inlinePositionFromCursorPoint(
     };
   }
 
-  const blockPath = /^\/blocks\/(\d+)$/.exec(point.path);
+  const blockPath = /^\/root\/children\/(\d+)$/.exec(point.path);
   if (blockPath !== null && point.edge !== undefined) {
     const blockIndex = Number(blockPath[1]);
-    const block = document.blocks[blockIndex];
+    const block = document.root.children[blockIndex];
     if (!isInlineTextBlock(block)) {
       return null;
     }
@@ -415,7 +420,7 @@ function pointFromInlineUnitOffset(
     offset -= 1;
   }
 
-  return { path: `/blocks/${blockIndex}`, edge: "after" };
+  return { path: `/root/children/${blockIndex}`, edge: "after" };
 }
 
 function activeMark(markType: ToggleableMarkType): Mark {
@@ -541,14 +546,14 @@ function textInline(
   marks?: Extract<InlineNode, { type: "text" }>["marks"],
 ): InlineNode {
   return marks === undefined || marks.length === 0
-    ? { type: "text", text }
-    : { type: "text", text, marks };
+    ? { kind: "text", type: "text", text }
+    : { kind: "text", type: "text", text, marks };
 }
 
 function textPath(blockIndex: number, childIndex: number): string {
-  return `/blocks/${blockIndex}/children/${childIndex}/text`;
+  return `/root/children/${blockIndex}/children/${childIndex}/text`;
 }
 
 function inlinePath(blockIndex: number, childIndex: number): string {
-  return `/blocks/${blockIndex}/children/${childIndex}`;
+  return `/root/children/${blockIndex}/children/${childIndex}`;
 }

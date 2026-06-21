@@ -11,6 +11,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "verify:internal": "node scripts/verify-internal.mjs",
+    "verify:internal:stress": "node scripts/verify-internal.mjs --repeat=10",
+    "verify:internal:soak": "node scripts/verify-internal.mjs --repeat=30",
     "format": "biome format",
     "lint": "biome lint",
     "check": "biome check"

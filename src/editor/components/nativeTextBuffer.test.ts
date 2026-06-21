@@ -1,34 +1,40 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from "vitest";
-import { selectionFromCursorPoint } from "../model/cursorCommands";
-import type { NoteDocument } from "../model/noteDocument";
+import {
+  selectionFromCursorPoint,
+  selectionFromCursorRange,
+} from "../model/cursorCommands";
+import {
+  createNoteDocument,
+  type NoteBlockInput,
+  type NoteDocument,
+} from "../model/noteDocument";
 import { createNativeTextBuffer, setNativeSelection } from "./nativeTextBuffer";
 
-const firstTextPath = "/blocks/0/children/0/text";
-const secondTextPath = "/blocks/1/children/0/text";
+const firstTextPath = "/root/children/0/children/0/text";
+const secondTextPath = "/root/children/1/children/0/text";
 
 afterEach(() => {
   document.body.innerHTML = "";
   document.getSelection()?.removeAllRanges();
 });
 
-function documentWithBlocks(blocks: NoteDocument["blocks"]): NoteDocument {
-  return {
+function documentWithBlocks(blocks: NoteBlockInput[]): NoteDocument {
+  return createNoteDocument(blocks, {
     id: "note-test",
     title: "Native",
     tags: [],
-    blocks,
-  };
+  });
 }
 
 function setupTextRoot() {
   const root = document.createElement("div");
   root.innerHTML = [
-    '<p class="text-block" data-path="/blocks/0">',
+    '<p class="text-block" data-path="/root/children/0">',
     `<span class="text-run" data-path="${firstTextPath}">Alpha</span>`,
     "</p>",
-    '<p class="text-block" data-path="/blocks/1">',
+    '<p class="text-block" data-path="/root/children/1">',
     `<span class="text-run" data-path="${secondTextPath}">Beta</span>`,
     "</p>",
   ].join("");
@@ -128,6 +134,32 @@ describe("createNativeTextBuffer", () => {
     ).toEqual({ path: firstTextPath, offset: 2 });
   });
 
+  it("allows composition text input from the native caret even if model selection is open", () => {
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "Alpha" }],
+      },
+    ]);
+    const { root, first } = setupTextRoot();
+
+    setDOMSelection(first, 2);
+
+    expect(
+      createNativeTextBuffer().pointForInput(
+        root,
+        note,
+        selectionFromCursorRange(
+          note,
+          { path: firstTextPath, offset: 1 },
+          { path: firstTextPath, offset: 3 },
+        ),
+        "insertCompositionText",
+      ),
+    ).toEqual({ path: firstTextPath, offset: 2 });
+  });
+
   it("does not hand active-mark text insertion to native DOM editing", () => {
     const note = documentWithBlocks([
       {
@@ -175,7 +207,7 @@ describe("createNativeTextBuffer", () => {
     if (!result.ok || !result.changed) {
       throw new Error("Expected changed flush result.");
     }
-    expect(result.patch).toEqual([
+    expect(result.patch).toMatchObject([
       { op: "replace", path: firstTextPath, value: "Alpha!" },
     ]);
     expect(result.selectionAfter.focus).toMatchObject({
@@ -211,8 +243,8 @@ describe("createNativeTextBuffer", () => {
     ]);
     const root = document.createElement("div");
     root.innerHTML = [
-      '<pre class="code-block text-block" data-path="/blocks/0">',
-      '<code class="code-block-text text-run" data-path="/blocks/0/text">abc</code>',
+      '<pre class="code-block text-block" data-path="/root/children/0">',
+      '<code class="code-block-text text-run" data-path="/root/children/0/text">abc</code>',
       "</pre>",
     ].join("");
     document.body.append(root);
@@ -220,11 +252,11 @@ describe("createNativeTextBuffer", () => {
     const point = createNativeTextBuffer().pointForInput(
       root,
       note,
-      selectionFromCursorPoint({ path: "/blocks/0", edge: "after" }),
+      selectionFromCursorPoint({ path: "/root/children/0", edge: "after" }),
       "insertText",
     );
 
-    expect(point).toEqual({ path: "/blocks/0/text", offset: 3 });
+    expect(point).toEqual({ path: "/root/children/0/text", offset: 3 });
   });
 
   it("places the native caret inside an empty text run", () => {
@@ -237,7 +269,7 @@ describe("createNativeTextBuffer", () => {
     ]);
     const root = document.createElement("div");
     root.innerHTML = [
-      '<p class="text-block" data-path="/blocks/0">',
+      '<p class="text-block" data-path="/root/children/0">',
       `<span class="text-run" data-path="${firstTextPath}"></span>`,
       "</p>",
     ].join("");

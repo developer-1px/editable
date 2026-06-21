@@ -40,10 +40,10 @@ import {
   toggleMark,
 } from "./markCommands";
 import {
-  type InlineNode,
+  type FigureBlockInput,
   initialNoteDocument,
   type Mark,
-  type NoteBlock,
+  type MentionInlineInput,
   type NoteDocument,
   NoteDocumentSchema,
 } from "./noteDocument";
@@ -245,11 +245,11 @@ type QueryDescriptorFor<Type extends EditorQuery["type"]> =
   (typeof queryDescriptors)[Type];
 
 const insertNodeStrategies = {
-  mention: defineInsertNodeStrategy<Extract<InlineNode, { type: "mention" }>>(
+  mention: defineInsertNodeStrategy<MentionInlineInput>(
     (document, selection, node) =>
       textCommandResult(insertMention(document, selection, node)),
   ),
-  figure: defineInsertNodeStrategy<Extract<NoteBlock, { type: "figure" }>>(
+  figure: defineInsertNodeStrategy<FigureBlockInput>(
     (document, selection, node) =>
       textCommandResult(insertFigure(document, selection, node)),
   ),
@@ -1017,7 +1017,7 @@ function defaultSelection(document: NoteDocument): SelectionSnap {
   return selectionFromRichSelection(document, {
     type: "caret",
     point: normalizeCursorPoint(document, {
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     }),
   });

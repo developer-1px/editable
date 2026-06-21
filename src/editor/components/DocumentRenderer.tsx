@@ -21,6 +21,7 @@ export function DocumentRenderer({ note, selection }: DocumentRendererProps) {
     selection === undefined
       ? undefined
       : selection.selectionRanges[selection.primaryIndex];
+  const blockKeys = blockRenderKeys(note.root.children);
 
   return (
     <div
@@ -53,9 +54,9 @@ export function DocumentRenderer({ note, selection }: DocumentRendererProps) {
       data-selection-selected-pointers={selection?.selectedPointers.join(" ")}
       role="document"
     >
-      {note.blocks.map((block, blockIndex) => (
+      {note.root.children.map((block, blockIndex) => (
         <BlockView
-          key={block.id}
+          key={blockKeys[blockIndex] ?? block.id}
           block={block}
           blockIndex={blockIndex}
           focus={focus}
@@ -63,6 +64,24 @@ export function DocumentRenderer({ note, selection }: DocumentRendererProps) {
       ))}
     </div>
   );
+}
+
+function blockRenderKeys(blocks: NoteBlock[]): string[] {
+  const counts = new Map<string, number>();
+  for (const block of blocks) {
+    counts.set(block.id, (counts.get(block.id) ?? 0) + 1);
+  }
+
+  const occurrences = new Map<string, number>();
+  return blocks.map((block) => {
+    if ((counts.get(block.id) ?? 0) <= 1) {
+      return block.id;
+    }
+
+    const occurrence = occurrences.get(block.id) ?? 0;
+    occurrences.set(block.id, occurrence + 1);
+    return `${block.id}:${occurrence}`;
+  });
 }
 
 function BlockView({
@@ -74,7 +93,7 @@ function BlockView({
   blockIndex: number;
   focus: SelectionPoint | null;
 }) {
-  const blockPath = `/blocks/${blockIndex}`;
+  const blockPath = `/root/children/${blockIndex}`;
 
   if (block.type === "figure") {
     return (

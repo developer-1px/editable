@@ -479,7 +479,7 @@ export function cursorPointInputFromSelection(
   const point = selection.focus ?? selection.anchor;
 
   if (point === null) {
-    return { path: "/blocks/0", edge: "before" };
+    return { path: "/root/children/0", edge: "before" };
   }
 
   return cursorPointInputFromSelectionPoint(point);

@@ -1,10 +1,13 @@
 import {
   createParagraphBlock,
   type InlineNode,
+  type InlineNodeInput,
+  InlineNodeSchema,
   isInlineTextBlock,
   type Mark,
   type NoteBlock,
   type NoteDocument,
+  textInline,
 } from "./noteDocument";
 
 const MARK_ORDER: Record<Mark["type"], number> = {
@@ -17,7 +20,10 @@ const MARK_ORDER: Record<Mark["type"], number> = {
 export function normalizeDocument(document: NoteDocument): NoteDocument {
   return {
     ...document,
-    blocks: normalizeBlocks(document.blocks),
+    root: {
+      ...document.root,
+      children: normalizeBlocks(document.root.children),
+    },
   };
 }
 
@@ -38,18 +44,22 @@ export function normalizeBlock(block: NoteBlock): NoteBlock {
   return block;
 }
 
-export function normalizeInlineChildren(children: InlineNode[]): InlineNode[] {
+export function normalizeInlineChildren(
+  children: InlineNodeInput[],
+): InlineNode[] {
   const normalized = mergeAdjacentText(
     children.filter((child) => child.type !== "text" || child.text.length > 0),
   );
 
-  return normalized.length > 0 ? normalized : [{ type: "text", text: "" }];
+  return normalized.length > 0 ? normalized : [textInline("")];
 }
 
-export function mergeAdjacentText(children: InlineNode[]): InlineNode[] {
+export function mergeAdjacentText(children: InlineNodeInput[]): InlineNode[] {
   const merged: InlineNode[] = [];
 
-  for (const child of children.map(normalizeInlineNode)) {
+  for (const child of children
+    .map((candidate) => InlineNodeSchema.parse(candidate))
+    .map(normalizeInlineNode)) {
     const previous = merged[merged.length - 1];
     if (
       previous?.type === "text" &&
@@ -76,9 +86,7 @@ function normalizeInlineNode(child: InlineNode): InlineNode {
 
   const marks = normalizeMarks(child.marks);
 
-  return marks.length > 0
-    ? { ...child, marks }
-    : { type: "text", text: child.text };
+  return marks.length > 0 ? { ...child, marks } : textInline(child.text);
 }
 
 function normalizeMarks(marks: Mark[] | undefined): Mark[] {

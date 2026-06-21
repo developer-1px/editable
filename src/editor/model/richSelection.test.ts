@@ -1,7 +1,11 @@
 import { createJSONDocument } from "@interactive-os/json-document";
 import { describe, expect, it } from "vitest";
-import type { NoteDocument } from "./noteDocument";
-import { NoteDocumentSchema } from "./noteDocument";
+import {
+  createNoteDocument,
+  type NoteBlockInput,
+  type NoteDocument,
+  NoteDocumentSchema,
+} from "./noteDocument";
 import {
   selectionForRender,
   selectionFromCursorPoint,
@@ -10,13 +14,12 @@ import {
 } from "./richSelection";
 import { insertText } from "./textCommands";
 
-function documentWithBlocks(blocks: NoteDocument["blocks"]): NoteDocument {
-  return {
+function documentWithBlocks(blocks: NoteBlockInput[]): NoteDocument {
+  return createNoteDocument(blocks, {
     id: "note-test",
     title: "Selection",
     tags: [],
-    blocks,
-  };
+  });
 }
 
 function expectOk<T extends { ok: boolean }>(
@@ -28,14 +31,14 @@ function expectOk<T extends { ok: boolean }>(
 describe("rich selection mapping", () => {
   it("serializes collapsed carets without selected pointers", () => {
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
     expect(selection.selectedPointers).toEqual([]);
     expect(selection.selectionRanges[0]).toMatchObject({
-      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-      focus: { path: "/blocks/0/children/0/text", offset: 1 },
+      anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+      focus: { path: "/root/children/0/children/0/text", offset: 1 },
     });
   });
 
@@ -64,24 +67,24 @@ describe("rich selection mapping", () => {
 
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/2", edge: "before" },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/2", edge: "before" },
     );
 
     expect(selection.selectedPointers).toEqual([]);
     expect(selectionForRender(document, selection)?.selectedPointers).toEqual([
-      "/blocks/0/children/1",
-      "/blocks/1",
+      "/root/children/0/children/1",
+      "/root/children/1",
     ]);
   });
 
   it("uses node selection as the only source selection with selected pointers", () => {
-    const selection = selectionFromNodeTarget("/blocks/1");
+    const selection = selectionFromNodeTarget("/root/children/1");
 
-    expect(selection.selectedPointers).toEqual(["/blocks/1"]);
+    expect(selection.selectedPointers).toEqual(["/root/children/1"]);
     expect(selection.selectionRanges[0]).toMatchObject({
-      anchor: { path: "/blocks/1", edge: "before" },
-      focus: { path: "/blocks/1", edge: "after" },
+      anchor: { path: "/root/children/1", edge: "before" },
+      focus: { path: "/root/children/1", edge: "after" },
     });
   });
 
@@ -103,8 +106,8 @@ describe("rich selection mapping", () => {
     );
     const selection = selectionFromCursorRange(
       document.value,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/0/children/2/text", offset: 0 },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/0/children/2/text", offset: 0 },
     );
     document.selection?.restore(selection);
 
@@ -114,12 +117,12 @@ describe("rich selection mapping", () => {
     document.undo();
 
     expect(document.selection?.snapshot().selectionRanges[0]).toMatchObject({
-      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-      focus: { path: "/blocks/0/children/2/text", offset: 0 },
+      anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+      focus: { path: "/root/children/0/children/2/text", offset: 0 },
     });
     expect(
       selectionForRender(document.value, document.selection?.snapshot())
         ?.selectedPointers,
-    ).toEqual(["/blocks/0/children/1"]);
+    ).toEqual(["/root/children/0/children/1"]);
   });
 });

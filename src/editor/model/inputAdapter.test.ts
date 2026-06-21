@@ -5,31 +5,36 @@ import {
   selectionFromCursorRange,
 } from "./cursorCommands";
 import { type EditorInputResult, translateEditorInput } from "./inputAdapter";
-import type { NoteDocument } from "./noteDocument";
+import {
+  createNoteDocument,
+  type NoteBlockInput,
+  type NoteDocument,
+} from "./noteDocument";
 import { selectionForRender } from "./richSelection";
 
 function documentWithText(text: string): NoteDocument {
-  return {
-    id: "note-test",
-    title: "Input",
-    tags: [],
-    blocks: [
+  return createNoteDocument(
+    [
       {
         id: "block-1",
         type: "paragraph",
         children: [{ type: "text", text }],
       },
     ],
-  };
+    {
+      id: "note-test",
+      title: "Input",
+      tags: [],
+    },
+  );
 }
 
-function documentWithBlocks(blocks: NoteDocument["blocks"]): NoteDocument {
-  return {
+function documentWithBlocks(blocks: NoteBlockInput[]): NoteDocument {
+  return createNoteDocument(blocks, {
     id: "note-test",
     title: "Input",
     tags: [],
-    blocks,
-  };
+  });
 }
 
 function expectHandled(
@@ -67,7 +72,7 @@ describe("translateEditorInput", () => {
   it("translates ArrowLeft and ArrowRight to horizontal cursor commands", () => {
     const document = documentWithText("AB");
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
@@ -99,11 +104,11 @@ describe("translateEditorInput", () => {
       },
     ]);
     const start = selectionFromCursorPoint({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     const textEnd = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 7,
     });
 
@@ -128,24 +133,24 @@ describe("translateEditorInput", () => {
     expectHandled(left);
     expectHandled(shiftRight);
     expect(right.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 3,
     });
     expect(left.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 4,
     });
     expect(shiftRight.selectionAfter.anchor).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 7,
     });
     expect(shiftRight.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
     expect(
       selectionForRender(document, shiftRight.selectionAfter)?.selectedPointers,
-    ).toEqual(["/blocks/0/children/1"]);
+    ).toEqual(["/root/children/0/children/1"]);
   });
 
   it("translates Alt/Option+ArrowUp and ArrowDown to block boundary commands", () => {
@@ -162,15 +167,15 @@ describe("translateEditorInput", () => {
       },
     ]);
     const insideText = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     const firstBlockEnd = selectionFromCursorPoint({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "after",
     });
     const afterFigure = selectionFromCursorPoint({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
 
@@ -201,28 +206,28 @@ describe("translateEditorInput", () => {
     expectHandled(nextBlockEnd);
     expectHandled(shiftUp);
     expect(up.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     expect(down.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "after",
     });
     expect(nextBlockEnd.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
     expect(shiftUp.selectionAfter.anchor).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
     expect(shiftUp.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
     expect(
       selectionForRender(document, shiftUp.selectionAfter)?.selectedPointers,
-    ).toEqual(["/blocks/1"]);
+    ).toEqual(["/root/children/1"]);
   });
 
   it("translates Home and End to document boundary cursor commands", () => {
@@ -244,7 +249,7 @@ describe("translateEditorInput", () => {
       },
     ]);
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
@@ -261,21 +266,21 @@ describe("translateEditorInput", () => {
     expectHandled(home);
     expectHandled(shiftEnd);
     expect(home.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     expect(shiftEnd.selectionAfter.anchor).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     expect(shiftEnd.selectionAfter.focus).toMatchObject({
-      path: "/blocks/2",
+      path: "/root/children/2",
       edge: "after",
     });
     expect(shiftEnd.selectionAfter.selectedPointers).toEqual([]);
     expect(
       selectionForRender(document, shiftEnd.selectionAfter)?.selectedPointers,
-    ).toEqual(["/blocks/1"]);
+    ).toEqual(["/root/children/1"]);
   });
 
   it("translates Ctrl/Meta+ArrowLeft and ArrowRight to line boundary cursor commands", () => {
@@ -297,21 +302,21 @@ describe("translateEditorInput", () => {
       },
     ]);
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     const lineGeometry: CursorGeometryAdapter = {
       rectForPoint: () => rect(10, 20, 1, 18),
       pointFromCoordinates: () => ({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       lineStartPoint: () => ({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 0,
       }),
       lineEndPoint: () => ({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
     };
@@ -370,7 +375,7 @@ describe("translateEditorInput", () => {
         geometry: {
           rectForPoint: () => rect(10, 20, 1, 18),
           pointFromCoordinates: () => ({
-            path: "/blocks/2/children/0/text",
+            path: "/root/children/2/children/0/text",
             offset: 1,
           }),
         },
@@ -389,7 +394,7 @@ describe("translateEditorInput", () => {
         geometry: {
           rectForPoint: () => rect(10, 20, 1, 18),
           pointFromCoordinates: () => ({
-            path: "/blocks/0",
+            path: "/root/children/0",
             edge: "before",
           }),
         },
@@ -403,39 +408,39 @@ describe("translateEditorInput", () => {
     expectHandled(metaUp);
     expectHandled(shiftCtrlDown);
     expect(metaLeft.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 0,
     });
     expect(ctrlRight.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     expect(shiftMetaRight.selectionAfter.anchor).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     expect(shiftMetaRight.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     expect(shiftCtrlLeft.selectionAfter.anchor).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     expect(shiftCtrlLeft.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 0,
     });
     expect(metaUp.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     expect(shiftCtrlDown.selectionAfter.anchor).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     expect(shiftCtrlDown.selectionAfter.focus).toMatchObject({
-      path: "/blocks/2",
+      path: "/root/children/2",
       edge: "after",
     });
     expect(
@@ -445,7 +450,7 @@ describe("translateEditorInput", () => {
     expect(
       selectionForRender(document, shiftCtrlDown.selectionAfter)
         ?.selectedPointers,
-    ).toEqual(["/blocks/1"]);
+    ).toEqual(["/root/children/1"]);
   });
 
   it("translates Ctrl+A and Meta+A to headless select-all", () => {
@@ -470,7 +475,7 @@ describe("translateEditorInput", () => {
       },
     ]);
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
@@ -488,17 +493,17 @@ describe("translateEditorInput", () => {
     expectHandled(ctrl);
     expectHandled(meta);
     expect(ctrl.selectionAfter.anchor).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     expect(ctrl.selectionAfter.focus).toMatchObject({
-      path: "/blocks/2",
+      path: "/root/children/2",
       edge: "after",
     });
     expect(ctrl.selectionAfter.selectedPointers).toEqual([]);
     expect(
       selectionForRender(document, ctrl.selectionAfter)?.selectedPointers,
-    ).toEqual(["/blocks/0/children/1", "/blocks/1"]);
+    ).toEqual(["/root/children/0/children/1", "/root/children/1"]);
     expect(meta.selectionAfter).toEqual(ctrl.selectionAfter);
   });
 
@@ -506,8 +511,8 @@ describe("translateEditorInput", () => {
     const document = documentWithText("ABCD");
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/0/children/0/text", offset: 3 },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/0/children/0/text", offset: 3 },
     );
 
     const bold = translateEditorInput(document, selection, {
@@ -523,10 +528,10 @@ describe("translateEditorInput", () => {
 
     expectHandled(bold);
     expectHandled(italic);
-    expect(bold.patch).toEqual([
+    expect(bold.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [
           { type: "text", text: "A" },
           { type: "text", text: "BC", marks: [{ type: "bold" }] },
@@ -534,10 +539,10 @@ describe("translateEditorInput", () => {
         ],
       },
     ]);
-    expect(italic.patch).toEqual([
+    expect(italic.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [
           { type: "text", text: "A" },
           { type: "text", text: "BC", marks: [{ type: "italic" }] },
@@ -551,8 +556,8 @@ describe("translateEditorInput", () => {
     const document = documentWithText("ABCD");
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/0/children/0/text", offset: 3 },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/0/children/0/text", offset: 3 },
       { pendingLinkHref: "https://openai.com" },
     );
 
@@ -569,10 +574,10 @@ describe("translateEditorInput", () => {
 
     expectHandled(code);
     expectHandled(link);
-    expect(code.patch).toEqual([
+    expect(code.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [
           { type: "text", text: "A" },
           { type: "text", text: "BC", marks: [{ type: "code" }] },
@@ -580,10 +585,10 @@ describe("translateEditorInput", () => {
         ],
       },
     ]);
-    expect(link.patch).toEqual([
+    expect(link.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [
           { type: "text", text: "A" },
           {
@@ -601,7 +606,7 @@ describe("translateEditorInput", () => {
     const result = translateEditorInput(
       documentWithText("AB"),
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       { type: "keydown", key: "b", ctrlKey: true },
@@ -610,7 +615,7 @@ describe("translateEditorInput", () => {
     expectHandled(result);
     expect(result.patch).toEqual([]);
     expect(result.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     expect(result.selectionAfter.context).toEqual({
@@ -622,7 +627,7 @@ describe("translateEditorInput", () => {
     const document = documentWithText("AB");
     const selection = selectionFromCursorPoint(
       {
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       },
       { pendingLinkHref: "https://openai.com" },
@@ -664,7 +669,7 @@ describe("translateEditorInput", () => {
       },
     ]);
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
     });
 
@@ -680,11 +685,11 @@ describe("translateEditorInput", () => {
 
     expectHandled(indent);
     expectHandled(outdent);
-    expect(indent.patch).toEqual([
-      { op: "replace", path: "/blocks/0/depth", value: 2 },
+    expect(indent.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/depth", value: 2 },
     ]);
-    expect(outdent.patch).toEqual([
-      { op: "replace", path: "/blocks/0/depth", value: 0 },
+    expect(outdent.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/depth", value: 0 },
     ]);
     expect(indent.selectionAfter).toBe(selection);
   });
@@ -693,18 +698,22 @@ describe("translateEditorInput", () => {
     const result = translateEditorInput(
       documentWithText("AB"),
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       { type: "keydown", key: "Tab" },
     );
 
     expectHandled(result);
-    expect(result.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "A\tB" },
+    expect(result.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0/children/0/text",
+        value: "A\tB",
+      },
     ]);
     expect(result.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
     });
   });
@@ -723,7 +732,7 @@ describe("translateEditorInput", () => {
       },
     ]);
     const selection = selectionFromCursorPoint({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
 
@@ -735,17 +744,17 @@ describe("translateEditorInput", () => {
 
     expectHandled(result);
     expect(result.selectionAfter.anchor).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "before",
     });
     expect(result.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
     expect(result.selectionAfter.selectedPointers).toEqual([]);
     expect(
       selectionForRender(document, result.selectionAfter)?.selectedPointers,
-    ).toEqual(["/blocks/1"]);
+    ).toEqual(["/root/children/1"]);
   });
 
   it("translates Shift+ArrowDown into headless range selection through geometry", () => {
@@ -758,13 +767,13 @@ describe("translateEditorInput", () => {
     ]);
     const geometry: CursorGeometryAdapter = {
       rectForPoint: () => rect(10, 20, 100, 1),
-      pointFromCoordinates: () => ({ path: "/blocks/0", edge: "after" }),
+      pointFromCoordinates: () => ({ path: "/root/children/0", edge: "after" }),
     };
 
     const result = translateEditorInput(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0",
+        path: "/root/children/0",
         edge: "before",
       }),
       { type: "keydown", key: "ArrowDown", shiftKey: true },
@@ -773,25 +782,25 @@ describe("translateEditorInput", () => {
 
     expectHandled(result);
     expect(result.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "after",
     });
     expect(result.selectionAfter.selectedPointers).toEqual([]);
     expect(
       selectionForRender(document, result.selectionAfter)?.selectedPointers,
-    ).toEqual(["/blocks/0"]);
+    ).toEqual(["/root/children/0"]);
   });
 
   it("translates ArrowUp and ArrowDown through the geometry adapter", () => {
     const document = documentWithText("AB");
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     const geometry: CursorGeometryAdapter = {
       rectForPoint: () => rect(10, 20, 2, 18),
       pointFromCoordinates: (_x, y) => ({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: y < 20 ? 0 : 2,
       }),
     };
@@ -819,7 +828,7 @@ describe("translateEditorInput", () => {
     const document = documentWithText("ABCDE");
     const selection = selectionFromCursorPoint(
       {
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 2,
       },
       { preferredX: 20 },
@@ -830,7 +839,7 @@ describe("translateEditorInput", () => {
       pointFromCoordinates(x, y) {
         calls.push({ x, y });
         return {
-          path: "/blocks/0/children/0/text",
+          path: "/root/children/0/children/0/text",
           offset: y < 100 ? 0 : 5,
         };
       },
@@ -875,7 +884,7 @@ describe("translateEditorInput", () => {
       },
     ]);
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
@@ -892,15 +901,15 @@ describe("translateEditorInput", () => {
     expectHandled(up);
     expectHandled(down);
     expect(up.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     expect(down.selectionAfter.anchor).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     expect(down.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
   });
@@ -909,22 +918,22 @@ describe("translateEditorInput", () => {
     const result = translateEditorInput(
       documentWithText("AB"),
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       { type: "beforeinput", inputType: "insertText", data: "x" },
     );
 
     expectHandled(result);
-    expect(result.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "AxB" },
+    expect(result.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "AxB" },
     ]);
   });
 
   it("translates browser text insertion beforeinput variants to insertText", () => {
     const document = documentWithText("AB");
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
@@ -947,14 +956,22 @@ describe("translateEditorInput", () => {
     expectHandled(replacement);
     expectHandled(paste);
     expectHandled(drop);
-    expect(replacement.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "AxB" },
+    expect(replacement.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "AxB" },
     ]);
-    expect(paste.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "ApasteB" },
+    expect(paste.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0/children/0/text",
+        value: "ApasteB",
+      },
     ]);
-    expect(drop.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "AdropB" },
+    expect(drop.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0/children/0/text",
+        value: "AdropB",
+      },
     ]);
   });
 
@@ -962,7 +979,7 @@ describe("translateEditorInput", () => {
     const result = translateEditorInput(
       documentWithText("AB"),
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       { type: "beforeinput", inputType: "insertLineBreak" },
@@ -970,8 +987,8 @@ describe("translateEditorInput", () => {
 
     expectHandled(result);
     expect(result.patch).toMatchObject([
-      { op: "replace", path: "/blocks/0" },
-      { op: "add", path: "/blocks/1" },
+      { op: "replace", path: "/root/children/0" },
+      { op: "add", path: "/root/children/1" },
     ]);
   });
 
@@ -979,8 +996,8 @@ describe("translateEditorInput", () => {
     const document = documentWithText("ABCD");
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/0/children/0/text", offset: 3 },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/0/children/0/text", offset: 3 },
     );
 
     const deleteContent = translateEditorInput(document, selection, {
@@ -994,12 +1011,12 @@ describe("translateEditorInput", () => {
 
     expectHandled(deleteContent);
     expectHandled(deleteByCut);
-    expect(deleteContent.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "AD" },
+    expect(deleteContent.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "AD" },
     ]);
     expect(deleteByCut.patch).toEqual(deleteContent.patch);
     expect(deleteByCut.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
   });
@@ -1018,8 +1035,8 @@ describe("translateEditorInput", () => {
     ]);
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/0/children/2/text", offset: 1 },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/0/children/2/text", offset: 1 },
     );
 
     const result = translateEditorInput(document, selection, {
@@ -1032,14 +1049,14 @@ describe("translateEditorInput", () => {
     expect(result.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0",
+        path: "/root/children/0",
         value: {
           children: [{ type: "text", text: "AxD" }],
         },
       },
     ]);
     expect(result.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
     });
   });
@@ -1047,7 +1064,7 @@ describe("translateEditorInput", () => {
   it("translates Backspace, Delete, and Enter to edit commands", () => {
     const document = documentWithText("AB");
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
@@ -1067,15 +1084,15 @@ describe("translateEditorInput", () => {
     expectHandled(backspace);
     expectHandled(deleteKey);
     expectHandled(enter);
-    expect(backspace.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "B" },
+    expect(backspace.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "B" },
     ]);
-    expect(deleteKey.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "A" },
+    expect(deleteKey.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "A" },
     ]);
     expect(enter.patch).toMatchObject([
-      { op: "replace", path: "/blocks/0" },
-      { op: "add", path: "/blocks/1" },
+      { op: "replace", path: "/root/children/0" },
+      { op: "add", path: "/root/children/1" },
     ]);
   });
 
@@ -1091,15 +1108,15 @@ describe("translateEditorInput", () => {
       },
     ]);
     const textEnd = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 7,
     });
     const textStart = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 0,
     });
     const beforeMention = selectionFromCursorPoint({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "before",
     });
 
@@ -1122,16 +1139,24 @@ describe("translateEditorInput", () => {
     expectHandled(backward);
     expectHandled(forward);
     expectHandled(atom);
-    expect(backward.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "one " },
-    ]);
-    expect(forward.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: " two" },
-    ]);
-    expect(atom.patch).toEqual([
+    expect(backward.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0",
+        path: "/root/children/0/children/0/text",
+        value: "one ",
+      },
+    ]);
+    expect(forward.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0/children/0/text",
+        value: " two",
+      },
+    ]);
+    expect(atom.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0",
         value: {
           id: "block-1",
           type: "paragraph",
@@ -1144,11 +1169,11 @@ describe("translateEditorInput", () => {
   it("translates deleteWord beforeinput variants to word delete commands", () => {
     const document = documentWithText("one two");
     const textEnd = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 7,
     });
     const textStart = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 0,
     });
 
@@ -1163,11 +1188,19 @@ describe("translateEditorInput", () => {
 
     expectHandled(backward);
     expectHandled(forward);
-    expect(backward.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "one " },
+    expect(backward.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0/children/0/text",
+        value: "one ",
+      },
     ]);
-    expect(forward.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: " two" },
+    expect(forward.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0/children/0/text",
+        value: " two",
+      },
     ]);
   });
 
@@ -1191,8 +1224,8 @@ describe("translateEditorInput", () => {
     ]);
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/2", edge: "before" },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/2", edge: "before" },
     );
 
     const result = translateEditorInput(document, selection, {
@@ -1204,7 +1237,7 @@ describe("translateEditorInput", () => {
     expect(result.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks",
+        path: "/root/children",
         value: [
           { children: [{ type: "text", text: "A" }] },
           { children: [{ type: "text", text: "CD" }] },
@@ -1212,7 +1245,7 @@ describe("translateEditorInput", () => {
       },
     ]);
     expect(result.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
   });
@@ -1231,8 +1264,8 @@ describe("translateEditorInput", () => {
     ]);
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/0/children/2/text", offset: 1 },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/0/children/2/text", offset: 1 },
     );
 
     const result = translateEditorInput(document, selection, {
@@ -1244,7 +1277,7 @@ describe("translateEditorInput", () => {
     expect(result.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks",
+        path: "/root/children",
         value: [
           { children: [{ type: "text", text: "A" }] },
           { children: [{ type: "text", text: "D" }] },
@@ -1252,7 +1285,7 @@ describe("translateEditorInput", () => {
       },
     ]);
     expect(result.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1/children/0/text",
+      path: "/root/children/1/children/0/text",
       offset: 0,
     });
   });
@@ -1261,17 +1294,17 @@ describe("translateEditorInput", () => {
     const result = translateEditorInput(
       documentWithText("AB"),
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       { type: "paste", text: " paste " },
     );
 
     expectHandled(result);
-    expect(result.patch).toEqual([
+    expect(result.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         value: "A paste B",
       },
     ]);
@@ -1291,8 +1324,8 @@ describe("translateEditorInput", () => {
     ]);
     const selection = selectionFromCursorRange(
       document,
-      { path: "/blocks/0/children/0/text", offset: 1 },
-      { path: "/blocks/0/children/2/text", offset: 1 },
+      { path: "/root/children/0/children/0/text", offset: 1 },
+      { path: "/root/children/0/children/2/text", offset: 1 },
     );
 
     const result = translateEditorInput(document, selection, {
@@ -1304,14 +1337,14 @@ describe("translateEditorInput", () => {
     expect(result.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0",
+        path: "/root/children/0",
         value: {
           children: [{ type: "text", text: "ApasteD" }],
         },
       },
     ]);
     expect(result.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 6,
     });
   });
@@ -1319,7 +1352,7 @@ describe("translateEditorInput", () => {
   it("does not mutate selection while composition is active", () => {
     const document = documentWithText("AB");
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
@@ -1342,7 +1375,7 @@ describe("translateEditorInput", () => {
     const document = documentWithText("AB");
     const selection = selectionFromCursorPoint(
       {
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       },
       {
@@ -1369,7 +1402,7 @@ describe("translateEditorInput", () => {
   it("passes F-keys and unsupported command shortcuts through", () => {
     const document = documentWithText("AB");
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 

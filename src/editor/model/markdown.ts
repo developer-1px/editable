@@ -1,5 +1,14 @@
 import { normalizeDocument, normalizeInlineChildren } from "./normalizer";
-import type { InlineNode, Mark, NoteBlock, NoteDocument } from "./noteDocument";
+import {
+  createNoteDocument,
+  type InlineNode,
+  type Mark,
+  mentionInline,
+  type NoteBlock,
+  type NoteBlockInput,
+  type NoteDocument,
+  textInline,
+} from "./noteDocument";
 
 type MarkdownImportOptions = {
   id?: string;
@@ -16,7 +25,7 @@ export function importMarkdown(
   options: MarkdownImportOptions = {},
 ): NoteDocument {
   const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
-  const blocks: NoteBlock[] = [];
+  const blocks: NoteBlockInput[] = [];
   let lineIndex = 0;
   let blockIndex = 0;
 
@@ -123,16 +132,17 @@ export function importMarkdown(
     blockIndex += 1;
   }
 
-  return normalizeDocument({
-    id: options.id ?? "markdown-note",
-    title: options.title ?? "Markdown note",
-    tags: options.tags ?? [],
-    blocks,
-  });
+  return normalizeDocument(
+    createNoteDocument(blocks, {
+      id: options.id ?? "markdown-note",
+      title: options.title ?? "Markdown note",
+      tags: options.tags ?? [],
+    }),
+  );
 }
 
 export function exportMarkdown(document: NoteDocument): string {
-  return document.blocks.map(exportBlock).join("\n\n");
+  return document.root.children.map(exportBlock).join("\n\n");
 }
 
 function exportBlock(block: NoteBlock): string {
@@ -169,11 +179,7 @@ function parseInline(markdown: string, activeMarks: Mark[] = []): InlineNode[] {
 
     const mention = parseMention(markdown, index);
     if (mention !== null) {
-      children.push({
-        type: "mention",
-        id: mention.id,
-        label: mention.label,
-      });
+      children.push(mentionInline(mention.id, mention.label));
       index = mention.end;
       continue;
     }
@@ -390,9 +396,7 @@ function pushText(children: InlineNode[], text: string, marks: Mark[]) {
     return;
   }
 
-  children.push(
-    marks.length === 0 ? { type: "text", text } : { type: "text", text, marks },
-  );
+  children.push(textInline(text, marks.length === 0 ? undefined : marks));
 }
 
 function blockId(kind: BlockKind, index: number): string {

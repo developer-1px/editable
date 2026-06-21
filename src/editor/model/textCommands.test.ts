@@ -1,7 +1,12 @@
 import { createJSONDocument } from "@interactive-os/json-document";
 import { describe, expect, it } from "vitest";
 import { selectionFromCursorPoint } from "./cursorCommands";
-import { type NoteDocument, NoteDocumentSchema } from "./noteDocument";
+import {
+  createNoteDocument,
+  type NoteBlockInput,
+  type NoteDocument,
+  NoteDocumentSchema,
+} from "./noteDocument";
 import {
   deleteBackward,
   deleteForward,
@@ -13,13 +18,12 @@ import {
   splitParagraph,
 } from "./textCommands";
 
-function documentWithBlocks(blocks: NoteDocument["blocks"]): NoteDocument {
-  return {
+function documentWithBlocks(blocks: NoteBlockInput[]): NoteDocument {
+  return createNoteDocument(blocks, {
     id: "note-test",
     title: "Text",
     tags: [],
-    blocks,
-  };
+  });
 }
 
 function expectOk<T extends { ok: boolean }>(
@@ -53,18 +57,18 @@ describe("text commands", () => {
       },
     ]);
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
     const command = insertText(document, selection, "x");
 
     expectOk(command);
-    expect(command.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "AxB" },
+    expect(command.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "AxB" },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
     });
   });
@@ -91,7 +95,7 @@ describe("text commands", () => {
     const heading = insertText(
       headingDocument,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       "x",
@@ -99,7 +103,7 @@ describe("text commands", () => {
     const list = insertText(
       listDocument,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       "y",
@@ -107,11 +111,11 @@ describe("text commands", () => {
 
     expectOk(heading);
     expectOk(list);
-    expect(heading.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "AxB" },
+    expect(heading.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "AxB" },
     ]);
-    expect(list.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "AyB" },
+    expect(list.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "AyB" },
     ]);
   });
 
@@ -126,28 +130,28 @@ describe("text commands", () => {
 
     const insert = insertText(
       document,
-      selectionFromCursorPoint({ path: "/blocks/0/text", offset: 1 }),
+      selectionFromCursorPoint({ path: "/root/children/0/text", offset: 1 }),
       "x",
     );
     const newline = splitParagraph(
       document,
-      selectionFromCursorPoint({ path: "/blocks/0/text", offset: 1 }),
+      selectionFromCursorPoint({ path: "/root/children/0/text", offset: 1 }),
     );
 
     expectOk(insert);
     expectOk(newline);
-    expect(insert.patch).toEqual([
-      { op: "replace", path: "/blocks/0/text", value: "axb" },
+    expect(insert.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/text", value: "axb" },
     ]);
     expect(insert.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/text",
+      path: "/root/children/0/text",
       offset: 2,
     });
-    expect(newline.patch).toEqual([
-      { op: "replace", path: "/blocks/0/text", value: "a\nb" },
+    expect(newline.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/text", value: "a\nb" },
     ]);
     expect(newline.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/text",
+      path: "/root/children/0/text",
       offset: 2,
     });
   });
@@ -164,7 +168,7 @@ describe("text commands", () => {
     const insert = insertText(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 2,
       }),
       "x",
@@ -172,29 +176,29 @@ describe("text commands", () => {
     const deleteText = deleteBackward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 2,
       }),
     );
 
     expectOk(insert);
     expectOk(deleteText);
-    expect(insert.patch).toEqual([
+    expect(insert.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         value: "boxld",
       },
     ]);
     expect(insert.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 3,
     });
-    expect(deleteText.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "bld" },
+    expect(deleteText.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "bld" },
     ]);
     expect(deleteText.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
   });
@@ -208,26 +212,26 @@ describe("text commands", () => {
       },
     ]);
     const selection = {
-      selectedPointers: ["/blocks/0/children/0/text"],
+      selectedPointers: ["/root/children/0/children/0/text"],
       selectionRanges: [
         {
-          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-          focus: { path: "/blocks/0/children/0/text", offset: 3 },
+          anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+          focus: { path: "/root/children/0/children/0/text", offset: 3 },
         },
       ],
       primaryIndex: 0,
-      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-      focus: { path: "/blocks/0/children/0/text", offset: 3 },
+      anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+      focus: { path: "/root/children/0/children/0/text", offset: 3 },
     };
 
     const command = insertText(document, selection, "x");
 
     expectOk(command);
-    expect(command.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "AxD" },
+    expect(command.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "AxD" },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
     });
   });
@@ -245,25 +249,25 @@ describe("text commands", () => {
       },
     ]);
     const selection = {
-      selectedPointers: ["/blocks/0/children/1"],
+      selectedPointers: ["/root/children/0/children/1"],
       selectionRanges: [
         {
-          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-          focus: { path: "/blocks/0/children/2/text", offset: 1 },
+          anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+          focus: { path: "/root/children/0/children/2/text", offset: 1 },
         },
       ],
       primaryIndex: 0,
-      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-      focus: { path: "/blocks/0/children/2/text", offset: 1 },
+      anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+      focus: { path: "/root/children/0/children/2/text", offset: 1 },
     };
 
     const command = insertText(document, selection, "x");
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0",
+        path: "/root/children/0",
         value: {
           id: "block-1",
           type: "paragraph",
@@ -272,7 +276,7 @@ describe("text commands", () => {
       },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
     });
   });
@@ -293,7 +297,7 @@ describe("text commands", () => {
     const before = insertText(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         edge: "before",
       }),
       "x",
@@ -301,7 +305,7 @@ describe("text commands", () => {
     const after = insertText(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         edge: "after",
       }),
       "y",
@@ -309,11 +313,11 @@ describe("text commands", () => {
 
     expectOk(before);
     expectOk(after);
-    expect(before.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "Ax" },
+    expect(before.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "Ax" },
     ]);
-    expect(after.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/2/text", value: "yB" },
+    expect(after.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/2/text", value: "yB" },
     ]);
   });
 
@@ -329,22 +333,22 @@ describe("text commands", () => {
     const command = insertText(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0",
+        path: "/root/children/0/children/0",
         edge: "after",
       }),
       "x",
     );
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "add",
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         value: { type: "text", text: "x" },
       },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/1/text",
+      path: "/root/children/0/children/1/text",
       offset: 1,
     });
   });
@@ -370,22 +374,22 @@ describe("text commands", () => {
 
     const before = insertText(
       document,
-      selectionFromCursorPoint({ path: "/blocks/1", edge: "before" }),
+      selectionFromCursorPoint({ path: "/root/children/1", edge: "before" }),
       "x",
     );
     const after = insertText(
       document,
-      selectionFromCursorPoint({ path: "/blocks/1", edge: "after" }),
+      selectionFromCursorPoint({ path: "/root/children/1", edge: "after" }),
       "y",
     );
 
     expectOk(before);
     expectOk(after);
-    expect(before.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "Ax" },
+    expect(before.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "Ax" },
     ]);
-    expect(after.patch).toEqual([
-      { op: "replace", path: "/blocks/2/children/0/text", value: "yB" },
+    expect(after.patch).toMatchObject([
+      { op: "replace", path: "/root/children/2/children/0/text", value: "yB" },
     ]);
   });
 
@@ -400,12 +404,12 @@ describe("text commands", () => {
 
     const before = insertText(
       document,
-      selectionFromCursorPoint({ path: "/blocks/0", edge: "before" }),
+      selectionFromCursorPoint({ path: "/root/children/0", edge: "before" }),
       "x",
     );
     const after = insertText(
       document,
-      selectionFromCursorPoint({ path: "/blocks/0", edge: "after" }),
+      selectionFromCursorPoint({ path: "/root/children/0", edge: "after" }),
       "y",
     );
 
@@ -414,7 +418,7 @@ describe("text commands", () => {
     expect(before.patch).toMatchObject([
       {
         op: "add",
-        path: "/blocks/0",
+        path: "/root/children/0",
         value: {
           type: "paragraph",
           children: [{ type: "text", text: "x" }],
@@ -424,7 +428,7 @@ describe("text commands", () => {
     expect(after.patch).toMatchObject([
       {
         op: "add",
-        path: "/blocks/1",
+        path: "/root/children/1",
         value: {
           type: "paragraph",
           children: [{ type: "text", text: "y" }],
@@ -447,7 +451,7 @@ describe("text commands", () => {
       trustedInitial: true,
     });
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     jsonDocument.selection?.restore(selection);
@@ -458,34 +462,34 @@ describe("text commands", () => {
       selectionAfter: command.selectionAfter,
     });
 
-    expect(jsonDocument.value.blocks[0]).toMatchObject({
+    expect(jsonDocument.value.root.children[0]).toMatchObject({
       type: "paragraph",
       children: [{ type: "text", text: "AxB" }],
     });
     expect(jsonDocument.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
     });
 
     jsonDocument.undo();
 
-    expect(jsonDocument.value.blocks[0]).toMatchObject({
+    expect(jsonDocument.value.root.children[0]).toMatchObject({
       type: "paragraph",
       children: [{ type: "text", text: "AB" }],
     });
     expect(jsonDocument.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
     jsonDocument.redo();
 
-    expect(jsonDocument.value.blocks[0]).toMatchObject({
+    expect(jsonDocument.value.root.children[0]).toMatchObject({
       type: "paragraph",
       children: [{ type: "text", text: "AxB" }],
     });
     expect(jsonDocument.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 2,
     });
   });
@@ -502,32 +506,32 @@ describe("text commands", () => {
     const backward = deleteBackward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 2,
       }),
     );
     const forward = deleteForward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 0,
       }),
     );
 
     expectOk(backward);
     expectOk(forward);
-    expect(backward.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "A" },
+    expect(backward.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "A" },
     ]);
     expect(backward.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
-    expect(forward.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "B" },
+    expect(forward.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "B" },
     ]);
     expect(forward.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 0,
     });
   });
@@ -549,21 +553,21 @@ describe("text commands", () => {
     const backward = deleteWordBackward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 7,
       }),
     );
     const forward = deleteWordForward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 0,
       }),
     );
     const code = deleteWordBackward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/1/text",
+        path: "/root/children/1/text",
         offset: 10,
       }),
     );
@@ -571,25 +575,33 @@ describe("text commands", () => {
     expectOk(backward);
     expectOk(forward);
     expectOk(code);
-    expect(backward.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "one " },
+    expect(backward.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0/children/0/text",
+        value: "one ",
+      },
     ]);
     expect(backward.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 4,
     });
-    expect(forward.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: " two" },
+    expect(forward.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0/children/0/text",
+        value: " two",
+      },
     ]);
     expect(forward.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 0,
     });
-    expect(code.patch).toEqual([
-      { op: "replace", path: "/blocks/1/text", value: "alpha " },
+    expect(code.patch).toMatchObject([
+      { op: "replace", path: "/root/children/1/text", value: "alpha " },
     ]);
     expect(code.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1/text",
+      path: "/root/children/1/text",
       offset: 6,
     });
   });
@@ -615,20 +627,20 @@ describe("text commands", () => {
     const mentionForward = deleteWordForward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
     );
     const mentionBackward = deleteWordBackward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/2/text",
+        path: "/root/children/0/children/2/text",
         offset: 0,
       }),
     );
     const figureForward = deleteWordForward(
       document,
-      selectionFromCursorPoint({ path: "/blocks/1", edge: "before" }),
+      selectionFromCursorPoint({ path: "/root/children/1", edge: "before" }),
     );
 
     expectOk(mentionForward);
@@ -637,15 +649,15 @@ describe("text commands", () => {
     expect(mentionForward.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0",
+        path: "/root/children/0",
         value: { children: [{ type: "text", text: "AB" }] },
       },
     ]);
     expect(mentionBackward.patch).toEqual(mentionForward.patch);
-    expect(figureForward.patch).toEqual([
+    expect(figureForward.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks",
+        path: "/root/children",
         value: [
           {
             id: "block-1",
@@ -670,26 +682,26 @@ describe("text commands", () => {
       },
     ]);
     const selection = {
-      selectedPointers: ["/blocks/0/children/0/text"],
+      selectedPointers: ["/root/children/0/children/0/text"],
       selectionRanges: [
         {
-          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-          focus: { path: "/blocks/0/children/0/text", offset: 3 },
+          anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+          focus: { path: "/root/children/0/children/0/text", offset: 3 },
         },
       ],
       primaryIndex: 0,
-      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-      focus: { path: "/blocks/0/children/0/text", offset: 3 },
+      anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+      focus: { path: "/root/children/0/children/0/text", offset: 3 },
     };
 
     const command = deleteBackward(document, selection);
 
     expectOk(command);
-    expect(command.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "AD" },
+    expect(command.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "AD" },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
   });
@@ -707,25 +719,25 @@ describe("text commands", () => {
       },
     ]);
     const selection = {
-      selectedPointers: ["/blocks/0/children/1"],
+      selectedPointers: ["/root/children/0/children/1"],
       selectionRanges: [
         {
-          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-          focus: { path: "/blocks/0/children/2/text", offset: 1 },
+          anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+          focus: { path: "/root/children/0/children/2/text", offset: 1 },
         },
       ],
       primaryIndex: 0,
-      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-      focus: { path: "/blocks/0/children/2/text", offset: 1 },
+      anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+      focus: { path: "/root/children/0/children/2/text", offset: 1 },
     };
 
     const command = deleteBackward(document, selection);
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0",
+        path: "/root/children/0",
         value: {
           id: "block-1",
           type: "paragraph",
@@ -734,7 +746,7 @@ describe("text commands", () => {
       },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
   });
@@ -758,25 +770,25 @@ describe("text commands", () => {
       },
     ]);
     const selection = {
-      selectedPointers: ["/blocks/1"],
+      selectedPointers: ["/root/children/1"],
       selectionRanges: [
         {
-          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-          focus: { path: "/blocks/2", edge: "before" as const },
+          anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+          focus: { path: "/root/children/2", edge: "before" as const },
         },
       ],
       primaryIndex: 0,
-      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-      focus: { path: "/blocks/2", edge: "before" as const },
+      anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+      focus: { path: "/root/children/2", edge: "before" as const },
     };
 
     const command = deleteBackward(document, selection);
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks",
+        path: "/root/children",
         value: [
           {
             id: "block-1",
@@ -792,7 +804,7 @@ describe("text commands", () => {
       },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
   });
@@ -813,32 +825,32 @@ describe("text commands", () => {
     const backward = deleteBackward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         edge: "after",
       }),
     );
     const forward = deleteForward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         edge: "before",
       }),
     );
 
     expectOk(backward);
     expectOk(forward);
-    expect(backward.patch).toEqual([
-      { op: "remove", path: "/blocks/0/children/1" },
+    expect(backward.patch).toMatchObject([
+      { op: "remove", path: "/root/children/0/children/1" },
     ]);
-    expect(forward.patch).toEqual([
-      { op: "remove", path: "/blocks/0/children/1" },
+    expect(forward.patch).toMatchObject([
+      { op: "remove", path: "/root/children/0/children/1" },
     ]);
     expect(backward.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/1/text",
+      path: "/root/children/0/children/1/text",
       offset: 0,
     });
     expect(forward.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/1/text",
+      path: "/root/children/0/children/1/text",
       offset: 0,
     });
   });
@@ -864,13 +876,13 @@ describe("text commands", () => {
 
     const command = deleteForward(
       document,
-      selectionFromCursorPoint({ path: "/blocks/1", edge: "before" }),
+      selectionFromCursorPoint({ path: "/root/children/1", edge: "before" }),
     );
 
     expectOk(command);
-    expect(command.patch).toEqual([{ op: "remove", path: "/blocks/1" }]);
+    expect(command.patch).toEqual([{ op: "remove", path: "/root/children/1" }]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1/children/0/text",
+      path: "/root/children/1/children/0/text",
       offset: 0,
     });
   });
@@ -894,13 +906,18 @@ describe("text commands", () => {
       },
     ]);
 
-    const backward = deleteBackward(document, atomSelection("/blocks/1"));
-    const forward = deleteForward(document, atomSelection("/blocks/1"));
+    const backward = deleteBackward(
+      document,
+      atomSelection("/root/children/1"),
+    );
+    const forward = deleteForward(document, atomSelection("/root/children/1"));
 
     expectOk(backward);
     expectOk(forward);
-    expect(backward.patch).toEqual([{ op: "remove", path: "/blocks/1" }]);
-    expect(forward.patch).toEqual([{ op: "remove", path: "/blocks/1" }]);
+    expect(backward.patch).toEqual([
+      { op: "remove", path: "/root/children/1" },
+    ]);
+    expect(forward.patch).toEqual([{ op: "remove", path: "/root/children/1" }]);
   });
 
   it("normalizes empty text runs after deletion", () => {
@@ -925,32 +942,32 @@ describe("text commands", () => {
     const removeRun = deleteBackward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
     );
     const keepEmptyAnchor = deleteBackward(
       onlyTextDocument,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
     );
 
     expectOk(removeRun);
     expectOk(keepEmptyAnchor);
-    expect(removeRun.patch).toEqual([
-      { op: "remove", path: "/blocks/0/children/0" },
+    expect(removeRun.patch).toMatchObject([
+      { op: "remove", path: "/root/children/0/children/0" },
     ]);
     expect(removeRun.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0",
+      path: "/root/children/0/children/0",
       edge: "before",
     });
-    expect(keepEmptyAnchor.patch).toEqual([
-      { op: "replace", path: "/blocks/0/children/0/text", value: "" },
+    expect(keepEmptyAnchor.patch).toMatchObject([
+      { op: "replace", path: "/root/children/0/children/0/text", value: "" },
     ]);
     expect(keepEmptyAnchor.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 0,
     });
   });
@@ -967,7 +984,7 @@ describe("text commands", () => {
     const command = splitParagraph(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
     );
@@ -976,7 +993,7 @@ describe("text commands", () => {
     expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0",
+        path: "/root/children/0",
         value: {
           type: "paragraph",
           children: [{ type: "text", text: "A" }],
@@ -984,7 +1001,7 @@ describe("text commands", () => {
       },
       {
         op: "add",
-        path: "/blocks/1",
+        path: "/root/children/1",
         value: {
           type: "paragraph",
           children: [{ type: "text", text: "B" }],
@@ -992,8 +1009,72 @@ describe("text commands", () => {
       },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1/children/0/text",
+      path: "/root/children/1/children/0/text",
       offset: 0,
+    });
+  });
+
+  it("keeps insertion on the empty paragraph created before existing text", () => {
+    const document = createJSONDocument(
+      NoteDocumentSchema,
+      documentWithBlocks([
+        {
+          id: "block-1",
+          type: "paragraph",
+          children: [{ type: "text", text: "Plain" }],
+        },
+      ]),
+      { history: 10, selection: true, trustedInitial: true },
+    );
+
+    const splitAfterP = splitParagraph(
+      document.value,
+      selectionFromCursorPoint({
+        path: "/root/children/0/children/0/text",
+        offset: 1,
+      }),
+    );
+    expectOk(splitAfterP);
+    document.commit(splitAfterP.patch, {
+      selectionAfter: splitAfterP.selectionAfter,
+    });
+
+    const splitAtStartOfRest = splitParagraph(
+      document.value,
+      splitAfterP.selectionAfter,
+    );
+    expectOk(splitAtStartOfRest);
+    document.commit(splitAtStartOfRest.patch, {
+      selectionAfter: splitAtStartOfRest.selectionAfter,
+    });
+
+    const insertIntoEmptyParagraph = insertText(
+      document.value,
+      splitAtStartOfRest.selectionAfter,
+      "d",
+    );
+    expectOk(insertIntoEmptyParagraph);
+    document.commit(insertIntoEmptyParagraph.patch, {
+      selectionAfter: insertIntoEmptyParagraph.selectionAfter,
+    });
+
+    expect(document.value.root.children).toMatchObject([
+      {
+        type: "paragraph",
+        children: [{ type: "text", text: "P" }],
+      },
+      {
+        type: "paragraph",
+        children: [{ type: "text", text: "d" }],
+      },
+      {
+        type: "paragraph",
+        children: [{ type: "text", text: "lain" }],
+      },
+    ]);
+    expect(document.selection?.snapshot()?.focus).toMatchObject({
+      path: "/root/children/1/children/0/text",
+      offset: 1,
     });
   });
 
@@ -1009,7 +1090,7 @@ describe("text commands", () => {
     const command = splitParagraph(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 0,
       }),
     );
@@ -1018,7 +1099,7 @@ describe("text commands", () => {
     expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0",
+        path: "/root/children/0",
         value: {
           type: "paragraph",
           children: [{ type: "text", text: "" }],
@@ -1026,7 +1107,7 @@ describe("text commands", () => {
       },
       {
         op: "add",
-        path: "/blocks/1",
+        path: "/root/children/1",
         value: {
           type: "paragraph",
           children: [{ type: "text", text: "" }],
@@ -1034,7 +1115,7 @@ describe("text commands", () => {
       },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1/children/0/text",
+      path: "/root/children/1/children/0/text",
       offset: 0,
     });
   });
@@ -1052,16 +1133,16 @@ describe("text commands", () => {
       },
     ]);
     const selection = {
-      selectedPointers: ["/blocks/0/children/1"],
+      selectedPointers: ["/root/children/0/children/1"],
       selectionRanges: [
         {
-          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-          focus: { path: "/blocks/0/children/2/text", offset: 1 },
+          anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+          focus: { path: "/root/children/0/children/2/text", offset: 1 },
         },
       ],
       primaryIndex: 0,
-      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-      focus: { path: "/blocks/0/children/2/text", offset: 1 },
+      anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+      focus: { path: "/root/children/0/children/2/text", offset: 1 },
     };
 
     const command = splitParagraph(document, selection);
@@ -1070,7 +1151,7 @@ describe("text commands", () => {
     expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks",
+        path: "/root/children",
         value: [
           { type: "paragraph", children: [{ type: "text", text: "A" }] },
           { type: "paragraph", children: [{ type: "text", text: "D" }] },
@@ -1078,7 +1159,7 @@ describe("text commands", () => {
       },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1/children/0/text",
+      path: "/root/children/1/children/0/text",
       offset: 0,
     });
   });
@@ -1095,7 +1176,7 @@ describe("text commands", () => {
     const command = splitParagraph(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
     );
@@ -1131,14 +1212,14 @@ describe("text commands", () => {
     const beforeMention = splitParagraph(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         edge: "before",
       }),
     );
     const afterMention = splitParagraph(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         edge: "after",
       }),
     );
@@ -1159,7 +1240,7 @@ describe("text commands", () => {
       },
     ]);
     expect(beforeMention.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1/children/0",
+      path: "/root/children/1/children/0",
       edge: "before",
     });
     expect(afterMention.patch).toMatchObject([
@@ -1176,7 +1257,7 @@ describe("text commands", () => {
       },
     ]);
     expect(afterMention.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1/children/0/text",
+      path: "/root/children/1/children/0/text",
       offset: 0,
     });
   });
@@ -1192,20 +1273,20 @@ describe("text commands", () => {
 
     const before = splitParagraph(
       document,
-      selectionFromCursorPoint({ path: "/blocks/0", edge: "before" }),
+      selectionFromCursorPoint({ path: "/root/children/0", edge: "before" }),
     );
     const after = splitParagraph(
       document,
-      selectionFromCursorPoint({ path: "/blocks/0", edge: "after" }),
+      selectionFromCursorPoint({ path: "/root/children/0", edge: "after" }),
     );
 
     expectOk(before);
     expectOk(after);
     expect(before.patch).toMatchObject([
-      { op: "add", path: "/blocks/0", value: { type: "paragraph" } },
+      { op: "add", path: "/root/children/0", value: { type: "paragraph" } },
     ]);
     expect(after.patch).toMatchObject([
-      { op: "add", path: "/blocks/1", value: { type: "paragraph" } },
+      { op: "add", path: "/root/children/1", value: { type: "paragraph" } },
     ]);
   });
 
@@ -1226,22 +1307,22 @@ describe("text commands", () => {
     const command = deleteBackward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/1/children/0/text",
+        path: "/root/children/1/children/0/text",
         offset: 0,
       }),
     );
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [{ type: "text", text: "AB" }],
       },
-      { op: "remove", path: "/blocks/1" },
+      { op: "remove", path: "/root/children/1" },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
   });
@@ -1263,22 +1344,22 @@ describe("text commands", () => {
     const command = deleteForward(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
     );
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [{ type: "text", text: "AB" }],
       },
-      { op: "remove", path: "/blocks/1" },
+      { op: "remove", path: "/root/children/1" },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
   });
@@ -1297,7 +1378,7 @@ describe("text commands", () => {
       trustedInitial: true,
     });
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     jsonDocument.selection?.restore(selection);
@@ -1308,9 +1389,9 @@ describe("text commands", () => {
       selectionAfter: command.selectionAfter,
     });
 
-    expect(jsonDocument.value.blocks).toHaveLength(2);
+    expect(jsonDocument.value.root.children).toHaveLength(2);
     expect(jsonDocument.selection?.focus).toMatchObject({
-      path: "/blocks/1/children/0/text",
+      path: "/root/children/1/children/0/text",
       offset: 0,
     });
   });
@@ -1327,17 +1408,17 @@ describe("text commands", () => {
     const command = insertMention(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       { type: "mention", id: "user-1", label: "Ada" },
     );
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [
           { type: "text", text: "A" },
           { type: "mention", id: "user-1", label: "Ada" },
@@ -1346,7 +1427,7 @@ describe("text commands", () => {
       },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
   });
@@ -1369,28 +1450,32 @@ describe("text commands", () => {
 
     const inline = insertText(
       inlineDocument,
-      atomSelection("/blocks/0/children/0"),
+      atomSelection("/root/children/0/children/0"),
       "x",
     );
-    const figure = insertText(figureDocument, atomSelection("/blocks/0"), "y");
+    const figure = insertText(
+      figureDocument,
+      atomSelection("/root/children/0"),
+      "y",
+    );
 
     expectOk(inline);
     expectOk(figure);
-    expect(inline.patch).toEqual([
+    expect(inline.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children/0",
+        path: "/root/children/0/children/0",
         value: { type: "text", text: "x" },
       },
     ]);
     expect(inline.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     expect(figure.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0",
+        path: "/root/children/0",
         value: {
           type: "paragraph",
           children: [{ type: "text", text: "y" }],
@@ -1398,7 +1483,7 @@ describe("text commands", () => {
       },
     ]);
     expect(figure.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
   });
@@ -1415,17 +1500,17 @@ describe("text commands", () => {
     const command = insertMention(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       { type: "mention", id: "user-1", label: "Ada" },
     );
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [
           { type: "text", text: "A", marks: [{ type: "bold" }] },
           { type: "mention", id: "user-1", label: "Ada" },
@@ -1447,7 +1532,7 @@ describe("text commands", () => {
     const command = insertFigure(
       document,
       selectionFromCursorPoint({
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
       { id: "figure-1", type: "figure", src: "/image.png" },
@@ -1457,7 +1542,7 @@ describe("text commands", () => {
     expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0",
+        path: "/root/children/0",
         value: {
           type: "paragraph",
           children: [{ type: "text", text: "A" }],
@@ -1465,12 +1550,12 @@ describe("text commands", () => {
       },
       {
         op: "add",
-        path: "/blocks/1",
+        path: "/root/children/1",
         value: { id: "figure-1", type: "figure", src: "/image.png" },
       },
       {
         op: "add",
-        path: "/blocks/2",
+        path: "/root/children/2",
         value: {
           type: "paragraph",
           children: [{ type: "text", text: "B" }],
@@ -1478,7 +1563,7 @@ describe("text commands", () => {
       },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
   });
@@ -1492,16 +1577,16 @@ describe("text commands", () => {
       },
     ]);
     const selection = {
-      selectedPointers: ["/blocks/0/children/0/text"],
+      selectedPointers: ["/root/children/0/children/0/text"],
       selectionRanges: [
         {
-          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-          focus: { path: "/blocks/0/children/0/text", offset: 3 },
+          anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+          focus: { path: "/root/children/0/children/0/text", offset: 3 },
         },
       ],
       primaryIndex: 0,
-      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-      focus: { path: "/blocks/0/children/0/text", offset: 3 },
+      anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+      focus: { path: "/root/children/0/children/0/text", offset: 3 },
     };
 
     const command = insertMention(document, selection, {
@@ -1511,10 +1596,10 @@ describe("text commands", () => {
     });
 
     expectOk(command);
-    expect(command.patch).toEqual([
+    expect(command.patch).toMatchObject([
       {
         op: "replace",
-        path: "/blocks/0/children",
+        path: "/root/children/0/children",
         value: [
           { type: "text", text: "A" },
           { type: "mention", id: "user-1", label: "Ada" },
@@ -1523,7 +1608,7 @@ describe("text commands", () => {
       },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
   });
@@ -1537,16 +1622,16 @@ describe("text commands", () => {
       },
     ]);
     const selection = {
-      selectedPointers: ["/blocks/0/children/0/text"],
+      selectedPointers: ["/root/children/0/children/0/text"],
       selectionRanges: [
         {
-          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-          focus: { path: "/blocks/0/children/0/text", offset: 3 },
+          anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+          focus: { path: "/root/children/0/children/0/text", offset: 3 },
         },
       ],
       primaryIndex: 0,
-      anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-      focus: { path: "/blocks/0/children/0/text", offset: 3 },
+      anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+      focus: { path: "/root/children/0/children/0/text", offset: 3 },
     };
 
     const command = insertFigure(document, selection, {
@@ -1574,7 +1659,7 @@ describe("text commands", () => {
       },
     ]);
     expect(command.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
   });
@@ -1590,12 +1675,12 @@ describe("text commands", () => {
 
     const before = insertMention(
       document,
-      selectionFromCursorPoint({ path: "/blocks/0", edge: "before" }),
+      selectionFromCursorPoint({ path: "/root/children/0", edge: "before" }),
       { type: "mention", id: "user-1", label: "Ada" },
     );
     const after = insertMention(
       document,
-      selectionFromCursorPoint({ path: "/blocks/0", edge: "after" }),
+      selectionFromCursorPoint({ path: "/root/children/0", edge: "after" }),
       { type: "mention", id: "user-2", label: "Grace" },
     );
 
@@ -1604,7 +1689,7 @@ describe("text commands", () => {
     expect(before.patch).toMatchObject([
       {
         op: "add",
-        path: "/blocks/0",
+        path: "/root/children/0",
         value: {
           type: "paragraph",
           children: [{ type: "mention", id: "user-1", label: "Ada" }],
@@ -1614,7 +1699,7 @@ describe("text commands", () => {
     expect(after.patch).toMatchObject([
       {
         op: "add",
-        path: "/blocks/1",
+        path: "/root/children/1",
         value: {
           type: "paragraph",
           children: [{ type: "mention", id: "user-2", label: "Grace" }],
@@ -1634,37 +1719,37 @@ describe("text commands", () => {
 
     const before = insertFigure(
       document,
-      selectionFromCursorPoint({ path: "/blocks/0", edge: "before" }),
+      selectionFromCursorPoint({ path: "/root/children/0", edge: "before" }),
       { id: "figure-2", type: "figure", src: "/two.png" },
     );
     const after = insertFigure(
       document,
-      selectionFromCursorPoint({ path: "/blocks/0", edge: "after" }),
+      selectionFromCursorPoint({ path: "/root/children/0", edge: "after" }),
       { id: "figure-3", type: "figure", src: "/three.png" },
     );
 
     expectOk(before);
     expectOk(after);
-    expect(before.patch).toEqual([
+    expect(before.patch).toMatchObject([
       {
         op: "add",
-        path: "/blocks/0",
+        path: "/root/children/0",
         value: { id: "figure-2", type: "figure", src: "/two.png" },
       },
     ]);
     expect(before.selectionAfter.focus).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "after",
     });
-    expect(after.patch).toEqual([
+    expect(after.patch).toMatchObject([
       {
         op: "add",
-        path: "/blocks/1",
+        path: "/root/children/1",
         value: { id: "figure-3", type: "figure", src: "/three.png" },
       },
     ]);
     expect(after.selectionAfter.focus).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
   });
@@ -1683,7 +1768,7 @@ describe("text commands", () => {
       trustedInitial: true,
     });
     const selection = selectionFromCursorPoint({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
     jsonDocument.selection?.restore(selection);
@@ -1699,25 +1784,25 @@ describe("text commands", () => {
     });
 
     expect(jsonDocument.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
 
     jsonDocument.undo();
 
-    expect(jsonDocument.value.blocks[0]).toMatchObject({
+    expect(jsonDocument.value.root.children[0]).toMatchObject({
       type: "paragraph",
       children: [{ type: "text", text: "AB" }],
     });
     expect(jsonDocument.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 1,
     });
 
     jsonDocument.redo();
 
     expect(jsonDocument.selection?.focus).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
   });

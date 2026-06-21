@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createNoteDocument,
   createParagraphBlock,
   initialNoteDocument,
   NoteDocumentSchema,
@@ -13,7 +14,7 @@ describe("note document schema", () => {
   });
 
   it("seeds the demo with rich inline and block fragments", () => {
-    expect(initialNoteDocument.blocks).toEqual(
+    expect(initialNoteDocument.root.children).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: "heading",
@@ -65,71 +66,85 @@ describe("note document schema", () => {
   });
 
   it("creates paragraph blocks for editor inserts", () => {
-    expect(createParagraphBlock("hello")).toMatchObject({
+    const initialBlockIds = new Set(
+      initialNoteDocument.root.children.map((block) => block.id),
+    );
+    const block = createParagraphBlock("hello");
+
+    expect(block).toMatchObject({
       type: "paragraph",
       children: [{ type: "text", text: "hello" }],
     });
+    expect(initialBlockIds.has(block.id)).toBe(false);
+  });
+
+  it("creates paragraph block ids that do not collide with the initial demo", () => {
+    const initialBlockIds = new Set(
+      initialNoteDocument.root.children.map((block) => block.id),
+    );
+
+    expect(initialBlockIds.has(createParagraphBlock("").id)).toBe(false);
   });
 
   it("accepts structured text marks", () => {
     expect(
-      NoteDocumentSchema.safeParse({
-        id: "note-1",
-        title: "Marked",
-        tags: [],
-        blocks: [
-          {
-            id: "block-1",
-            type: "paragraph",
-            children: [
-              {
-                type: "text",
-                text: "OpenAI",
-                marks: [
-                  { type: "bold" },
-                  { type: "link", href: "https://openai.com" },
-                ],
-              },
-            ],
-          },
-        ],
-      }).success,
+      NoteDocumentSchema.safeParse(
+        createNoteDocument(
+          [
+            {
+              id: "block-1",
+              type: "paragraph",
+              children: [
+                {
+                  type: "text",
+                  text: "OpenAI",
+                  marks: [
+                    { type: "bold" },
+                    { type: "link", href: "https://openai.com" },
+                  ],
+                },
+              ],
+            },
+          ],
+          { id: "note-1", title: "Marked", tags: [] },
+        ),
+      ).success,
     ).toBe(true);
   });
 
   it("accepts rich text block variants", () => {
     expect(
-      NoteDocumentSchema.safeParse({
-        id: "note-1",
-        title: "Blocks",
-        tags: [],
-        blocks: [
-          {
-            id: "heading-1",
-            type: "heading",
-            level: 2,
-            children: [{ type: "text", text: "Heading" }],
-          },
-          {
-            id: "quote-1",
-            type: "quote",
-            children: [{ type: "text", text: "Quote" }],
-          },
-          {
-            id: "list-1",
-            type: "listItem",
-            ordered: true,
-            depth: 1,
-            children: [{ type: "text", text: "Item" }],
-          },
-          {
-            id: "code-1",
-            type: "codeBlock",
-            language: "ts",
-            text: "const value = 1;",
-          },
-        ],
-      }).success,
+      NoteDocumentSchema.safeParse(
+        createNoteDocument(
+          [
+            {
+              id: "heading-1",
+              type: "heading",
+              level: 2,
+              children: [{ type: "text", text: "Heading" }],
+            },
+            {
+              id: "quote-1",
+              type: "quote",
+              children: [{ type: "text", text: "Quote" }],
+            },
+            {
+              id: "list-1",
+              type: "listItem",
+              ordered: true,
+              depth: 1,
+              children: [{ type: "text", text: "Item" }],
+            },
+            {
+              id: "code-1",
+              type: "codeBlock",
+              language: "ts",
+              text: "const value = 1;",
+            },
+          ],
+          { id: "note-1", title: "Blocks", tags: [] },
+        ),
+      ).success,
     ).toBe(true);
   });
 });

@@ -68,6 +68,72 @@ input {
   background: #f0ede7;
 }
 
+.debug-recorder {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 54px;
+  height: 24px;
+  border: 1px solid #d8d4cc;
+  border-radius: 6px;
+  background: #fffdfa;
+  padding: 0 7px;
+  color: #28231d;
+  font-size: 0.72rem;
+  font-weight: 720;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.debug-recorder-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #8b8478;
+}
+
+.debug-recorder-recording {
+  border-color: #d24a35;
+  color: #a12b1b;
+}
+
+.debug-recorder-recording .debug-recorder-dot {
+  background: #d24a35;
+}
+
+.debug-recorder-done {
+  border-color: #2f6f4f;
+  color: #255c42;
+}
+
+.debug-recorder-done .debug-recorder-dot {
+  background: #2f6f4f;
+}
+
+.debug-recorder-copy-failed {
+  border-color: #a63f32;
+  color: #a63f32;
+}
+
+.debug-recorder-copy-failed .debug-recorder-dot {
+  background: #a63f32;
+}
+
+.debug-recorder-label,
+.debug-recorder-meta {
+  white-space: nowrap;
+}
+
+.debug-recorder-meta {
+  color: #6b6258;
+  font-weight: 620;
+}
+
 .document-stage {
   position: relative;
 }

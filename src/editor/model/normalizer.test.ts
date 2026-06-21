@@ -4,22 +4,25 @@ import {
   normalizeDocument,
   normalizeInlineChildren,
 } from "./normalizer";
-import type { NoteDocument } from "./noteDocument";
+import {
+  createNoteDocument,
+  type NoteBlockInput,
+  type NoteDocument,
+} from "./noteDocument";
 
-function documentWithBlocks(blocks: NoteDocument["blocks"]): NoteDocument {
-  return {
+function documentWithBlocks(blocks: NoteBlockInput[]): NoteDocument {
+  return createNoteDocument(blocks, {
     id: "note-test",
     title: "Normalize",
     tags: [],
-    blocks,
-  };
+  });
 }
 
 describe("document normalizer", () => {
   it("creates an empty paragraph when the document has no blocks", () => {
     const normalized = normalizeDocument(documentWithBlocks([]));
 
-    expect(normalized.blocks).toMatchObject([
+    expect(normalized.root.children).toMatchObject([
       {
         type: "paragraph",
         children: [{ type: "text", text: "" }],
@@ -38,7 +41,7 @@ describe("document normalizer", () => {
       ]),
     );
 
-    expect(normalized.blocks[0]).toEqual({
+    expect(normalized.root.children[0]).toMatchObject({
       id: "block-1",
       type: "paragraph",
       children: [{ type: "text", text: "" }],
@@ -72,7 +75,7 @@ describe("document normalizer", () => {
       ]),
     );
 
-    expect(normalized.blocks).toMatchObject([
+    expect(normalized.root.children).toMatchObject([
       {
         type: "heading",
         children: [{ type: "text", text: "" }],
@@ -95,7 +98,7 @@ describe("document normalizer", () => {
         { type: "mention", id: "user-1", label: "Ada" },
         { type: "text", text: "" },
       ]),
-    ).toEqual([{ type: "mention", id: "user-1", label: "Ada" }]);
+    ).toMatchObject([{ type: "mention", id: "user-1", label: "Ada" }]);
   });
 
   it("merges adjacent text runs without inserting atom sentinels", () => {
@@ -107,7 +110,7 @@ describe("document normalizer", () => {
         { type: "text", text: "" },
         { type: "text", text: "C" },
       ]),
-    ).toEqual([
+    ).toMatchObject([
       { type: "text", text: "AB" },
       { type: "mention", id: "user-1", label: "Ada" },
       { type: "text", text: "C" },
@@ -133,7 +136,7 @@ describe("document normalizer", () => {
           marks: [{ type: "code" }],
         },
       ]),
-    ).toEqual([
+    ).toMatchObject([
       {
         type: "text",
         text: "AB",
@@ -157,7 +160,7 @@ describe("document normalizer", () => {
           marks: [{ type: "link", href: "https://b.example" }],
         },
       ]),
-    ).toEqual([
+    ).toMatchObject([
       {
         type: "text",
         text: "A",
@@ -185,7 +188,7 @@ describe("document normalizer", () => {
           marks: [{ type: "bold" }, { type: "italic" }],
         },
       ]),
-    ).toEqual([
+    ).toMatchObject([
       {
         type: "text",
         text: "AB",

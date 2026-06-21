@@ -55,17 +55,17 @@ describe("SelectionOverlay", () => {
     const html = renderToStaticMarkup(
       <SelectionOverlay
         geometry={geometryFor({
-          "/blocks/0/children/0/text:2": rect(32, 10, 1, 20),
+          "/root/children/0/children/0/text:2": rect(32, 10, 1, 20),
         })}
         selection={selectionFromCursorPoint({
-          path: "/blocks/0/children/0/text",
+          path: "/root/children/0/children/0/text",
           offset: 2,
         })}
       />,
     );
 
     expect(html).toContain('data-overlay="caret"');
-    expect(html).toContain('data-path="/blocks/0/children/0/text"');
+    expect(html).toContain('data-path="/root/children/0/children/0/text"');
     expect(html).toContain("left:32px");
     expect(html).toContain("top:10px");
   });
@@ -74,10 +74,10 @@ describe("SelectionOverlay", () => {
     const html = renderToStaticMarkup(
       <SelectionOverlay
         geometry={geometryFor({
-          "/blocks/0/children/0/text:0": rect(32, 10, 0, 20),
+          "/root/children/0/children/0/text:0": rect(32, 10, 0, 20),
         })}
         selection={selectionFromCursorPoint({
-          path: "/blocks/0/children/0/text",
+          path: "/root/children/0/children/0/text",
           offset: 0,
         })}
       />,
@@ -89,15 +89,15 @@ describe("SelectionOverlay", () => {
 
   it("draws mention before and after caret edges", () => {
     const geometry = geometryFor({
-      "/blocks/0/children/1:before": rect(70, 10, 1, 20),
-      "/blocks/0/children/1:after": rect(110, 10, 1, 20),
+      "/root/children/0/children/1:before": rect(70, 10, 1, 20),
+      "/root/children/0/children/1:after": rect(110, 10, 1, 20),
     });
 
     const before = renderToStaticMarkup(
       <SelectionOverlay
         geometry={geometry}
         selection={selectionFromCursorPoint({
-          path: "/blocks/0/children/1",
+          path: "/root/children/0/children/1",
           edge: "before",
         })}
       />,
@@ -106,7 +106,7 @@ describe("SelectionOverlay", () => {
       <SelectionOverlay
         geometry={geometry}
         selection={selectionFromCursorPoint({
-          path: "/blocks/0/children/1",
+          path: "/root/children/0/children/1",
           edge: "after",
         })}
       />,
@@ -124,25 +124,24 @@ describe("SelectionOverlay", () => {
     const html = renderToStaticMarkup(
       <SelectionOverlay
         geometry={geometryFor({
-          "/blocks/0/children/0/text:1": rect(20, 10, 1, 20),
-          "/blocks/0/children/0/text:3": rect(44, 10, 1, 20),
-          "/blocks/0/children/0/text:1->/blocks/0/children/0/text:3": [
-            rect(20, 10, 24, 20),
-          ],
+          "/root/children/0/children/0/text:1": rect(20, 10, 1, 20),
+          "/root/children/0/children/0/text:3": rect(44, 10, 1, 20),
+          "/root/children/0/children/0/text:1->/root/children/0/children/0/text:3":
+            [rect(20, 10, 24, 20)],
         })}
         selection={{
           ...selectionFromCursorPoint({
-            path: "/blocks/0/children/0/text",
+            path: "/root/children/0/children/0/text",
             offset: 3,
           }),
           selectionRanges: [
             {
-              anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-              focus: { path: "/blocks/0/children/0/text", offset: 3 },
+              anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+              focus: { path: "/root/children/0/children/0/text", offset: 3 },
             },
           ],
-          anchor: { path: "/blocks/0/children/0/text", offset: 1 },
-          focus: { path: "/blocks/0/children/0/text", offset: 3 },
+          anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+          focus: { path: "/root/children/0/children/0/text", offset: 3 },
         }}
       />,
     );
@@ -154,15 +153,15 @@ describe("SelectionOverlay", () => {
 
   it("draws figure before and after caret edges", () => {
     const geometry = geometryFor({
-      "/blocks/1:before": rect(10, 50, 1, 120),
-      "/blocks/1:after": rect(210, 50, 1, 120),
+      "/root/children/1:before": rect(10, 50, 1, 120),
+      "/root/children/1:after": rect(210, 50, 1, 120),
     });
 
     const before = renderToStaticMarkup(
       <SelectionOverlay
         geometry={geometry}
         selection={selectionFromCursorPoint({
-          path: "/blocks/1",
+          path: "/root/children/1",
           edge: "before",
         })}
       />,
@@ -171,7 +170,7 @@ describe("SelectionOverlay", () => {
       <SelectionOverlay
         geometry={geometry}
         selection={selectionFromCursorPoint({
-          path: "/blocks/1",
+          path: "/root/children/1",
           edge: "after",
         })}
       />,
@@ -189,15 +188,15 @@ describe("SelectionOverlay", () => {
 
   it("draws paragraph before and after caret edges without atom selection", () => {
     const geometry = geometryFor({
-      "/blocks/0:before": rect(10, 10, 1, 20),
-      "/blocks/0:after": rect(60, 10, 1, 20),
+      "/root/children/0:before": rect(10, 10, 1, 20),
+      "/root/children/0:after": rect(60, 10, 1, 20),
     });
 
     const before = renderToStaticMarkup(
       <SelectionOverlay
         geometry={geometry}
         selection={selectionFromCursorPoint({
-          path: "/blocks/0",
+          path: "/root/children/0",
           edge: "before",
         })}
       />,
@@ -206,7 +205,7 @@ describe("SelectionOverlay", () => {
       <SelectionOverlay
         geometry={geometry}
         selection={selectionFromCursorPoint({
-          path: "/blocks/0",
+          path: "/root/children/0",
           edge: "after",
         })}
       />,
@@ -223,18 +222,18 @@ describe("SelectionOverlay", () => {
   it("draws distinct selected states for mention and figure atoms", () => {
     const selection = {
       ...selectionFromCursorPoint({
-        path: "/blocks/0/children/1",
+        path: "/root/children/0/children/1",
         edge: "after",
       }),
-      selectedPointers: ["/blocks/0/children/1", "/blocks/1"],
+      selectedPointers: ["/root/children/0/children/1", "/root/children/1"],
     };
     const html = renderToStaticMarkup(
       <SelectionOverlay
         geometry={geometryFor({
-          "/blocks/0/children/1:before": rect(70, 10, 1, 20),
-          "/blocks/0/children/1:after": rect(110, 10, 1, 20),
-          "/blocks/1:before": rect(10, 50, 1, 120),
-          "/blocks/1:after": rect(210, 50, 1, 120),
+          "/root/children/0/children/1:before": rect(70, 10, 1, 20),
+          "/root/children/0/children/1:after": rect(110, 10, 1, 20),
+          "/root/children/1:before": rect(10, 50, 1, 120),
+          "/root/children/1:after": rect(210, 50, 1, 120),
         })}
         selection={selection}
       />,

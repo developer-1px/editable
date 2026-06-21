@@ -4,21 +4,23 @@ import {
   type EditorViewAdapter,
   type InsertableEditorNode,
 } from "./editorCore";
-import type { NoteDocument } from "./noteDocument";
+import { createNoteDocument, type NoteDocument } from "./noteDocument";
 
 function documentWithText(text: string): NoteDocument {
-  return {
-    id: "note-test",
-    title: "Editor core",
-    tags: [],
-    blocks: [
+  return createNoteDocument(
+    [
       {
         id: "block-1",
         type: "paragraph",
         children: [{ type: "text", text }],
       },
     ],
-  };
+    {
+      id: "note-test",
+      title: "Editor core",
+      tags: [],
+    },
+  );
 }
 
 function rect(
@@ -61,7 +63,7 @@ describe("editor core public API", () => {
       initial: documentWithText("AB"),
       selection: {
         type: "caret",
-        point: { path: "/blocks/0/children/0/text", offset: 1 },
+        point: { path: "/root/children/0/children/0/text", offset: 1 },
       },
     });
     const listener = vi.fn();
@@ -70,13 +72,13 @@ describe("editor core public API", () => {
     const result = editor.dispatch({ type: "insertText", text: "x" });
 
     expect(result.ok).toBe(true);
-    expect(editor.query({ type: "document" }).blocks[0]).toMatchObject({
+    expect(editor.query({ type: "document" }).root.children[0]).toMatchObject({
       type: "paragraph",
       children: [{ type: "text", text: "AxB" }],
     });
     expect(editor.query({ type: "selection" })).toMatchObject({
       type: "caret",
-      point: { path: "/blocks/0/children/0/text", offset: 2 },
+      point: { path: "/root/children/0/children/0/text", offset: 2 },
     });
     expect(listener).toHaveBeenCalledTimes(1);
   });
@@ -86,7 +88,7 @@ describe("editor core public API", () => {
       initial: documentWithText("AB"),
       selection: {
         type: "caret",
-        point: { path: "/blocks/0/children/0/text", offset: 1 },
+        point: { path: "/root/children/0/children/0/text", offset: 1 },
       },
     });
 
@@ -99,7 +101,7 @@ describe("editor core public API", () => {
       ok: false,
       reason: "View geometry is required.",
     });
-    expect(editor.query({ type: "document" }).blocks[0]).toMatchObject({
+    expect(editor.query({ type: "document" }).root.children[0]).toMatchObject({
       type: "paragraph",
       children: [{ type: "text", text: "AB" }],
     });
@@ -111,11 +113,11 @@ describe("editor core public API", () => {
         return {
           rectForPoint: () => rect(10, 10, 1, 20),
           pointFromCoordinates: () => ({
-            path: "/blocks/0/children/0/text",
+            path: "/root/children/0/children/0/text",
             offset: 2,
           }),
           pointForVerticalMovement: () => ({
-            path: "/blocks/0/children/0/text",
+            path: "/root/children/0/children/0/text",
             offset: 2,
           }),
         };
@@ -125,7 +127,7 @@ describe("editor core public API", () => {
       initial: documentWithText("ABC"),
       selection: {
         type: "caret",
-        point: { path: "/blocks/0/children/0/text", offset: 0 },
+        point: { path: "/root/children/0/children/0/text", offset: 0 },
       },
       view,
     });
@@ -143,7 +145,7 @@ describe("editor core public API", () => {
     expect(result.ok).toBe(true);
     expect(editor.query({ type: "selection" })).toMatchObject({
       type: "caret",
-      point: { path: "/blocks/0/children/0/text", offset: 2 },
+      point: { path: "/root/children/0/children/0/text", offset: 2 },
     });
   });
 
@@ -152,7 +154,7 @@ describe("editor core public API", () => {
       initial: documentWithText("A"),
       selection: {
         type: "caret",
-        point: { path: "/blocks/0/children/0/text", offset: 1 },
+        point: { path: "/root/children/0/children/0/text", offset: 1 },
       },
     });
     const mention: InsertableEditorNode = {
@@ -164,7 +166,7 @@ describe("editor core public API", () => {
     const result = editor.dispatch({ type: "insertNode", node: mention });
 
     expect(result.ok).toBe(true);
-    expect(editor.query({ type: "document" }).blocks[0]).toMatchObject({
+    expect(editor.query({ type: "document" }).root.children[0]).toMatchObject({
       type: "paragraph",
       children: [
         { type: "text", text: "A" },
@@ -178,7 +180,7 @@ describe("editor core public API", () => {
       initial: documentWithText("A"),
       selection: {
         type: "caret",
-        point: { path: "/blocks/0/children/0/text", offset: 1 },
+        point: { path: "/root/children/0/children/0/text", offset: 1 },
       },
     });
 
@@ -193,7 +195,7 @@ describe("editor core public API", () => {
       initial: documentWithText("AB"),
       selection: {
         type: "caret",
-        point: { path: "/blocks/0/children/0/text", offset: 1 },
+        point: { path: "/root/children/0/children/0/text", offset: 1 },
       },
     });
 
@@ -206,7 +208,7 @@ describe("editor core public API", () => {
     ]);
 
     expect(result.ok).toBe(false);
-    expect(editor.query({ type: "document" }).blocks[0]).toMatchObject({
+    expect(editor.query({ type: "document" }).root.children[0]).toMatchObject({
       type: "paragraph",
       children: [{ type: "text", text: "AB" }],
     });
@@ -217,7 +219,7 @@ describe("editor core public API", () => {
       initial: documentWithText("AB"),
       selection: {
         type: "caret",
-        point: { path: "/blocks/0/children/0/text", offset: 1 },
+        point: { path: "/root/children/0/children/0/text", offset: 1 },
       },
     });
 
@@ -225,13 +227,13 @@ describe("editor core public API", () => {
     expect(editor.query({ type: "canUndo" })).toBe(true);
 
     expect(editor.dispatch({ type: "undo" }).ok).toBe(true);
-    expect(editor.query({ type: "document" }).blocks[0]).toMatchObject({
+    expect(editor.query({ type: "document" }).root.children[0]).toMatchObject({
       type: "paragraph",
       children: [{ type: "text", text: "AB" }],
     });
 
     expect(editor.dispatch({ type: "redo" }).ok).toBe(true);
-    expect(editor.query({ type: "document" }).blocks[0]).toMatchObject({
+    expect(editor.query({ type: "document" }).root.children[0]).toMatchObject({
       type: "paragraph",
       children: [{ type: "text", text: "AxB" }],
     });

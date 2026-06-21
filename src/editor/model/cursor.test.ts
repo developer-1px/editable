@@ -12,15 +12,19 @@ import {
   selectedAtomPointersBetween,
   toSelectionPoint,
 } from "./cursor";
-import { type NoteDocument, NoteDocumentSchema } from "./noteDocument";
+import {
+  createNoteDocument,
+  type NoteBlockInput,
+  type NoteDocument,
+  NoteDocumentSchema,
+} from "./noteDocument";
 
-function documentWithBlocks(blocks: NoteDocument["blocks"]): NoteDocument {
-  return {
+function documentWithBlocks(blocks: NoteBlockInput[]): NoteDocument {
+  return createNoteDocument(blocks, {
     id: "note-test",
     title: "Cursor",
     tags: [],
-    blocks,
-  };
+  });
 }
 
 describe("cursor model", () => {
@@ -37,7 +41,7 @@ describe("cursor model", () => {
 
     cursor = moveCursor(document, cursor, "forward");
     expect(cursor).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 0,
     });
 
@@ -61,33 +65,33 @@ describe("cursor model", () => {
     expect(cursorLength(document)).toBe(5);
     expect(
       resolveCursorIndex(document, {
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 1,
       }),
     ).toBe(
       resolveCursorIndex(document, {
-        path: "/blocks/0/children/1/text",
+        path: "/root/children/0/children/1/text",
         offset: 0,
       }),
     );
     expect(
       moveCursor(
         document,
-        { path: "/blocks/0/children/0/text", offset: 1 },
+        { path: "/root/children/0/children/0/text", offset: 1 },
         "forward",
       ),
     ).toMatchObject({
-      path: "/blocks/0/children/1/text",
+      path: "/root/children/0/children/1/text",
       offset: 1,
     });
     expect(
       moveCursor(
         document,
-        { path: "/blocks/0/children/1/text", offset: 0 },
+        { path: "/root/children/0/children/1/text", offset: 0 },
         "backward",
       ),
     ).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 0,
     });
   });
@@ -107,23 +111,31 @@ describe("cursor model", () => {
     ]);
 
     expect(firstCursorPoint(document)).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     expect(
       moveCursor(
         document,
-        { path: "/blocks/0/children/0/text", offset: 1 },
+        { path: "/root/children/0/children/0/text", offset: 1 },
         "forward",
       ),
-    ).toMatchObject({ path: "/blocks/0", edge: "after" });
+    ).toMatchObject({ path: "/root/children/0", edge: "after" });
     expect(
-      moveCursor(document, { path: "/blocks/0", edge: "after" }, "forward"),
-    ).toMatchObject({ path: "/blocks/1", edge: "before" });
+      moveCursor(
+        document,
+        { path: "/root/children/0", edge: "after" },
+        "forward",
+      ),
+    ).toMatchObject({ path: "/root/children/1", edge: "before" });
     expect(
-      moveCursor(document, { path: "/blocks/1", edge: "before" }, "forward"),
+      moveCursor(
+        document,
+        { path: "/root/children/1", edge: "before" },
+        "forward",
+      ),
     ).toMatchObject({
-      path: "/blocks/1/children/0/text",
+      path: "/root/children/1/children/0/text",
       offset: 0,
     });
   });
@@ -145,21 +157,21 @@ describe("cursor model", () => {
     expect(
       moveCursor(
         document,
-        { path: "/blocks/0/children/1", edge: "before" },
+        { path: "/root/children/0/children/1", edge: "before" },
         "forward",
       ),
     ).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
     expect(
       moveCursor(
         document,
-        { path: "/blocks/0/children/1", edge: "after" },
+        { path: "/root/children/0/children/1", edge: "after" },
         "backward",
       ),
     ).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "before",
     });
   });
@@ -185,22 +197,22 @@ describe("cursor model", () => {
     expect(
       selectedAtomPointersBetween(
         document,
-        { path: "/blocks/0/children/1", edge: "before" },
-        { path: "/blocks/0/children/1", edge: "after" },
+        { path: "/root/children/0/children/1", edge: "before" },
+        { path: "/root/children/0/children/1", edge: "after" },
       ),
-    ).toEqual(["/blocks/0/children/1"]);
+    ).toEqual(["/root/children/0/children/1"]);
     expect(
       selectedAtomPointersBetween(
         document,
-        { path: "/blocks/1", edge: "before" },
-        { path: "/blocks/1", edge: "after" },
+        { path: "/root/children/1", edge: "before" },
+        { path: "/root/children/1", edge: "after" },
       ),
-    ).toEqual(["/blocks/1"]);
+    ).toEqual(["/root/children/1"]);
     expect(
       selectedAtomPointersBetween(
         document,
-        { path: "/blocks/1", edge: "before" },
-        { path: "/blocks/1", edge: "before" },
+        { path: "/root/children/1", edge: "before" },
+        { path: "/root/children/1", edge: "before" },
       ),
     ).toEqual([]);
   });
@@ -220,17 +232,17 @@ describe("cursor model", () => {
     expect(
       selectedAtomPointersBetween(
         document,
-        { path: "/blocks/0/children/0/text", offset: 0 },
-        { path: "/blocks/0/children/1", edge: "before" },
+        { path: "/root/children/0/children/0/text", offset: 0 },
+        { path: "/root/children/0/children/1", edge: "before" },
       ),
     ).toEqual([]);
     expect(
       selectedAtomPointersBetween(
         document,
-        { path: "/blocks/0/children/0/text", offset: 0 },
-        { path: "/blocks/0/children/1", edge: "after" },
+        { path: "/root/children/0/children/0/text", offset: 0 },
+        { path: "/root/children/0/children/1", edge: "after" },
       ),
-    ).toEqual(["/blocks/0/children/1"]);
+    ).toEqual(["/root/children/0/children/1"]);
   });
 
   it("treats an inline mention chip as one cursor unit", () => {
@@ -246,23 +258,26 @@ describe("cursor model", () => {
       },
     ]);
 
-    let cursor: CursorPoint = { path: "/blocks/0/children/0/text", offset: 1 };
+    let cursor: CursorPoint = {
+      path: "/root/children/0/children/0/text",
+      offset: 1,
+    };
 
     cursor = moveCursor(document, cursor, "forward");
     expect(cursor).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "before",
     });
 
     cursor = moveCursor(document, cursor, "forward");
     expect(cursor).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
 
     cursor = moveCursor(document, cursor, "forward");
     expect(cursor).toMatchObject({
-      path: "/blocks/0/children/2/text",
+      path: "/root/children/0/children/2/text",
       offset: 0,
     });
   });
@@ -287,19 +302,22 @@ describe("cursor model", () => {
       },
     ]);
 
-    let cursor: CursorPoint = { path: "/blocks/0/children/0/text", offset: 1 };
+    let cursor: CursorPoint = {
+      path: "/root/children/0/children/0/text",
+      offset: 1,
+    };
 
     cursor = moveCursor(document, cursor, "forward");
-    expect(cursor).toMatchObject({ path: "/blocks/0", edge: "after" });
+    expect(cursor).toMatchObject({ path: "/root/children/0", edge: "after" });
 
     cursor = moveCursor(document, cursor, "forward");
-    expect(cursor).toMatchObject({ path: "/blocks/1", edge: "before" });
+    expect(cursor).toMatchObject({ path: "/root/children/1", edge: "before" });
 
     cursor = moveCursor(document, cursor, "forward");
-    expect(cursor).toMatchObject({ path: "/blocks/1", edge: "after" });
+    expect(cursor).toMatchObject({ path: "/root/children/1", edge: "after" });
 
     cursor = moveCursor(document, cursor, "backward");
-    expect(cursor).toMatchObject({ path: "/blocks/1", edge: "before" });
+    expect(cursor).toMatchObject({ path: "/root/children/1", edge: "before" });
   });
 
   it("moves by word boundaries and treats atoms as one word unit", () => {
@@ -323,51 +341,51 @@ describe("cursor model", () => {
     expect(
       moveCursorByWord(
         document,
-        { path: "/blocks/0", edge: "before" },
+        { path: "/root/children/0", edge: "before" },
         "forward",
       ),
     ).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 3,
     });
     expect(
       moveCursorByWord(
         document,
-        { path: "/blocks/0/children/0/text", offset: 7 },
+        { path: "/root/children/0/children/0/text", offset: 7 },
         "backward",
       ),
     ).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 4,
     });
     expect(
       moveCursorByWord(
         document,
-        { path: "/blocks/0/children/0/text", offset: 7 },
+        { path: "/root/children/0/children/0/text", offset: 7 },
         "forward",
       ),
     ).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
     expect(
       moveCursorByWord(
         document,
-        { path: "/blocks/0/children/2/text", offset: 0 },
+        { path: "/root/children/0/children/2/text", offset: 0 },
         "backward",
       ),
     ).toMatchObject({
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "before",
     });
     expect(
       moveCursorByWord(
         document,
-        { path: "/blocks/0", edge: "after" },
+        { path: "/root/children/0", edge: "after" },
         "forward",
       ),
     ).toMatchObject({
-      path: "/blocks/1",
+      path: "/root/children/1",
       edge: "after",
     });
   });
@@ -400,59 +418,71 @@ describe("cursor model", () => {
     ]);
 
     expect(firstCursorPoint(document)).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "before",
     });
     expect(
-      moveCursor(document, { path: "/blocks/0", edge: "before" }, "forward"),
+      moveCursor(
+        document,
+        { path: "/root/children/0", edge: "before" },
+        "forward",
+      ),
     ).toMatchObject({
-      path: "/blocks/0/children/0/text",
+      path: "/root/children/0/children/0/text",
       offset: 0,
     });
     expect(
       moveCursor(
         document,
-        { path: "/blocks/0/children/0/text", offset: 2 },
+        { path: "/root/children/0/children/0/text", offset: 2 },
         "forward",
       ),
     ).toMatchObject({
-      path: "/blocks/0",
+      path: "/root/children/0",
       edge: "after",
     });
     expect(
-      moveCursor(document, { path: "/blocks/1", edge: "before" }, "forward"),
+      moveCursor(
+        document,
+        { path: "/root/children/1", edge: "before" },
+        "forward",
+      ),
     ).toMatchObject({
-      path: "/blocks/1/children/0",
+      path: "/root/children/1/children/0",
       edge: "before",
     });
     expect(
       moveCursor(
         document,
-        { path: "/blocks/1/children/0", edge: "before" },
+        { path: "/root/children/1/children/0", edge: "before" },
         "forward",
       ),
     ).toMatchObject({
-      path: "/blocks/1/children/0",
+      path: "/root/children/1/children/0",
       edge: "after",
     });
     expect(
       moveCursor(
         document,
-        { path: "/blocks/2/children/0/text", offset: 4 },
+        { path: "/root/children/2/children/0/text", offset: 4 },
         "forward",
       ),
     ).toMatchObject({
-      path: "/blocks/2",
+      path: "/root/children/2",
       edge: "after",
     });
     expect(
-      moveCursor(document, { path: "/blocks/3", edge: "before" }, "forward"),
+      moveCursor(
+        document,
+        { path: "/root/children/3", edge: "before" },
+        "forward",
+      ),
     ).toMatchObject({
-      path: "/blocks/3/text",
+      path: "/root/children/3/text",
       offset: 0,
     });
     expect(lastCursorPoint(document)).toMatchObject({
-      path: "/blocks/3",
+      path: "/root/children/3",
       edge: "after",
     });
   });
@@ -468,16 +498,16 @@ describe("cursor model", () => {
 
     expect(
       normalizeCursorPoint(document, {
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: -10,
       }),
-    ).toMatchObject({ path: "/blocks/0/children/0/text", offset: 0 });
+    ).toMatchObject({ path: "/root/children/0/children/0/text", offset: 0 });
     expect(
       normalizeCursorPoint(document, {
-        path: "/blocks/0/children/0/text",
+        path: "/root/children/0/children/0/text",
         offset: 99,
       }),
-    ).toMatchObject({ path: "/blocks/0/children/0/text", offset: 3 });
+    ).toMatchObject({ path: "/root/children/0/children/0/text", offset: 3 });
   });
 
   it("normalizes edge points to before or after edges only", () => {
@@ -494,24 +524,24 @@ describe("cursor model", () => {
       },
     ]);
 
-    expect(normalizeCursorPoint(document, { path: "/blocks/0" })).toMatchObject(
-      { path: "/blocks/0", edge: "before" },
-    );
+    expect(
+      normalizeCursorPoint(document, { path: "/root/children/0" }),
+    ).toMatchObject({ path: "/root/children/0", edge: "before" });
     expect(
       normalizeCursorPoint(document, {
-        path: "/blocks/0",
+        path: "/root/children/0",
         edge: "after",
       }),
-    ).toMatchObject({ path: "/blocks/0", edge: "after" });
+    ).toMatchObject({ path: "/root/children/0", edge: "after" });
     expect(
-      normalizeCursorPoint(document, { path: "/blocks/0/children/0" }),
-    ).toMatchObject({ path: "/blocks/0/children/0", edge: "before" });
+      normalizeCursorPoint(document, { path: "/root/children/0/children/0" }),
+    ).toMatchObject({ path: "/root/children/0/children/0", edge: "before" });
     expect(
       normalizeCursorPoint(document, {
-        path: "/blocks/1",
+        path: "/root/children/1",
         edge: "after",
       }),
-    ).toMatchObject({ path: "/blocks/1", edge: "after" });
+    ).toMatchObject({ path: "/root/children/1", edge: "after" });
   });
 
   it("serializes cursor points into json-document selection state", () => {
@@ -530,7 +560,7 @@ describe("cursor model", () => {
       trustedInitial: true,
     });
     const point = normalizeCursorPoint(document, {
-      path: "/blocks/0/children/1",
+      path: "/root/children/0/children/1",
       edge: "after",
     });
 

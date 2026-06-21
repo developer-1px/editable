@@ -745,7 +745,11 @@ function pointForHorizontalMovement(
 
   if (direction === "forward" && origin.affinity === "backward") {
     const last = line.fragments.at(-1);
-    if (last?.kind === "text" && sameTextPoint(origin, line.end)) {
+    if (
+      last?.kind === "text" &&
+      !isEmptyTextFragment(last) &&
+      sameTextPoint(origin, line.end)
+    ) {
       const next = nextCollapsedTextFragment(map, last);
       return next === null
         ? null
@@ -755,7 +759,11 @@ function pointForHorizontalMovement(
 
   if (direction === "backward" && origin.affinity === "forward") {
     const first = line.fragments[0];
-    if (first?.kind === "text" && sameTextPoint(origin, line.start)) {
+    if (
+      first?.kind === "text" &&
+      !isEmptyTextFragment(first) &&
+      sameTextPoint(origin, line.start)
+    ) {
       const previous = previousCollapsedTextFragment(map, first);
       return previous === null ? null : pointForFragmentEdge(previous, "after");
     }
@@ -966,7 +974,11 @@ function textCaretFragmentForPoint(
     return null;
   }
 
-  if (point.affinity !== "backward" && point.offset === fragment.endOffset) {
+  if (
+    !isEmptyTextFragment(fragment) &&
+    point.affinity !== "backward" &&
+    point.offset === fragment.endOffset
+  ) {
     const next = nextCollapsedTextFragment(map, fragment);
     if (next !== null) {
       return { fragment: next, offset: next.startOffset };
@@ -1012,6 +1024,10 @@ function previousCollapsedTextFragment(
   }
 
   return null;
+}
+
+function isEmptyTextFragment(fragment: TextLayoutFragment): boolean {
+  return fragment.startOffset === fragment.endOffset;
 }
 
 function sameTextPoint(left: CursorPoint, right: CursorPoint): boolean {
@@ -1439,7 +1455,9 @@ function unionRects(rects: DOMRect[]): DOMRect {
 }
 
 function isTopLevelCursorBlock(element: Element): boolean {
-  return /^\/blocks\/\d+$/.test(element.getAttribute("data-path") ?? "");
+  return /^\/root\/children\/\d+$/.test(
+    element.getAttribute("data-path") ?? "",
+  );
 }
 
 function isBlockAtom(element: Element): boolean {

@@ -120,7 +120,7 @@ function selectionPointToCursorPoint(
 }
 
 function atomKind(path: string): "figure" | "mention" {
-  return /^\/blocks\/\d+$/.test(path) ? "figure" : "mention";
+  return /^\/root\/children\/\d+$/.test(path) ? "figure" : "mention";
 }
 
 function cursorPointsEqual(left: CursorPoint, right: CursorPoint): boolean {
