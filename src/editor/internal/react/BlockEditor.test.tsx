@@ -3,6 +3,7 @@
 import {
   act,
   cleanup,
+  createEvent,
   fireEvent,
   render,
   screen,
@@ -46,6 +47,32 @@ describe("BlockEditor", () => {
 
     expect(editor.hasAttribute("data-focused")).toBe(false);
     expect(document.body.querySelector('[data-overlay="caret"]')).toBe(null);
+  });
+
+  it("keeps editor focus and selection when toolbar buttons receive mouse down", async () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    fireEvent.keyDown(editor, { key: "ArrowRight" });
+    const view = editor.querySelector(".document-view");
+
+    expect(view?.getAttribute("data-selection-path")).toBe(
+      "/root/children/0/children/0/text",
+    );
+    expect(view?.getAttribute("data-selection-offset")).toBe("1");
+
+    const undo = screen.getByRole("button", { name: "Undo" });
+    const mouseDown = createEvent.mouseDown(undo);
+    fireEvent(undo, mouseDown);
+
+    expect(mouseDown.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(editor);
+    expect(view?.getAttribute("data-selection-path")).toBe(
+      "/root/children/0/children/0/text",
+    );
+    expect(view?.getAttribute("data-selection-offset")).toBe("1");
   });
 
   it("scrolls the canonical selection into view after keyboard movement", async () => {

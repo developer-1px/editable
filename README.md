@@ -147,6 +147,8 @@ The intended ownership rule is:
   native fallback audit
 - `docs/editor-beforeinput-policy-audit.md`: beforeinput trust boundary and
   Chrome Android delete fallback audit
+- `docs/editor-event-ownership-audit.md`: editor root vs node/widget DOM event
+  ownership audit
 - `docs/editor-contenteditable-buffer-audit.md`: native contenteditable buffer
   adapter audit
 - `docs/editor-native-selection-bridge-audit.md`: DOM selection to canonical
