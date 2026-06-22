@@ -103,6 +103,8 @@ The intended ownership rule is:
   new P0 input expectations
 - `docs/editor-browser-input-gate.md`: Playwright browser smoke gate and IME
   manual capture split
+- `docs/editor-test-environment-policy-audit.md`: model/jsdom/browser/device
+  test environment responsibility audit
 - `docs/repo-analysis-report.md`: current confirmed-vs-ambiguous repo analysis
 - `docs/editor-document-authority-audit.md`: document authority and stale-risk
   audit
