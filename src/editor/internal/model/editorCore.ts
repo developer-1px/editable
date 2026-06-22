@@ -390,6 +390,18 @@ export function createEditor(options: CreateEditorOptions = {}): Editor {
   return editor;
 }
 
+export function dispatchEditorCommandToJSONDocument(
+  document: JSONDocument<NoteDocument>,
+  command: EditorCommand | readonly EditorCommand[],
+  options: {
+    view?: EditorViewAdapter;
+  } = {},
+): EditorResult {
+  return isCommandArray(command)
+    ? dispatchBatch(document, command, options.view)
+    : dispatchSingle(document, command, options.view);
+}
+
 function dispatchSingle(
   document: JSONDocument<NoteDocument>,
   command: EditorCommand,
