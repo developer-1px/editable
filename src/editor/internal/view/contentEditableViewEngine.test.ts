@@ -141,6 +141,16 @@ function textRun(root: ParentNode, path: string): HTMLElement {
   return element;
 }
 
+function firstTextNodeInside(element: HTMLElement): Text {
+  const textWalker = element.ownerDocument.createTreeWalker(element, 4);
+  const textNode = textWalker.nextNode();
+  if (!(textNode instanceof Text)) {
+    throw new Error("Element must contain a text node.");
+  }
+
+  return textNode;
+}
+
 function setDOMSelection(element: HTMLElement, offset: number) {
   const textNode = element.firstChild;
   if (!(textNode instanceof Text)) {
@@ -376,6 +386,125 @@ describe("createContentEditableViewEngine", () => {
       offset: 6,
     });
     expect(session.hasActiveEdit()).toBe(false);
+  });
+
+  it("limits dirty reparse to the marked active text leaf", () => {
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "Alpha", marks: [{ type: "bold" }] }],
+      },
+    ]);
+    const { root, first } = setupTextRoot();
+    const session = createContentEditableViewEngine();
+    first.innerHTML = '<strong class="rich-strong">Alpha</strong>';
+
+    setDOMBoundarySelection(firstTextNodeInside(first), 5);
+    expect(
+      session.planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({ path: firstTextPath, offset: 5 }),
+        { inputType: "insertText", data: "!" },
+      ),
+    ).toEqual({ kind: "deferToContentEditable" });
+
+    const strong = first.querySelector("strong");
+    if (strong === null) {
+      throw new Error("Fixture must contain a mark wrapper.");
+    }
+    strong.textContent = "Alpha!";
+    setDOMBoundarySelection(firstTextNodeInside(first), 6);
+
+    const result = session.flush(root, note);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok || !result.changed) {
+      throw new Error("Expected changed flush result.");
+    }
+    expect(result.path).toBe(firstTextPath);
+    expect(result.patch).toEqual([
+      { op: "replace", path: firstTextPath, value: "Alpha!" },
+    ]);
+    expect(first.querySelector("strong")).not.toBe(null);
+  });
+
+  it("does not start a native dirty range from contenteditable false widgets", () => {
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [
+          { type: "text", text: "Alpha" },
+          { type: "mention", id: "user-ada", label: "Ada" },
+          { type: "text", text: "Beta" },
+        ],
+      },
+    ]);
+    const { root, mention } = setupInlineAtomTextRoot();
+    const session = createContentEditableViewEngine();
+
+    setDOMBoundarySelection(mention, 0);
+
+    expect(
+      session.planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({
+          path: "/root/children/0/children/1",
+          edge: "before",
+        }),
+        { inputType: "insertText", data: "x" },
+      ),
+    ).toEqual({ kind: "runHeadless" });
+    expect(session.hasActiveEdit()).toBe(false);
+  });
+
+  it("diffs only the active text leaf and leaves sibling block repair to reset", () => {
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "Alpha" }],
+      },
+      {
+        id: "block-2",
+        type: "paragraph",
+        children: [{ type: "text", text: "Beta" }],
+      },
+    ]);
+    const { root, first, second } = setupTextRoot();
+    const session = createContentEditableViewEngine();
+
+    setDOMSelection(first, 5);
+    expect(
+      session.planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({ path: firstTextPath, offset: 5 }),
+        { inputType: "insertText", data: "!" },
+      ),
+    ).toEqual({ kind: "deferToContentEditable" });
+    first.textContent = "Alpha!";
+    second.textContent = "Browser changed sibling";
+    setDOMSelection(first, 6);
+
+    const result = session.flush(root, note);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok || !result.changed) {
+      throw new Error("Expected changed flush result.");
+    }
+    expect(result.patch).toEqual([
+      { op: "replace", path: firstTextPath, value: "Alpha!" },
+    ]);
+    expect(second.textContent).toBe("Browser changed sibling");
+
+    session.reset(root, note);
+
+    expect(first.textContent).toBe("Alpha");
+    expect(second.textContent).toBe("Beta");
   });
 
   it("resets foreign DOM even when textContent already matches the model", () => {

@@ -165,6 +165,8 @@ The intended ownership rule is:
   custom overlay visibility lifecycle audit
 - `docs/editor-dom-position-equivalence-audit.md`: DOM position equivalence,
   bias, and contenteditable=false boundary audit
+- `docs/editor-dom-dirty-range-policy-audit.md`: DOM dirty range, leaf-only
+  reparse, and model diff restore policy audit
 - `docs/editor-shadow-selection-fallback-audit.md`: ShadowRoot selection and
   Safari fallback policy audit
 - `docs/editor-scroll-focus-policy-audit.md`: scroll reveal and focus
