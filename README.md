@@ -155,6 +155,8 @@ The intended ownership rule is:
   native fallback audit
 - `docs/editor-beforeinput-policy-audit.md`: beforeinput trust boundary and
   Chrome Android delete fallback audit
+- `docs/editor-offset-zero-input-policy-audit.md`: offset 0, mark/link
+  boundary, and native insertText policy audit
 - `docs/editor-event-ownership-audit.md`: editor root vs node/widget DOM event
   ownership audit
 - `docs/editor-contenteditable-buffer-audit.md`: native contenteditable buffer

@@ -430,6 +430,110 @@ describe("createContentEditableViewEngine", () => {
     expect(first.querySelector("strong")).not.toBe(null);
   });
 
+  it("keeps offset zero insertText native at editable text starts after inline boundaries", () => {
+    const afterBoldTextPath = "/root/children/0/children/2/text";
+    const afterLinkTextPath = "/root/children/0/children/4/text";
+    const afterMentionTextPath = "/root/children/0/children/6/text";
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [
+          { type: "text", text: "Plain" },
+          { type: "text", text: "Bold", marks: [{ type: "bold" }] },
+          { type: "text", text: "AfterBold" },
+          {
+            type: "text",
+            text: "Link",
+            marks: [{ type: "link", href: "https://example.com" }],
+          },
+          { type: "text", text: "AfterLink" },
+          { type: "mention", id: "user-ada", label: "Ada" },
+          { type: "text", text: "AfterMention" },
+        ],
+      },
+      {
+        id: "block-2",
+        type: "paragraph",
+        children: [{ type: "text", text: "BlockStart" }],
+      },
+    ]);
+    const root = document.createElement("div");
+    root.innerHTML = [
+      '<p class="text-block" data-path="/root/children/0">',
+      `<span class="text-run" data-path="${firstTextPath}">Plain</span>`,
+      '<span class="text-run" data-path="/root/children/0/children/1/text"><strong>Bold</strong></span>',
+      `<span class="text-run" data-path="${afterBoldTextPath}">AfterBold</span>`,
+      '<span class="text-run" data-path="/root/children/0/children/3/text"><a class="rich-link" href="https://example.com">Link</a></span>',
+      `<span class="text-run" data-path="${afterLinkTextPath}">AfterLink</span>`,
+      '<span class="mention-chip" contenteditable="false" data-path="/root/children/0/children/5">@Ada</span>',
+      `<span class="text-run" data-path="${afterMentionTextPath}">AfterMention</span>`,
+      "</p>",
+      '<p class="text-block" data-path="/root/children/1">',
+      `<span class="text-run" data-path="${secondTextPath}">BlockStart</span>`,
+      "</p>",
+    ].join("");
+    document.body.append(root);
+
+    const cases: Array<{
+      label: string;
+      select: () => void;
+      selectionPath: string;
+    }> = [
+      {
+        label: "paragraph start",
+        select: () => setDOMSelection(textRun(root, firstTextPath), 0),
+        selectionPath: firstTextPath,
+      },
+      {
+        label: "after bold mark",
+        select: () => setDOMSelection(textRun(root, afterBoldTextPath), 0),
+        selectionPath: afterBoldTextPath,
+      },
+      {
+        label: "after link mark",
+        select: () => setDOMSelection(textRun(root, afterLinkTextPath), 0),
+        selectionPath: afterLinkTextPath,
+      },
+      {
+        label: "after contenteditable=false mention",
+        select: () => setDOMSelection(textRun(root, afterMentionTextPath), 0),
+        selectionPath: afterMentionTextPath,
+      },
+      {
+        label: "block start edge",
+        select: () => {
+          const secondBlock = root.querySelector(
+            '[data-path="/root/children/1"]',
+          );
+          if (!(secondBlock instanceof HTMLElement)) {
+            throw new Error("Fixture failed to render second block.");
+          }
+          setDOMBoundarySelection(secondBlock, 0);
+        },
+        selectionPath: secondTextPath,
+      },
+    ];
+
+    for (const current of cases) {
+      const session = createContentEditableViewEngine();
+      current.select();
+
+      expect(
+        session.planBeforeInput(
+          root,
+          note,
+          selectionFromCursorPoint({
+            path: current.selectionPath,
+            offset: 0,
+          }),
+          { inputType: "insertText", data: "x" },
+        ),
+      ).toEqual({ kind: "deferToContentEditable" });
+      expect(session.hasActiveEdit(), current.label).toBe(true);
+    }
+  });
+
   it("does not start a native dirty range from contenteditable false widgets", () => {
     const note = documentWithBlocks([
       {
