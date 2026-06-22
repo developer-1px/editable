@@ -203,6 +203,8 @@ The intended ownership rule is:
   caption, iframe, focus, selection, and clipboard handoff policy audit
 - `docs/editor-widget-decoration-lifecycle-audit.md`: widget-like DOM identity,
   key, and destroy lifecycle audit
+- `docs/editor-decoration-boundary-composition-audit.md`: decoration, widget,
+  mark boundary, composition, and cursor policy audit
 - `docs/editor-cursor-geometry-audit.md`: cursor geometry adapter audit
 - `docs/editor-css-layout-geometry-policy-audit.md`: CSS layout, transform,
   zoom, and overlay geometry policy audit
