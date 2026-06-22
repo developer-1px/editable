@@ -142,7 +142,12 @@ function formatInputSummary(
   const target = formatTarget(event.target);
 
   if (event.type === "keydown" || event.type === "keyup") {
-    return `${event.type} ${modifiers}${event.key ?? event.code ?? "unknown"} target=${target}`;
+    const keyCode =
+      event.keyCode === undefined ? "" : ` keyCode=${event.keyCode}`;
+    const composing = event.isComposing === true ? " composing" : "";
+    return `${event.type} ${
+      modifiers
+    }${event.key ?? event.code ?? "unknown"}${keyCode}${composing} target=${target}`;
   }
 
   if (event.type === "beforeinput" || event.type === "input") {
@@ -150,7 +155,20 @@ function formatInputSummary(
       event.data === undefined || event.data === null
         ? ""
         : ` data=${quote(event.data)}`;
-    return `${event.type} ${event.inputType ?? "unknown"}${data} target=${target}`;
+    const composing = event.isComposing === true ? " composing" : "";
+    return `${event.type} ${event.inputType ?? "unknown"}${data}${composing} target=${target}`;
+  }
+
+  if (
+    event.type === "compositionstart" ||
+    event.type === "compositionupdate" ||
+    event.type === "compositionend"
+  ) {
+    const data =
+      event.data === undefined || event.data === null
+        ? ""
+        : ` data=${quote(event.data)}`;
+    return `${event.type}${data} target=${target}`;
   }
 
   if (event.type === "paste" || event.type === "copy" || event.type === "cut") {
@@ -223,8 +241,10 @@ function summarizeInputEvent(event: SerializedInputEvent) {
     type: event.type,
     key: event.key,
     code: event.code,
+    keyCode: event.keyCode,
     inputType: event.inputType,
     data: event.data,
+    isComposing: event.isComposing,
     clipboardText: event.clipboardText,
     pointerType: event.pointerType,
     button: event.button,

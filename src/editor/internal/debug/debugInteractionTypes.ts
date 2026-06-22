@@ -120,6 +120,7 @@ export type SerializedInputEvent = {
   isComposing?: boolean;
   isPrimary?: boolean;
   key?: string;
+  keyCode?: number;
   location?: number;
   metaKey?: boolean;
   offsetX?: number;

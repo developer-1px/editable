@@ -72,6 +72,7 @@ export type KeyboardTraceEvent = {
   ctrlKey?: boolean;
   isComposing?: boolean;
   key: string;
+  keyCode?: number;
   metaKey?: boolean;
   shiftKey?: boolean;
   type: "keydown" | "keyup";
@@ -495,6 +496,9 @@ function createTraceEvent(root: HTMLElement, event: EditorTraceEvent): Event {
       shiftKey: event.shiftKey ?? false,
     });
     defineEventValue(keyboardEvent, "isComposing", event.isComposing ?? false);
+    if (event.keyCode !== undefined) {
+      defineEventValue(keyboardEvent, "keyCode", event.keyCode);
+    }
     return keyboardEvent;
   }
 

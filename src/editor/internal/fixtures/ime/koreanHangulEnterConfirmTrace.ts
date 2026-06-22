@@ -30,7 +30,10 @@ export const koreanHangulEnterConfirmTrace = {
       },
     },
     { kind: "event", event: { type: "compositionend", data: "안" } },
-    { kind: "event", event: { type: "keydown", key: "Enter" } },
+    {
+      kind: "event",
+      event: { type: "keydown", key: "Enter", keyCode: 229 },
+    },
     {
       kind: "event",
       event: {

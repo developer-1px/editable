@@ -16,6 +16,10 @@ type ClipboardEventLike = Event & {
   clipboardData?: DataTransfer | null;
 };
 
+type CompositionEventLike = Event & {
+  data?: string;
+};
+
 type PointerEventLike = MouseEvent & {
   height?: number;
   isPrimary?: boolean;
@@ -39,6 +43,7 @@ export function serializeInputEvent(event: Event): SerializedInputEvent {
     serialized.ctrlKey = event.ctrlKey;
     serialized.isComposing = event.isComposing;
     serialized.key = event.key;
+    serialized.keyCode = event.keyCode;
     serialized.location = event.location;
     serialized.metaKey = event.metaKey;
     serialized.repeat = event.repeat;
@@ -49,6 +54,10 @@ export function serializeInputEvent(event: Event): SerializedInputEvent {
     serialized.data = event.data;
     serialized.inputType = event.inputType;
     serialized.isComposing = event.isComposing;
+  }
+
+  if (isCompositionEventLike(event)) {
+    serialized.data = event.data;
   }
 
   if (isClipboardEventLike(event)) {
@@ -154,6 +163,14 @@ function isInputEventLike(event: Event): event is InputEventLike {
 
 function isClipboardEventLike(event: Event): event is ClipboardEventLike {
   return "clipboardData" in event;
+}
+
+function isCompositionEventLike(event: Event): event is CompositionEventLike {
+  return (
+    event.type === "compositionstart" ||
+    event.type === "compositionupdate" ||
+    event.type === "compositionend"
+  );
 }
 
 function isPointerEventLike(event: Event): event is PointerEventLike {
