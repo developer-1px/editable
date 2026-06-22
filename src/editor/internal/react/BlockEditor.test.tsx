@@ -525,13 +525,24 @@ describe("BlockEditor", () => {
     ).toEqual(["recording-started", "recording-stopped"]);
   });
 
-  it("uses beforeinput for printable text and keydown for structural editing", () => {
+  it("uses beforeinput for printable text and keydown for structural editing", async () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    const firstText = editor.querySelector(
+      '[data-path="/root/children/0/children/0/text"]',
+    )?.firstChild;
+    if (!(firstText instanceof Text)) {
+      throw new Error("Fixture failed to render first text.");
+    }
+    setDOMSelection(firstText, 0);
+
     const beforeText = editor.querySelector(".document-view")?.textContent;
     const beforeBlockCount = editor.querySelectorAll(".paragraph-block").length;
 
-    fireEvent.keyDown(editor, { key: "x" });
+    dispatchKeyboard(editor, "keydown", { key: "x" });
 
     expect(editor.querySelector(".document-view")?.textContent).toBe(
       beforeText,
@@ -540,21 +551,25 @@ describe("BlockEditor", () => {
       beforeBlockCount,
     );
 
-    fireEvent.keyDown(editor, { key: "Enter" });
+    dispatchKeyboard(editor, "keydown", { key: "Enter" });
 
-    expect(editor.querySelectorAll(".paragraph-block")).toHaveLength(
-      beforeBlockCount + 1,
+    await waitFor(() =>
+      expect(editor.querySelectorAll(".paragraph-block")).toHaveLength(
+        beforeBlockCount + 1,
+      ),
     );
 
-    fireEvent.keyDown(editor, { key: "ArrowRight", shiftKey: true });
+    dispatchKeyboard(editor, "keydown", { key: "ArrowRight", shiftKey: true });
     fireBeforeInput(editor, { inputType: "insertText", data: "x" });
 
-    expect(editor.textContent).toContain("xPlain");
-    expect(
-      editor
-        .querySelector(".document-view")
-        ?.getAttribute("data-selection-offset"),
-    ).toBe("1");
+    await waitFor(() => {
+      expect(editor.textContent).toContain("xPlain");
+      expect(
+        editor
+          .querySelector(".document-view")
+          ?.getAttribute("data-selection-offset"),
+      ).toBe("1");
+    });
   });
 
   it("inserts printable text with the active mark from keyboard shortcuts", async () => {
