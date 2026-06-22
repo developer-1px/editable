@@ -127,6 +127,8 @@ The intended ownership rule is:
   confirmed, partially confirmed, and ambiguous areas
 - `docs/editor-selection-model-audit.md`: canonical selection model and native
   selection policy audit
+- `docs/editor-cross-block-range-policy-audit.md`: cross-block range,
+  multi-range DOM selection, composition/delete policy audit
 - `docs/editor-pointer-selection-audit.md`: pointer and mouse selection adapter
   audit
 - `docs/editor-text-mutation-command-audit.md`: text mutation command and
