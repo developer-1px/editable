@@ -1408,6 +1408,7 @@ export function useBlockEditorController({
     layoutMeasured,
     layoutVersion,
     note: document.value,
+    overlayOwnerDocument: editorSurfaceElement?.ownerDocument ?? null,
     readOnly,
     selectionOverlay,
     setEditorSurfaceRef,

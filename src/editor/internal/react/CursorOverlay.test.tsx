@@ -43,6 +43,7 @@ describe("CursorOverlay", () => {
         geometry={geometryFor({
           "/root/children/0/children/0/text:2": rect(32, 10, 1, 20),
         })}
+        ownerDocument={null}
         point={{
           path: "/root/children/0/children/0/text",
           offset: 2,
@@ -63,6 +64,7 @@ describe("CursorOverlay", () => {
         geometry={geometryFor({
           "/root/children/0/children/0/text:0": rect(32, 10, 0, 20),
         })}
+        ownerDocument={null}
         point={{
           path: "/root/children/0/children/0/text",
           offset: 0,
@@ -80,6 +82,7 @@ describe("CursorOverlay", () => {
         geometry={geometryFor({
           "/root/children/0/children/1:after": rect(110, 10, 1, 20),
         })}
+        ownerDocument={null}
         point={{
           path: "/root/children/0/children/1",
           edge: "after",

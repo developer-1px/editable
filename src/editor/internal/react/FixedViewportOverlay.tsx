@@ -4,11 +4,13 @@ import { createPortal } from "react-dom";
 type FixedViewportOverlayProps = {
   children: ReactNode;
   className: string;
+  ownerDocument: Document | null;
 };
 
 export function FixedViewportOverlay({
   children,
   className,
+  ownerDocument,
 }: FixedViewportOverlayProps) {
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const overlay = (
@@ -18,8 +20,8 @@ export function FixedViewportOverlay({
   );
 
   useLayoutEffect(() => {
-    setPortalHost(document.body);
-  }, []);
+    setPortalHost(ownerDocument?.body ?? null);
+  }, [ownerDocument]);
 
   if (portalHost === null) {
     return overlay;

@@ -9,11 +9,13 @@ import { FixedViewportOverlay } from "./FixedViewportOverlay";
 
 type SelectionOverlayProps = {
   geometry: CursorGeometry;
+  ownerDocument: Document | null;
   selection?: SelectionSnap;
 };
 
 export function SelectionOverlay({
   geometry,
+  ownerDocument,
   selection,
 }: SelectionOverlayProps) {
   if (selection === undefined) {
@@ -25,7 +27,10 @@ export function SelectionOverlay({
   const selectedAtoms = selectedAtomRects(geometry, selection);
 
   return (
-    <FixedViewportOverlay className="selection-overlay">
+    <FixedViewportOverlay
+      className="selection-overlay"
+      ownerDocument={ownerDocument}
+    >
       {selectedRangeItems.map((item) => (
         <div
           className="selection-range"

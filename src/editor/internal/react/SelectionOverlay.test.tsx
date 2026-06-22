@@ -63,6 +63,7 @@ describe("SelectionOverlay", () => {
     const before = renderToStaticMarkup(
       <SelectionOverlay
         geometry={geometry}
+        ownerDocument={null}
         selection={selectionFromCursorPoint({
           path: "/root/children/0/children/1",
           edge: "before",
@@ -72,6 +73,7 @@ describe("SelectionOverlay", () => {
     const after = renderToStaticMarkup(
       <SelectionOverlay
         geometry={geometry}
+        ownerDocument={null}
         selection={selectionFromCursorPoint({
           path: "/root/children/0/children/1",
           edge: "after",
@@ -94,6 +96,7 @@ describe("SelectionOverlay", () => {
           "/root/children/0/children/0/text:1->/root/children/0/children/0/text:3":
             [rect(20, 10, 24, 20)],
         })}
+        ownerDocument={null}
         selection={{
           ...selectionFromCursorPoint({
             path: "/root/children/0/children/0/text",
@@ -131,6 +134,7 @@ describe("SelectionOverlay", () => {
             "/root/children/0/children/0/text:1->/root/children/0/children/0/text:3":
               [rect(20, 10, 24, 20), rect(20, 10, 24, 20)],
           })}
+          ownerDocument={null}
           selection={{
             ...selectionFromCursorPoint({
               path: "/root/children/0/children/0/text",
@@ -190,6 +194,7 @@ describe("SelectionOverlay", () => {
           "/root/children/1:before": rect(10, 50, 1, 120),
           "/root/children/1:after": rect(210, 50, 1, 120),
         })}
+        ownerDocument={null}
         selection={selection}
       />,
     );

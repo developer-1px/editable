@@ -72,10 +72,12 @@ export function BlockEditor(props: BlockEditorProps = {}) {
               <SelectionOverlay
                 geometry={editor.geometry}
                 key={editor.layoutVersion}
+                ownerDocument={editor.overlayOwnerDocument}
                 selection={editor.selectionOverlay}
               />
               <CursorOverlay
                 geometry={editor.geometry}
+                ownerDocument={editor.overlayOwnerDocument}
                 point={editor.cursorOverlayPoint}
               />
             </>

@@ -5,10 +5,15 @@ import { FixedViewportOverlay } from "./FixedViewportOverlay";
 
 type CursorOverlayProps = {
   geometry: CursorGeometry;
+  ownerDocument: Document | null;
   point: CursorPoint | null;
 };
 
-export function CursorOverlay({ geometry, point }: CursorOverlayProps) {
+export function CursorOverlay({
+  geometry,
+  ownerDocument,
+  point,
+}: CursorOverlayProps) {
   if (point === null) {
     return null;
   }
@@ -19,7 +24,10 @@ export function CursorOverlay({ geometry, point }: CursorOverlayProps) {
   }
 
   return (
-    <FixedViewportOverlay className="cursor-overlay">
+    <FixedViewportOverlay
+      className="cursor-overlay"
+      ownerDocument={ownerDocument}
+    >
       <div
         className="selection-caret"
         data-edge={"edge" in point ? point.edge : undefined}

@@ -195,6 +195,8 @@ The intended ownership rule is:
   ignore vs selection ownership policy audit
 - `docs/editor-shadow-selection-fallback-audit.md`: ShadowRoot selection and
   Safari fallback policy audit
+- `docs/editor-root-context-policy-audit.md`: document, ShadowRoot, iframe,
+  popup, selection, clipboard, geometry, and overlay root policy audit
 - `docs/editor-scroll-focus-policy-audit.md`: scroll reveal and focus
   preventScroll policy audit
 - `docs/editor-focus-selectionchange-race-audit.md`: focus, blur,

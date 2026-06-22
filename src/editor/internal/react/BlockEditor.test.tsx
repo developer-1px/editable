@@ -97,6 +97,35 @@ describe("BlockEditor", () => {
     expect(removedSelectionListeners).toHaveLength(1);
   });
 
+  it("portals overlays into the editor owner document", async () => {
+    const iframe = document.createElement("iframe");
+    document.body.append(iframe);
+    const iframeDocument = iframe.contentDocument;
+    if (iframeDocument === null) {
+      throw new Error("iframe document is unavailable.");
+    }
+    iframeDocument.body.innerHTML = "";
+    const container = iframeDocument.createElement("div");
+    iframeDocument.body.append(container);
+
+    const view = render(<BlockEditor />, {
+      baseElement: iframeDocument.body,
+      container,
+    });
+    const editor = view.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(iframeDocument.activeElement).toBe(editor));
+    await waitFor(() =>
+      expect(
+        iframeDocument.body.querySelector('[data-overlay="caret"]'),
+      ).not.toBe(null),
+    );
+    expect(document.body.querySelector('[data-overlay="caret"]')).toBe(null);
+
+    view.unmount();
+    iframe.remove();
+  });
+
   it("scrolls the canonical selection into view after keyboard movement", async () => {
     const scrollIntoView = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
