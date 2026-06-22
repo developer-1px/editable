@@ -131,6 +131,8 @@ The intended ownership rule is:
   multi-range DOM selection, composition/delete policy audit
 - `docs/editor-pointer-selection-audit.md`: pointer and mouse selection adapter
   audit
+- `docs/editor-mobile-touch-selection-policy-audit.md`: mobile touch selection,
+  long press, handle drag, and native menu policy audit
 - `docs/editor-text-mutation-command-audit.md`: text mutation command and
   replacement policy audit
 - `docs/editor-mutation-observer-policy-audit.md`: MutationObserver stale
