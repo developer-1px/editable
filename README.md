@@ -169,6 +169,8 @@ The intended ownership rule is:
   reparse, and model diff restore policy audit
 - `docs/editor-contentdom-stability-audit.md`: contentDOM stability, render
   surface integrity, and decoration placement audit
+- `docs/editor-custom-view-mutation-policy-audit.md`: custom view mutation
+  ignore vs selection ownership policy audit
 - `docs/editor-shadow-selection-fallback-audit.md`: ShadowRoot selection and
   Safari fallback policy audit
 - `docs/editor-scroll-focus-policy-audit.md`: scroll reveal and focus
