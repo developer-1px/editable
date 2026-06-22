@@ -30,7 +30,7 @@ export function readContentEditableSelection(
     return null;
   }
 
-  const selection = root.ownerDocument.getSelection();
+  const selection = getSelectionForRoot(root);
   if (
     selection === null ||
     selection.anchorNode === null ||
@@ -96,7 +96,7 @@ export function setContentEditableSelection(
     return;
   }
 
-  const selection = root.ownerDocument.getSelection();
+  const selection = getSelectionForRoot(root);
   if (selection === null) {
     return;
   }
@@ -144,7 +144,7 @@ export function textPointFromSelection(
 export function textPointFromDOMSelection(
   root: HTMLElement,
 ): ContentEditableTextPoint | null {
-  const selection = root.ownerDocument.getSelection();
+  const selection = getSelectionForRoot(root);
   if (
     selection === null ||
     selection.focusNode === null ||
@@ -280,6 +280,24 @@ function snapContentEditableTextPoint(
       point.offset,
     ),
   };
+}
+
+function getSelectionForRoot(root: HTMLElement): Selection | null {
+  const rootNode = root.getRootNode();
+  if (isShadowRootWithSelection(rootNode)) {
+    return rootNode.getSelection();
+  }
+
+  return root.ownerDocument.getSelection();
+}
+
+function isShadowRootWithSelection(
+  node: Node,
+): node is Node & { getSelection: () => Selection | null } {
+  return (
+    "host" in node &&
+    typeof (node as { getSelection?: unknown }).getSelection === "function"
+  );
 }
 
 function closestTextRun(node: Node): Element | null {

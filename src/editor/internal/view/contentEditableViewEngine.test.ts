@@ -54,6 +54,56 @@ function setupTextRoot() {
   };
 }
 
+function setupShadowTextRoot() {
+  const host = document.createElement("div");
+  const shadowRoot = host.attachShadow({ mode: "open" });
+  const root = document.createElement("div");
+  root.innerHTML = [
+    '<p class="text-block" data-path="/root/children/0">',
+    `<span class="text-run" data-path="${firstTextPath}">Alpha</span>`,
+    "</p>",
+  ].join("");
+  shadowRoot.append(root);
+  document.body.append(host);
+
+  return {
+    root,
+    shadowRoot,
+    first: textRun(root, firstTextPath),
+  };
+}
+
+function installShadowSelection(shadowRoot: ShadowRoot) {
+  let range: Range | null = null;
+  const selection = {
+    get anchorNode() {
+      return range?.startContainer ?? null;
+    },
+    get anchorOffset() {
+      return range?.startOffset ?? 0;
+    },
+    get focusNode() {
+      return range?.endContainer ?? null;
+    },
+    get focusOffset() {
+      return range?.endOffset ?? 0;
+    },
+    removeAllRanges() {
+      range = null;
+    },
+    addRange(nextRange: Range) {
+      range = nextRange.cloneRange();
+    },
+  };
+
+  Object.defineProperty(shadowRoot, "getSelection", {
+    configurable: true,
+    value: () => selection as Selection,
+  });
+
+  return selection;
+}
+
 function textRun(root: ParentNode, path: string): HTMLElement {
   const element = root.querySelector(`[data-path="${path}"]`);
   if (!(element instanceof HTMLElement)) {
@@ -373,6 +423,45 @@ describe("createContentEditableViewEngine", () => {
       anchor: { path: firstTextPath, offset: 1 },
       focus: { path: firstTextPath, offset: 4 },
     });
+  });
+
+  it("reads and writes selection through ShadowRoot selection when mounted in shadow DOM", () => {
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "Alpha" }],
+      },
+    ]);
+    const { root, shadowRoot, first } = setupShadowTextRoot();
+    const shadowSelection = installShadowSelection(shadowRoot);
+    const firstText = first.firstChild;
+    if (!(firstText instanceof Text)) {
+      throw new Error("Text run must contain a text node.");
+    }
+
+    const range = document.createRange();
+    range.setStart(firstText, 1);
+    range.setEnd(firstText, 4);
+    shadowSelection.removeAllRanges();
+    shadowSelection.addRange(range);
+
+    expect(readContentEditableSelection(root, note)).toMatchObject({
+      anchor: { path: firstTextPath, offset: 1 },
+      focus: { path: firstTextPath, offset: 4 },
+    });
+
+    setContentEditableSelection(root, note, {
+      path: firstTextPath,
+      offset: 2,
+    });
+
+    expect(readContentEditableSelection(root, note)?.focus).toMatchObject({
+      path: firstTextPath,
+      offset: 2,
+    });
+    expect(shadowSelection.focusNode).toBe(firstText);
+    expect(shadowSelection.focusOffset).toBe(2);
   });
 
   it("snaps flushed native caret offsets to grapheme boundaries", () => {
