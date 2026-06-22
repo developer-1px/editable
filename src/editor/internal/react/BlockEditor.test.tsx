@@ -75,6 +75,28 @@ describe("BlockEditor", () => {
     expect(view?.getAttribute("data-selection-offset")).toBe("1");
   });
 
+  it("uses a single guarded owner-document selectionchange listener", async () => {
+    const addEventListener = vi.spyOn(document, "addEventListener");
+    const removeEventListener = vi.spyOn(document, "removeEventListener");
+
+    const { unmount } = render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    const addedSelectionListeners = addEventListener.mock.calls.filter(
+      ([type]) => type === "selectionchange",
+    );
+    expect(addedSelectionListeners).toHaveLength(1);
+
+    unmount();
+
+    const removedSelectionListeners = removeEventListener.mock.calls.filter(
+      ([type]) => type === "selectionchange",
+    );
+    expect(removedSelectionListeners).toHaveLength(1);
+  });
+
   it("scrolls the canonical selection into view after keyboard movement", async () => {
     const scrollIntoView = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {

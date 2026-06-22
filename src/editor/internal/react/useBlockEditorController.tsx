@@ -1125,10 +1125,8 @@ export function useBlockEditorController({
     }
 
     root.addEventListener("select", handleSelect);
-    root.ownerDocument.addEventListener("selectionchange", handleSelect);
     return () => {
       root.removeEventListener("select", handleSelect);
-      root.ownerDocument.removeEventListener("selectionchange", handleSelect);
     };
   }, [editorSurfaceElement, handleSelect]);
 

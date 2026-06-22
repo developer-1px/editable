@@ -197,6 +197,8 @@ The intended ownership rule is:
   Safari fallback policy audit
 - `docs/editor-scroll-focus-policy-audit.md`: scroll reveal and focus
   preventScroll policy audit
+- `docs/editor-focus-selectionchange-race-audit.md`: focus, blur,
+  selectionchange, stale DOM selection, and scroll race audit
 - `docs/editor-custom-selection-handoff-audit.md`: custom node selection owner
   handoff audit
 - `docs/editor-nested-editable-handoff-policy-audit.md`: nested editable,
