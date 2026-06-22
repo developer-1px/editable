@@ -193,6 +193,8 @@ The intended ownership rule is:
   preventScroll policy audit
 - `docs/editor-custom-selection-handoff-audit.md`: custom node selection owner
   handoff audit
+- `docs/editor-nested-editable-handoff-policy-audit.md`: nested editable,
+  caption, iframe, focus, selection, and clipboard handoff policy audit
 - `docs/editor-widget-decoration-lifecycle-audit.md`: widget-like DOM identity,
   key, and destroy lifecycle audit
 - `docs/editor-cursor-geometry-audit.md`: cursor geometry adapter audit
