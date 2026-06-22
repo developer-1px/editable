@@ -1644,6 +1644,70 @@ describe("translateEditorInput", () => {
     });
   });
 
+  it("routes empty typed block Enter through the block type exit policy", () => {
+    const emptyHeading = documentWithBlocks([
+      {
+        id: "heading-1",
+        type: "heading",
+        level: 2,
+        children: [{ type: "text", text: "" }],
+      },
+    ]);
+    const whitespaceListItem = documentWithBlocks([
+      {
+        id: "list-1",
+        type: "listItem",
+        ordered: false,
+        depth: 0,
+        children: [{ type: "text", text: "  " }],
+      },
+    ]);
+
+    const heading = translateEditorInput(
+      emptyHeading,
+      selectionFromCursorPoint({
+        path: "/root/children/0/children/0/text",
+        offset: 0,
+      }),
+      { type: "keydown", key: "Enter" },
+    );
+    const list = translateEditorInput(
+      whitespaceListItem,
+      selectionFromCursorPoint({
+        path: "/root/children/0/children/0/text",
+        offset: 2,
+      }),
+      { type: "beforeinput", inputType: "insertParagraph" },
+    );
+
+    expectHandled(heading);
+    expectHandled(list);
+    expect(heading.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0",
+        value: { id: "heading-1", type: "paragraph" },
+      },
+    ]);
+    expect(list.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0",
+        value: { id: "list-1", type: "paragraph" },
+      },
+    ]);
+    expect(heading.patch).toHaveLength(1);
+    expect(list.patch).toHaveLength(1);
+    expect(heading.selectionAfter.focus).toMatchObject({
+      path: "/root/children/0/children/0/text",
+      offset: 0,
+    });
+    expect(list.selectionAfter.focus).toMatchObject({
+      path: "/root/children/0/children/0/text",
+      offset: 0,
+    });
+  });
+
   it("translates generic delete and cut beforeinput over selections", () => {
     const document = documentWithText("ABCD");
     const selection = selectionFromCursorRange(

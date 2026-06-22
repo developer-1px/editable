@@ -909,6 +909,14 @@ function splitParagraphAtTextPoint(
     return { ok: false, reason: "Expected text block." };
   }
 
+  const blockTypeExit = splitEmptyTypedBlockAsParagraph(
+    block,
+    location.blockIndex,
+  );
+  if (blockTypeExit !== null) {
+    return blockTypeExit;
+  }
+
   const child = block.children[location.childIndex];
   if (child?.type !== "text") {
     return { ok: false, reason: "Expected text child." };
@@ -923,6 +931,56 @@ function splitParagraphAtTextPoint(
     [...block.children.slice(0, location.childIndex), beforeText],
     [afterText, ...block.children.slice(location.childIndex + 1)],
   );
+}
+
+function splitEmptyTypedBlockAsParagraph(
+  block: InlineTextBlock,
+  blockIndex: number,
+): TextCommandResult | null {
+  if (!shouldExitTypedBlockOnSplit(block)) {
+    return null;
+  }
+
+  const paragraph: InlineTextBlock = {
+    id: block.id,
+    kind: "element",
+    type: "paragraph",
+    flow: "block",
+    children: [textInline("")],
+  };
+
+  return {
+    ok: true,
+    patch: [
+      {
+        op: "replace",
+        path: `/root/children/${blockIndex}`,
+        value: paragraph,
+      },
+    ],
+    selectionAfter: selectionFromCursorPoint({
+      path: textPath(blockIndex, 0),
+      offset: 0,
+    }),
+  };
+}
+
+function shouldExitTypedBlockOnSplit(block: InlineTextBlock): boolean {
+  if (block.type === "paragraph") {
+    return false;
+  }
+
+  let text = "";
+  for (const child of block.children) {
+    if (child.type !== "text") {
+      return false;
+    }
+    text += child.text;
+  }
+
+  return block.type === "listItem"
+    ? text.trim().length === 0
+    : text.length === 0;
 }
 
 function splitParagraphAtInlineAtom(

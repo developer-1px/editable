@@ -1334,6 +1334,150 @@ describe("text commands", () => {
     });
   });
 
+  it("exits an empty heading to an empty paragraph on split", () => {
+    const document = documentWithBlocks([
+      {
+        id: "heading-1",
+        type: "heading",
+        level: 2,
+        children: [{ type: "text", text: "" }],
+      },
+    ]);
+
+    const command = splitParagraph(
+      document,
+      selectionFromCursorPoint({
+        path: "/root/children/0/children/0/text",
+        offset: 0,
+      }),
+    );
+
+    expectOk(command);
+    expect(command.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0",
+        value: {
+          id: "heading-1",
+          type: "paragraph",
+          children: [{ type: "text", text: "" }],
+        },
+      },
+    ]);
+    expect(command.patch).toHaveLength(1);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/root/children/0/children/0/text",
+      offset: 0,
+    });
+  });
+
+  it("exits empty quote and list item blocks to empty paragraphs on split", () => {
+    const quoteDocument = documentWithBlocks([
+      {
+        id: "quote-1",
+        type: "quote",
+        children: [{ type: "text", text: "" }],
+      },
+    ]);
+    const listDocument = documentWithBlocks([
+      {
+        id: "list-1",
+        type: "listItem",
+        ordered: false,
+        depth: 0,
+        children: [{ type: "text", text: "" }],
+      },
+    ]);
+
+    const quote = splitParagraph(
+      quoteDocument,
+      selectionFromCursorPoint({
+        path: "/root/children/0/children/0/text",
+        offset: 0,
+      }),
+    );
+    const list = splitParagraph(
+      listDocument,
+      selectionFromCursorPoint({
+        path: "/root/children/0/children/0/text",
+        offset: 0,
+      }),
+    );
+
+    expectOk(quote);
+    expectOk(list);
+    expect(quote.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0",
+        value: {
+          id: "quote-1",
+          type: "paragraph",
+          children: [{ type: "text", text: "" }],
+        },
+      },
+    ]);
+    expect(list.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0",
+        value: {
+          id: "list-1",
+          type: "paragraph",
+          children: [{ type: "text", text: "" }],
+        },
+      },
+    ]);
+    expect(quote.patch).toHaveLength(1);
+    expect(list.patch).toHaveLength(1);
+    expect(quote.selectionAfter.focus).toMatchObject({
+      path: "/root/children/0/children/0/text",
+      offset: 0,
+    });
+    expect(list.selectionAfter.focus).toMatchObject({
+      path: "/root/children/0/children/0/text",
+      offset: 0,
+    });
+  });
+
+  it("treats whitespace-only list items as empty when splitting", () => {
+    const document = documentWithBlocks([
+      {
+        id: "list-1",
+        type: "listItem",
+        ordered: false,
+        depth: 0,
+        children: [{ type: "text", text: "   " }],
+      },
+    ]);
+
+    const command = splitParagraph(
+      document,
+      selectionFromCursorPoint({
+        path: "/root/children/0/children/0/text",
+        offset: 3,
+      }),
+    );
+
+    expectOk(command);
+    expect(command.patch).toMatchObject([
+      {
+        op: "replace",
+        path: "/root/children/0",
+        value: {
+          id: "list-1",
+          type: "paragraph",
+          children: [{ type: "text", text: "" }],
+        },
+      },
+    ]);
+    expect(command.patch).toHaveLength(1);
+    expect(command.selectionAfter.focus).toMatchObject({
+      path: "/root/children/0/children/0/text",
+      offset: 0,
+    });
+  });
+
   it("replaces selected code text with a newline when splitting", () => {
     const document = documentWithBlocks([
       { id: "code-1", type: "codeBlock", text: "abc" },

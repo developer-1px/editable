@@ -32,8 +32,8 @@ block DecoratorNode Enter, whitespace-only list item Enter를 별도 bug surface
 | paragraph text 중간 | 현재 paragraph를 앞쪽 paragraph로 교체하고 뒤쪽 paragraph를 추가한다. | text 내부면 grapheme 삭제, offset 0이면 이전 inline text block과 merge한다. | text 내부면 grapheme 삭제, block 끝이면 다음 inline text block과 merge한다. | command-owned |
 | empty paragraph | empty paragraph 하나를 유지하고 뒤에 empty paragraph를 추가한다. caret은 새 paragraph에 둔다. | 이전 inline text block과 merge 또는 첫 block이면 no-op. | 다음 inline text block과 merge 또는 마지막이면 no-op. | command-owned |
 | heading / quote / listItem text 중간 | 앞쪽 block은 기존 type을 유지하고 뒤쪽은 paragraph가 된다. | 이전 inline text block과 merge한다. merge 후 type은 이전 block type이 남는다. | 다음 inline text block과 merge한다. merge 후 type은 현재 block type이 남는다. | command-owned |
-| empty heading / quote / listItem | 기존 empty typed block을 유지하고 뒤에 empty paragraph를 추가한다. | 이전 inline text block과 merge 또는 no-op. | 다음 inline text block과 merge 또는 no-op. | command-owned |
-| whitespace-only listItem | 현재는 whitespace도 text content로 취급한다. list 탈출/empty item semantic은 구현돼 있지 않다. | text 삭제 또는 boundary merge. | text 삭제 또는 boundary merge. | command-owned, product drift |
+| empty heading / quote / listItem | 현재 block을 empty paragraph로 교체해 block type을 해제한다. caret은 같은 block index의 empty paragraph에 둔다. | 이전 inline text block과 merge 또는 no-op. | 다음 inline text block과 merge 또는 no-op. | command-owned |
+| whitespace-only listItem | 보이는 빈 list item으로 보고 현재 block을 empty paragraph로 교체한다. | text 삭제 또는 boundary merge. | text 삭제 또는 boundary merge. | command-owned |
 | codeBlock text 중간 | block split이 아니라 `\n`을 code text에 삽입한다. | text/newline grapheme 삭제. | text/newline grapheme 삭제. | command-owned |
 | empty codeBlock / codeBlock start/end | Enter는 `\n` 삽입이다. start Backspace와 end Delete는 인접 codeBlock끼리만 merge하고, 다른 block type과는 no-op이다. | 이전 codeBlock과 merge, 아니면 no-op. | 다음 codeBlock과 merge, 아니면 no-op. | command-owned |
 | figure block edge | before/after edge에 empty paragraph를 추가하고 caret을 그 paragraph에 둔다. | figure after edge에서 figure를 삭제한다. | figure before edge에서 figure를 삭제한다. | command-owned |
@@ -65,8 +65,8 @@ block DecoratorNode Enter, whitespace-only list item Enter를 별도 bug surface
 | `textCommands.test.ts`: selected code text newline | 실행 테스트 있음 | selected code range Enter는 `\n` replacement다. |
 | `inputAdapter.test.ts`: `insertParagraph`/`insertLineBreak` | 실행 테스트 있음 | browser beforeinput Enter 계열이 같은 split command로 수렴한다. |
 | `p0-empty-block-backspace` | replay fixture 있음 | empty paragraph 뒤 Backspace가 빈 block을 제거/merge하고 caret을 결정한다. |
-| whitespace-only listItem Enter | 없음 | 보이는 빈 list item을 empty로 볼지, whitespace text로 볼지 미정이다. |
-| empty heading/quote/listItem Enter | 부분 근거 | current command behavior는 추론 가능하지만 dedicated regression fixture가 없다. |
+| whitespace-only listItem Enter | 실행 테스트 있음 | 보이는 빈 list item을 empty로 보고 paragraph로 list exit한다. |
+| empty heading/quote/listItem Enter | 실행 테스트 있음 | empty typed block Enter는 현재 block을 paragraph로 교체하고 selectionAfter를 고정한다. |
 | codeBlock empty line Backspace in real browser | 없음 | native code block newline/Backspace event ordering은 browser별 trace가 필요하다. |
 | Android/iOS block boundary Enter/Backspace | 없음 | ProseMirror/Lexical 근거는 있지만 우리 실기기 trace는 없다. |
 
@@ -83,8 +83,8 @@ block DecoratorNode Enter, whitespace-only list item Enter를 별도 bug surface
 
 | Drift | 영향 | 후속 처리 |
 | --- | --- | --- |
-| whitespace-only listItem Enter policy 없음 | 사용자는 빈 list item으로 보지만 model은 whitespace text로 보아 list 탈출/empty semantic을 줄 수 없다. | #71에서 구현 정책을 닫는다. |
-| empty heading/quote/listItem Enter의 block type exit fixture 없음 | 현재는 typed empty block을 남기고 뒤 paragraph를 만든다. 일반 editor 기대와 다를 수 있다. | #71에서 whitespace-only listItem과 함께 empty typed block exit 정책으로 묶는다. |
+| whitespace-only listItem Enter policy 없음 | 사용자는 빈 list item으로 보지만 model은 whitespace text로 보아 list 탈출/empty semantic을 줄 수 있었다. | #71에서 해소. whitespace-only listItem Enter는 paragraph로 exit한다. |
+| empty heading/quote/listItem Enter의 block type exit fixture 없음 | typed empty block을 남기고 뒤 paragraph를 만드는 동작은 일반 editor 기대와 달랐다. | #71에서 해소. empty typed block은 현재 block을 paragraph로 교체한다. |
 | Android/iOS Enter/Backspace 실기기 trace 없음 | mature editor가 고친 bug class를 우리 verify gate가 재현하지 못한다. | #72에서 모바일 keyboard boundary trace로 분리한다. |
 | codeBlock escape/outside movement policy 없음 | Enter는 항상 newline이고 Backspace/Delete는 adjacent codeBlock만 merge한다. code block 탈출 UX는 아직 제품 정책이 아니다. | 새 제품 요구가 있을 때 code block escape 정책으로 분리한다. |
 
@@ -97,8 +97,8 @@ block DecoratorNode Enter, whitespace-only list item Enter를 별도 bug surface
 | empty paragraph split/Backspace | 실행 테스트로 확정 | `textCommands.test.ts`, `p0-empty-block-backspace` |
 | codeBlock newline policy | 실행 테스트로 확정 | `textCommands.test.ts`, `inputAdapter.test.ts`, `docs/editor-code-block-compatibility-audit.md` |
 | figure/atom boundary delete/paragraph insertion | 실행 테스트로 부분 확정 | atom delete/replacement와 figure edge split tests는 있으나 selected figure Enter dedicated fixture는 부족하다. |
-| whitespace-only list item empty semantic | 미정/드리프트 | Lexical #8068과 같은 issue class가 있으나 current model에는 list exit semantic이 없다. |
-| empty heading/quote/listItem typed block exit | 미정/드리프트 | current command behavior는 source로 확인되지만 product expectation과 dedicated fixture가 없다. |
+| whitespace-only list item empty semantic | 실행 테스트로 확정 | `textCommands.test.ts`와 `inputAdapter.test.ts`가 whitespace-only listItem Enter를 paragraph exit로 검증한다. |
+| empty heading/quote/listItem typed block exit | 실행 테스트로 확정 | `textCommands.test.ts`와 `inputAdapter.test.ts`가 empty typed block Enter의 paragraph replacement와 selectionAfter를 검증한다. |
 | Android/iOS boundary event ordering | 외부 근거만 있음 | ProseMirror/Lexical changelog는 강한 위험 신호지만 우리 real-device trace가 없다. |
 
 ## /doubt 판정
@@ -109,11 +109,11 @@ block DecoratorNode Enter, whitespace-only list item Enter를 별도 bug surface
 | `beforeinput`을 primary truth로 승격 | 제거 | `inputType`은 intent hint다. document truth는 command result와 flush/reconcile이 결정한다. |
 | block boundary key를 per-DOM fallback으로 분산 | 제거 | 같은 키가 block type별 semantic command로 닫혀야 한다. |
 | current split/delete command seam | 유지 | caller가 DOM detail을 몰라도 patch + `selectionAfter`로 결정된다. |
-| whitespace-only listItem/empty typed block exit | 후속 구현 | 현재 issue 범위는 조사다. 제품 기대와 구현 drift가 명확하므로 #71로 분리했다. |
+| whitespace-only listItem/empty typed block exit | 유지 확정 | #71에서 text command와 input adapter 경로를 같은 paragraph exit 정책으로 닫았다. |
 
 ## 현재 결론
 
 정석은 block boundary key를 native DOM mutation이 아니라 canonical command로 처리하는
-것이다. 현재 구현은 paragraph/code/atom의 기본 command ownership은 맞지만,
-whitespace-only listItem과 empty typed block의 "보이는 빈 블록" semantic은 #71,
-Android/iOS virtual keyboard boundary trace는 #72로 분리했다.
+것이다. 현재 구현은 paragraph/code/atom의 기본 command ownership과 whitespace-only
+listItem 및 empty typed block의 "보이는 빈 블록" Enter semantic을 닫았다.
+Android/iOS virtual keyboard boundary trace는 #72로 분리한다.
