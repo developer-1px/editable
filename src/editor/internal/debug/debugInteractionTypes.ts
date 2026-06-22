@@ -107,6 +107,7 @@ export type SerializedInputEvent = {
   clientX?: number;
   clientY?: number;
   clipboardText?: string;
+  clipboardTypes?: string[];
   code?: string;
   ctrlKey?: boolean;
   data?: string | null;

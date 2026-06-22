@@ -152,6 +152,8 @@ The intended ownership rule is:
 - `docs/editor-markdown-adapter-audit.md`: markdown import/export adapter audit
 - `docs/editor-clipboard-transfer-audit.md`: clipboard text transfer vs rich
   paste restore audit
+- `docs/editor-paste-drop-payload-policy-audit.md`: paste/drop MIME,
+  uri-list, file, HTML, plain, markdown, and debug payload policy audit
 - `docs/editor-clipboard-slice-context-audit.md`: clipboard HTML slice context
   and data-pm-slice policy audit
 - `docs/editor-paste-html-security-policy-audit.md`: pasted HTML,

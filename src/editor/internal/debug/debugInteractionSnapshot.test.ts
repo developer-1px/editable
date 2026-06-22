@@ -227,6 +227,7 @@ describe("readSnapshot", () => {
             data: undefined,
             isComposing: undefined,
             clipboardText: "A\nB",
+            clipboardTypes: ["text/plain"],
             pointerType: undefined,
             button: undefined,
             client: undefined,
@@ -236,7 +237,42 @@ describe("readSnapshot", () => {
           },
         },
       ]),
-    ).toEqual(['  #0 +0ms input: paste "A\\nB" target=DIV']);
+    ).toEqual(['  #0 +0ms input: paste "A\\nB" types=text/plain target=DIV']);
+  });
+
+  it("keeps clipboard MIME types when clipboard text is unavailable", () => {
+    const paste = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, "clipboardData", {
+      configurable: true,
+      value: {
+        getData: () => "",
+        types: ["text/html", "text/uri-list"],
+      },
+    });
+
+    const serialized = serializeInputEvent(paste);
+    const entry = {
+      kind: "input",
+      sequence: 0,
+      at: "2026-06-21T00:00:00.000Z",
+      elapsedMs: 0,
+      event: serialized,
+    } as const;
+    const timelineEntry = summarizeTimelineEntry(entry);
+
+    expect(serialized.clipboardText).toBeUndefined();
+    expect(serialized.clipboardTypes).toEqual(["text/html", "text/uri-list"]);
+    expect(formatTimeline([timelineEntry])).toContain(
+      "  #0 +0ms input: paste types=text/html,text/uri-list target=unknown",
+    );
+    expect(timelineEntry.kind).toBe("input");
+    if (timelineEntry.kind !== "input") {
+      throw new Error("expected input timeline entry");
+    }
+    expect(timelineEntry.event.clipboardTypes).toEqual([
+      "text/html",
+      "text/uri-list",
+    ]);
   });
 
   it("keeps IME diagnostic fields in serialized events and timelines", () => {

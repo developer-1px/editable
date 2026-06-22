@@ -12,7 +12,8 @@ source-app clipboard sample, 그리고 현재 editor가 실제로 HTML을 읽는
 HTML을 sanitize해서 일부만 받는 것이 아니라, HTML clipboard payload를 paste input으로
 채택하지 않는 것이다.
 
-- 확정: paste/drop은 custom MIME, `text/plain`, `text/markdown` 문자열만 읽는다.
+- 확정: paste/drop은 custom MIME, `text/plain`, `text/markdown`, `text/uri-list`
+  문자열만 읽는다.
 - 확정: `text/html` only payload는 current paste input이 아니다.
 - 확정: `data-pm-slice` 같은 HTML slice context도 현재 무시한다.
 - 확정: link href는 markdown import, command write, persisted parse, renderer에서
@@ -29,7 +30,7 @@ HTML을 sanitize해서 일부만 받는 것이 아니라, HTML clipboard payload
 | `text/plain` | external fallback 중 가장 먼저 읽는다. | HTML/DOM metadata를 버리고 plain text만 삽입한다. |
 | `text/markdown` | `text/plain`이 없을 때 markdown format으로 읽는다. | supported markdown fragment만 model로 복원한다. |
 | `text/html` | 읽지 않는다. | 현재 XSS/script/style/class 폭주는 import surface가 아니다. |
-| `text/uri-list` | 읽지 않는다. | Apple/브라우저 URL drop/paste interop는 아직 current contract가 아니다. |
+| `text/uri-list` | comment/blank line을 제거해 plain text URL list로 읽는다. | URL을 link/media로 trust하지 않고 텍스트 삽입으로만 처리한다. |
 | `data-pm-slice` HTML | 읽지 않는다. | ProseMirror slice context와 wrapper metadata는 current importer가 아니다. |
 
 ## Future HTML Allowlist Draft
@@ -111,7 +112,6 @@ only를 null로 두고 plain fallback이 있으면 plain을 읽는 테스트가 
 | figure `src` sanitizer 없음 | markdown paste/import나 command로 unsafe/remote/data media URL이 canonical document에 들어갈 수 있다. | #73에서 media URL sanitizer로 분리한다. |
 | raw external HTML corpus 없음 | future HTML importer를 검증할 실물 clipboard sample이 없다. | #74에서 Google Docs/Notion/Slack/GitHub/webpage sample 수집으로 분리한다. |
 | HTML importer 없음 | rich external paste fidelity는 없다. | #10 clipboard parsing 조사와 함께 product scope를 정해야 한다. |
-| `text/uri-list` 미지원 | Apple/web URL copy/drop interop가 제한된다. | HTML/URI paste product policy가 생기면 별도 처리한다. |
 
 ## 증거 강도
 
@@ -119,6 +119,7 @@ only를 null로 두고 plain fallback이 있으면 plain을 읽는 테스트가 
 | --- | --- | --- |
 | current `text/html` non-support | 실행 테스트로 확정 | `clipboard.test.ts`가 `text/html` only `data-pm-slice` transfer를 null로 검증한다. |
 | current string transfer contract | 실행 테스트로 확정 | `clipboard.test.ts`, `BlockEditor.test.tsx`, `inputAdapter.test.ts`가 custom/plain/markdown paste/drop을 닫는다. |
+| `text/uri-list` plain fallback | 실행 테스트로 확정 | `clipboard.test.ts`가 comment/blank line 제거와 HTML 미신뢰를 검증한다. |
 | link href allowlist | 실행 테스트로 확정 | `editor-link-mark-audit.md`, `markdown.test.ts`, `DocumentRenderer.test.tsx`, public parse tests |
 | attrs/source metadata non-import | 실행 테스트로 확정 | `editor-attrs-extension-surface-audit.md`, `markdown.test.ts`, renderer attrs sentinel tests |
 | figure media URL trust | 미정/gap | `editor-figure-media-trust-audit.md`가 media sanitizer 부재를 분리한다. |

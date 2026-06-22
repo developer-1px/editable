@@ -174,7 +174,11 @@ function formatInputSummary(
   if (event.type === "paste" || event.type === "copy" || event.type === "cut") {
     const clipboard =
       event.clipboardText === undefined ? "" : ` ${quote(event.clipboardText)}`;
-    return `${event.type}${clipboard} target=${target}`;
+    const types =
+      event.clipboardTypes === undefined || event.clipboardTypes.length === 0
+        ? ""
+        : ` types=${event.clipboardTypes.join(",")}`;
+    return `${event.type}${clipboard}${types} target=${target}`;
   }
 
   const client =
@@ -246,6 +250,7 @@ function summarizeInputEvent(event: SerializedInputEvent) {
     data: event.data,
     isComposing: event.isComposing,
     clipboardText: event.clipboardText,
+    clipboardTypes: event.clipboardTypes,
     pointerType: event.pointerType,
     button: event.button,
     client:

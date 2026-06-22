@@ -61,12 +61,17 @@ export function serializeInputEvent(event: Event): SerializedInputEvent {
   }
 
   if (isClipboardEventLike(event)) {
+    const transfer = event.clipboardData;
     const clipboardText =
-      event.clipboardData === null || event.clipboardData === undefined
+      transfer === null || transfer === undefined
         ? null
-        : readTextFromTransfer(event.clipboardData);
+        : readTextFromTransfer(transfer);
     if (clipboardText !== null) {
       serialized.clipboardText = clipboardText;
+    }
+    const clipboardTypes = transferTypes(transfer);
+    if (clipboardTypes.length > 0) {
+      serialized.clipboardTypes = clipboardTypes;
     }
   }
 
@@ -163,6 +168,14 @@ function isInputEventLike(event: Event): event is InputEventLike {
 
 function isClipboardEventLike(event: Event): event is ClipboardEventLike {
   return "clipboardData" in event;
+}
+
+function transferTypes(transfer: DataTransfer | null | undefined): string[] {
+  if (transfer === null || transfer === undefined) {
+    return [];
+  }
+
+  return Array.from(transfer.types ?? []);
 }
 
 function isCompositionEventLike(event: Event): event is CompositionEventLike {

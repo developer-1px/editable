@@ -86,7 +86,12 @@ export function readClipboardTextFromTransfer(
   }
 
   const markdown = transfer.getData("text/markdown");
-  return markdown.length === 0 ? null : { text: markdown, format: "markdown" };
+  if (markdown.length > 0) {
+    return { text: markdown, format: "markdown" };
+  }
+
+  const uriList = readUriListText(transfer.getData("text/uri-list"));
+  return uriList === null ? null : { text: uriList, format: "plain" };
 }
 
 function readStructuredClipboardData(value: string): ClipboardText | null {
@@ -121,6 +126,15 @@ function readStructuredClipboardData(value: string): ClipboardText | null {
   }
 
   return null;
+}
+
+function readUriListText(value: string): string | null {
+  const uris = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+
+  return uris.length === 0 ? null : uris.join("\n");
 }
 
 function orderedSelectionRange(

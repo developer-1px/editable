@@ -228,6 +228,32 @@ describe("clipboard", () => {
     });
   });
 
+  it("reads uri-list fallback data as plain text without importing HTML", () => {
+    expect(
+      readClipboardTextFromTransfer(
+        transferData({
+          "text/html": '<a href="https://example.com">Example</a>',
+          "text/uri-list":
+            "# copied from Safari share\nhttps://example.com/\r\n\nhttps://example.com/next",
+        }),
+      ),
+    ).toEqual({
+      text: "https://example.com/\nhttps://example.com/next",
+      format: "plain",
+    });
+  });
+
+  it("ignores empty or comment-only uri-list data", () => {
+    expect(
+      readClipboardTextFromTransfer(
+        transferData({
+          "text/html": '<a href="https://example.com">Example</a>',
+          "text/uri-list": "# only a comment\n\n",
+        }),
+      ),
+    ).toBe(null);
+  });
+
   it("reads structured plain transfer text before external fallback data", () => {
     expect(
       readClipboardTextFromTransfer(

@@ -19,6 +19,8 @@
 - 확정: 외부 `text/markdown` fallback은 markdown format으로 command layer에
   전달되며, supported markdown fragment는 bold/italic/code/link mark, mention,
   figure, multi-block fragment로 복원될 수 있다.
+- 확정: 외부 `text/uri-list` fallback은 comments/blank lines를 제거하고 plain
+  text URL list로 command layer에 전달한다.
 - source behavior: custom MIME이 없고 외부 `text/plain`과 `text/markdown`이 둘 다
   있으면 현재 reader는 `text/plain`을 먼저 읽는다. 이것을 rich external paste
   product policy로 닫았다고 말하지는 않는다.
@@ -51,7 +53,7 @@ restore가 제품 범위로 결정되면 그때 node payload, migration, trust p
 | 근거 | 의미 |
 | --- | --- |
 | `serializeSelectionForClipboard` | collapsed selection은 null이고, range/atom selection은 plain text와 markdown fallback을 만든다. |
-| `readClipboardTextFromTransfer` | custom `markdown`은 markdown format, custom `plainText`와 `text/plain`은 plain format, `text/markdown`은 markdown format으로 읽는다. Current external fallback order is custom MIME, external `text/plain`, then external `text/markdown`. |
+| `readClipboardTextFromTransfer` | custom `markdown`은 markdown format, custom `plainText`와 `text/plain`은 plain format, `text/markdown`은 markdown format, `text/uri-list`는 plain format으로 읽는다. Current external fallback order is custom MIME, external `text/plain`, external `text/markdown`, then external `text/uri-list`. |
 | `BlockEditor` paste/drop handlers | 읽은 text/format을 paste input으로 넘긴다. custom MIME node graph importer를 호출하지 않는다. |
 | `inputAdapter.test.ts` | plain paste는 문자열 삽입이고, markdown-format paste는 supported marks/link/mention/figure/multi-block fragment를 복원한다. |
 | `clipboard.test.ts` | custom envelope가 `{ schema, plainText, markdown }`만 담고, extra `selectedPointers`/`nodes` metadata를 읽어도 paste result는 text/markdown contract에 머무는 것을 고정한다. |
@@ -63,7 +65,7 @@ restore가 제품 범위로 결정되면 그때 node payload, migration, trust p
 | --- | --- | --- |
 | transfer interface 확정 | `EditorClipboardData` keys, `ClipboardText` `{ text, format }`, `ClipboardFormat` `"plain" | "markdown"`, `editable-clipboard@1` envelope | clipboard module의 좁은 interface는 string plus format이다. Node graph, selection topology, identity restore interface가 아니다. |
 | 실행 테스트로 닫힘 | collapsed selection null, text/mark/grapheme/block/atom serialization, custom envelope shape, custom metadata ignore, malformed/wrong schema fallback, beforeinput paste/drop transfer reader, React paste/drop/copy/cut command path, markdown mention/multi-block restore | 현재 regression gate가 직접 잡는 transfer 기준선이다. |
-| source behavior로 확인 | external fallback order가 custom MIME -> `text/plain` -> `text/markdown`인 점, BlockEditor drop handler의 coordinate-based drop point 선택 | 코드 경로는 명확하지만, 모든 browser clipboard 조합이나 product rich external paste preference를 닫은 것은 아니다. |
+| source behavior로 확인 | external fallback order가 custom MIME -> `text/plain` -> `text/markdown` -> `text/uri-list`인 점, BlockEditor drop handler의 coordinate-based drop point 선택 | 코드 경로는 명확하지만, 모든 browser clipboard 조합이나 product rich external paste preference를 닫은 것은 아니다. |
 | adapter complement | `inputAdapter`는 `format: "markdown"`일 때 markdown importer를 시도하고 실패/비-markdown format은 plain text insertion으로 수렴한다. | rich restore는 clipboard payload가 아니라 markdown adapter가 표현할 수 있는 fragment 범위에 묶인다. |
 
 ## /doubt 판정
