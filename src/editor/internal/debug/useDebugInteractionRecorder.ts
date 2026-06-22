@@ -257,52 +257,18 @@ function entryTiming(session: DebugRecordingSession): {
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      // Fall back to execCommand below.
-    }
-  }
-
-  if (typeof document === "undefined") {
+  if (
+    typeof navigator === "undefined" ||
+    navigator.clipboard?.writeText === undefined
+  ) {
     return false;
   }
 
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.left = "-100vw";
-  textarea.style.position = "fixed";
-  textarea.style.top = "0";
-
-  const activeElement =
-    document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-  const selection = document.getSelection();
-  const ranges: Range[] = [];
-  if (selection !== null) {
-    for (let index = 0; index < selection.rangeCount; index += 1) {
-      ranges.push(selection.getRangeAt(index).cloneRange());
-    }
-  }
-
-  document.body.append(textarea);
-  textarea.select();
-
   try {
-    return document.execCommand("copy");
-  } finally {
-    textarea.remove();
-    if (selection !== null) {
-      selection.removeAllRanges();
-      for (const range of ranges) {
-        selection.addRange(range);
-      }
-    }
-    activeElement?.focus();
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
   }
 }
 

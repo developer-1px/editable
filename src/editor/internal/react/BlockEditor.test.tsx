@@ -264,6 +264,9 @@ describe("BlockEditor", () => {
     });
 
     render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
 
     fireEvent.keyDown(window, {
       code: "Backslash",
@@ -282,7 +285,9 @@ describe("BlockEditor", () => {
     await waitFor(() => expect(inspector.textContent).toContain("FAIL"));
 
     expect(writeText).toHaveBeenCalledTimes(1);
-    expect(document.execCommand).toHaveBeenCalledWith("copy");
+    expect(document.execCommand).not.toHaveBeenCalled();
+    expect(document.body.querySelector("textarea")).toBeNull();
+    expect(document.activeElement).toBe(editor);
     expect(consoleWarn).toHaveBeenCalledWith(
       "Debug recording could not be copied to the clipboard.",
     );
@@ -943,6 +948,33 @@ describe("BlockEditor", () => {
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("Plain"));
     expect(editor.textContent).toContain("Plain bold");
+    expect(document.body.querySelector("textarea")).toBeNull();
+    expect(document.activeElement).toBe(editor);
+  });
+
+  it("does not create hidden DOM fallback when keymap copy has no Clipboard API", async () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    const firstText = editor.querySelector(
+      '[data-path="/root/children/0/children/0/text"]',
+    )?.firstChild;
+    if (!(firstText instanceof Text)) {
+      throw new Error("Fixture failed to render first text.");
+    }
+
+    setDOMRangeSelection(firstText, 0, firstText, 5);
+    const keydown = dispatchKeyboard(editor, "keydown", {
+      key: "c",
+      metaKey: true,
+    });
+
+    expect(keydown.defaultPrevented).toBe(true);
+    expect(editor.textContent).toContain("Plain bold");
+    expect(document.body.querySelector("textarea")).toBeNull();
+    expect(document.activeElement).toBe(editor);
   });
 
   it("lets paste keymap shortcuts continue to the paste event", async () => {
