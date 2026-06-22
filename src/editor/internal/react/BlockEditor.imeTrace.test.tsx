@@ -238,7 +238,7 @@ describe("BlockEditor IME trace replay", () => {
     ).toBe("7");
   });
 
-  it("does not treat IME confirmation Enter as a paragraph split", async () => {
+  it("commits IME text and splits the paragraph when Enter confirms composition", async () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
 
@@ -253,18 +253,18 @@ describe("BlockEditor IME trace replay", () => {
     );
 
     expect(finalCommit?.defaultPrevented).toBe(true);
-    expect(firstText?.textContent).toBe("Plai안n ");
-    expect(firstParagraph?.textContent).toContain("Plai안n bold");
-    expect(editor.querySelectorAll(".paragraph-block")).toHaveLength(2);
+    expect(firstText?.textContent).toBe("Plai안");
+    expect(firstParagraph?.textContent).toBe("Plai안");
+    expect(editor.querySelectorAll(".paragraph-block")).toHaveLength(3);
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-path"),
-    ).toBe("/root/children/0/children/0/text");
+    ).toBe("/root/children/1/children/0/text");
     expect(
       editor
         .querySelector(".document-view")
         ?.getAttribute("data-selection-offset"),
-    ).toBe("5");
+    ).toBe("0");
   });
 });

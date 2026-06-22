@@ -102,6 +102,8 @@ export function BlockEditor({ readOnly = false }: BlockEditorProps = {}) {
     typeof createContentEditableViewEngine
   > | null>(null);
   const compositionSelectionRef = useRef<SelectionSnap | null>(null);
+  const compositionEnterKeyRef = useRef(false);
+  const lastFlushedDocumentRef = useRef<NoteDocument | null>(null);
   const pointerDragRef = useRef<{
     pointerId: number;
     anchor: CursorPoint;
@@ -319,6 +321,8 @@ export function BlockEditor({ readOnly = false }: BlockEditorProps = {}) {
       const collapsed = selectionIsCollapsed(selectionAfter);
       contentEditableEngine.reset(root, document.value);
       compositionSelectionRef.current = null;
+      compositionEnterKeyRef.current = false;
+      lastFlushedDocumentRef.current = null;
       setComposing(false);
       setHasNativeRangeSelection(false);
       document.selection?.restore(selectionAfter);
@@ -352,6 +356,7 @@ export function BlockEditor({ readOnly = false }: BlockEditorProps = {}) {
     compositionSelectionRef.current = null;
     setComposing(false);
     if (!result.ok) {
+      lastFlushedDocumentRef.current = null;
       return null;
     }
 
@@ -374,6 +379,10 @@ export function BlockEditor({ readOnly = false }: BlockEditorProps = {}) {
         result.nextText,
       );
       if (markedInsertion?.ok) {
+        lastFlushedDocumentRef.current = documentAfterPatch(
+          document.value,
+          markedInsertion.patch,
+        );
         setNativeCursorPreview(
           selectionSnapshotPoint(markedInsertion.selectionAfter),
         );
@@ -386,10 +395,12 @@ export function BlockEditor({ readOnly = false }: BlockEditorProps = {}) {
 
     setNativeCursorPreview(selectionSnapshotPoint(selectionAfter));
     if (!result.changed) {
+      lastFlushedDocumentRef.current = document.value;
       document.selection?.restore(selectionAfter);
       return selectionAfter;
     }
 
+    lastFlushedDocumentRef.current = documentAfter;
     document.commit(result.patch, {
       selectionAfter,
     });
@@ -618,6 +629,9 @@ export function BlockEditor({ readOnly = false }: BlockEditorProps = {}) {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (!readOnly && contentEditableEngine.shouldIgnoreKeyDown()) {
+        if (isPlainEnterKeyDown(event)) {
+          compositionEnterKeyRef.current = true;
+        }
         event.preventDefault();
         return;
       }
@@ -755,6 +769,8 @@ export function BlockEditor({ readOnly = false }: BlockEditorProps = {}) {
 
       if (decision.kind === "commitComposition") {
         event.preventDefault();
+        const splitAfterCommit = compositionEnterKeyRef.current;
+        compositionEnterKeyRef.current = false;
         const compositionSelection =
           compositionSelectionRef.current ?? selectionBeforeInput;
         if (
@@ -766,18 +782,62 @@ export function BlockEditor({ readOnly = false }: BlockEditorProps = {}) {
           compositionSelectionRef.current = null;
           setComposing(false);
           setHasNativeRangeSelection(false);
-          runInput(
+          const insertResult = translateEditorInput(
+            document.value,
+            compositionSelection,
             {
               type: "beforeinput",
               inputType: "insertText",
               data: input.data,
             },
-            compositionSelection,
+            {
+              geometry: geometry ?? undefined,
+              readOnly,
+            },
           );
+          if (splitAfterCommit && insertResult.ok && insertResult.handled) {
+            const documentAfterInsert =
+              insertResult.patch.length === 0
+                ? document.value
+                : documentAfterPatch(document.value, insertResult.patch);
+            const splitResult = translateEditorInput(
+              documentAfterInsert,
+              insertResult.selectionAfter,
+              { type: "keydown", key: "Enter" },
+              {
+                geometry: geometry ?? undefined,
+                readOnly,
+              },
+            );
+            if (splitResult.ok && splitResult.handled) {
+              const selectionAfter = splitResult.selectionAfter;
+              setHasNativeRangeSelection(false);
+              setNativeCursorPreview(selectionSnapshotPoint(selectionAfter));
+              document.commit([...insertResult.patch, ...splitResult.patch], {
+                selectionAfter,
+              });
+              return;
+            }
+          }
+
+          applyInputResult(insertResult);
           return;
         }
 
-        flushContentEditableViewBeforeCommand();
+        const selectionAfterFlush = flushContentEditableViewBeforeCommand();
+        if (splitAfterCommit && selectionAfterFlush !== null) {
+          applyInputResult(
+            translateEditorInput(
+              lastFlushedDocumentRef.current ?? document.value,
+              selectionAfterFlush,
+              { type: "keydown", key: "Enter" },
+              {
+                geometry: geometry ?? undefined,
+                readOnly,
+              },
+            ),
+          );
+        }
         setComposing(false);
         return;
       }
@@ -806,8 +866,10 @@ export function BlockEditor({ readOnly = false }: BlockEditorProps = {}) {
     },
     [
       document,
+      applyInputResult,
       flushContentEditableViewBeforeCommand,
       contentEditableEngine,
+      geometry,
       readOnly,
       runInput,
       selectionForInput,
@@ -835,6 +897,7 @@ export function BlockEditor({ readOnly = false }: BlockEditorProps = {}) {
       }
 
       setComposing(true);
+      compositionEnterKeyRef.current = false;
       const selection = selectionSnapshot();
       compositionSelectionRef.current = selection;
       contentEditableEngine.beginComposition(
@@ -1284,6 +1347,16 @@ function releasePointer(element: HTMLElement, pointerId: number) {
   }
 
   element.releasePointerCapture(pointerId);
+}
+
+function isPlainEnterKeyDown(event: KeyboardEvent<HTMLDivElement>): boolean {
+  return (
+    event.key === "Enter" &&
+    !event.shiftKey &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey
+  );
 }
 
 function textCommandFromMarkedNativeInsertion(
