@@ -8,6 +8,7 @@ import {
   findReplayedEvent,
   replayEditorTrace,
 } from "../testing/editorTraceReplay";
+import { assertPreventedEditingEventsCovered } from "../testing/preventedEventAudit";
 import { BlockEditor } from "./BlockEditor";
 
 afterEach(() => {
@@ -27,6 +28,7 @@ describe("BlockEditor IME trace replay", () => {
     );
 
     expect(finalCommit?.defaultPrevented).toBe(true);
+    expect(() => assertPreventedEditingEventsCovered(events)).not.toThrow();
     expect(firstText?.textContent).toBe("Plai안n ");
     expect(firstText?.textContent).not.toContain("ㅇ");
     expect(
@@ -247,12 +249,19 @@ describe("BlockEditor IME trace replay", () => {
       koreanHangulEnterConfirmTrace,
     );
     const finalCommit = findReplayedEvent(events, "beforeinput", "insertText");
+    const enter = findReplayedEvent(events, "keydown");
     const firstParagraph = editor.querySelector(".paragraph-block");
     const firstText = editor.querySelector(
       '[data-path="/root/children/0/children/0/text"]',
     );
 
     expect(finalCommit?.defaultPrevented).toBe(true);
+    expect(enter?.defaultPrevented).toBe(true);
+    expect(() =>
+      assertPreventedEditingEventsCovered(events, {
+        deferredCommands: [{ type: "keydown", key: "Enter", altKey: false }],
+      }),
+    ).not.toThrow();
     expect(firstText?.textContent).toBe("Plai안");
     expect(firstParagraph?.textContent).toBe("Plai안");
     expect(editor.querySelectorAll(".paragraph-block")).toHaveLength(3);

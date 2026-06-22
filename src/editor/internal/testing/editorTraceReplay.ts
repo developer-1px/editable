@@ -29,7 +29,8 @@ export type EditorTraceStep =
 export type EditorTraceEvent =
   | KeyboardTraceEvent
   | CompositionTraceEvent
-  | InputTraceEvent;
+  | InputTraceEvent
+  | TransferTraceEvent;
 
 export type KeyboardTraceEvent = {
   altKey?: boolean;
@@ -54,9 +55,37 @@ export type InputTraceEvent = {
   type: "beforeinput" | "input";
 };
 
+export type TransferTraceEvent = {
+  clientX?: number;
+  clientY?: number;
+  data?: Record<string, string>;
+  format?: "markdown" | "plain";
+  text?: string;
+  type: "drop" | "paste";
+};
+
+export type ReplayedEditorState = {
+  selectionAnchorEdge: string | null;
+  selectionAnchorOffset: string | null;
+  selectionAnchorPath: string | null;
+  selectionEdge: string | null;
+  selectionFocusEdge: string | null;
+  selectionFocusOffset: string | null;
+  selectionFocusPath: string | null;
+  selectionOffset: string | null;
+  selectionPath: string | null;
+  selectionRangeCount: string | null;
+  selectionSelectedPointers: string | null;
+  text: string;
+};
+
 export type ReplayedEditorEvent = {
+  after: ReplayedEditorState;
+  before: ReplayedEditorState;
   defaultPrevented: boolean;
   event: EditorTraceEvent;
+  index: number;
+  stateChanged: boolean;
 };
 
 export async function replayEditorTrace(
@@ -68,11 +97,17 @@ export async function replayEditorTrace(
   for (const step of trace.steps) {
     if (step.kind === "event") {
       act(() => {
+        const before = readReplayedEditorState(root);
         const event = createTraceEvent(root, step.event);
         root.dispatchEvent(event);
+        const after = readReplayedEditorState(root);
         events.push({
+          after,
+          before,
           defaultPrevented: event.defaultPrevented,
           event: step.event,
+          index: events.length,
+          stateChanged: !replayedEditorStatesEqual(before, after),
         });
       });
       continue;
@@ -145,7 +180,28 @@ function createTraceEvent(root: HTMLElement, event: EditorTraceEvent): Event {
     return inputEvent;
   }
 
-  const compositionData = "data" in event ? (event.data ?? "") : "";
+  if (event.type === "paste" || event.type === "drop") {
+    const transfer = createTraceTransferData(event);
+    const transferEvent = new window.Event(event.type, {
+      bubbles: true,
+      cancelable: true,
+    });
+    if (event.type === "paste") {
+      defineEventValue(transferEvent, "clipboardData", transfer);
+    } else {
+      defineEventValue(transferEvent, "dataTransfer", transfer);
+      defineEventValue(transferEvent, "clientX", event.clientX ?? 0);
+      defineEventValue(transferEvent, "clientY", event.clientY ?? 0);
+    }
+    return transferEvent;
+  }
+
+  const compositionData =
+    event.type === "compositionstart" ||
+    event.type === "compositionupdate" ||
+    event.type === "compositionend"
+      ? (event.data ?? "")
+      : "";
   const compositionEvent =
     typeof window.CompositionEvent === "function"
       ? new window.CompositionEvent(event.type, {
@@ -159,6 +215,83 @@ function createTraceEvent(root: HTMLElement, event: EditorTraceEvent): Event {
         });
   defineEventValue(compositionEvent, "data", compositionData);
   return compositionEvent;
+}
+
+function readReplayedEditorState(root: HTMLElement): ReplayedEditorState {
+  const view = root.querySelector(".document-view");
+
+  return {
+    selectionAnchorEdge:
+      view?.getAttribute("data-selection-anchor-edge") ?? null,
+    selectionAnchorOffset:
+      view?.getAttribute("data-selection-anchor-offset") ?? null,
+    selectionAnchorPath:
+      view?.getAttribute("data-selection-anchor-path") ?? null,
+    selectionEdge: view?.getAttribute("data-selection-edge") ?? null,
+    selectionFocusEdge: view?.getAttribute("data-selection-focus-edge") ?? null,
+    selectionFocusOffset:
+      view?.getAttribute("data-selection-focus-offset") ?? null,
+    selectionFocusPath: view?.getAttribute("data-selection-focus-path") ?? null,
+    selectionOffset: view?.getAttribute("data-selection-offset") ?? null,
+    selectionPath: view?.getAttribute("data-selection-path") ?? null,
+    selectionRangeCount:
+      view?.getAttribute("data-selection-range-count") ?? null,
+    selectionSelectedPointers:
+      view?.getAttribute("data-selection-selected-pointers") ?? null,
+    text: view?.textContent ?? "",
+  };
+}
+
+function replayedEditorStatesEqual(
+  left: ReplayedEditorState,
+  right: ReplayedEditorState,
+): boolean {
+  return (
+    left.text === right.text &&
+    left.selectionPath === right.selectionPath &&
+    left.selectionOffset === right.selectionOffset &&
+    left.selectionEdge === right.selectionEdge &&
+    left.selectionAnchorPath === right.selectionAnchorPath &&
+    left.selectionAnchorOffset === right.selectionAnchorOffset &&
+    left.selectionAnchorEdge === right.selectionAnchorEdge &&
+    left.selectionFocusPath === right.selectionFocusPath &&
+    left.selectionFocusOffset === right.selectionFocusOffset &&
+    left.selectionFocusEdge === right.selectionFocusEdge &&
+    left.selectionRangeCount === right.selectionRangeCount &&
+    left.selectionSelectedPointers === right.selectionSelectedPointers
+  );
+}
+
+function createTraceTransferData(event: TransferTraceEvent) {
+  const data = new Map<string, string>();
+  for (const [type, value] of Object.entries(event.data ?? {})) {
+    data.set(type, value);
+  }
+  if (event.text !== undefined) {
+    data.set("text/plain", event.text);
+    if (event.format === "markdown") {
+      data.set("text/markdown", event.text);
+    }
+  }
+
+  return {
+    get types() {
+      return Array.from(data.keys());
+    },
+    clearData(type?: string) {
+      if (type === undefined) {
+        data.clear();
+      } else {
+        data.delete(type);
+      }
+    },
+    getData(type: string) {
+      return data.get(type) ?? "";
+    },
+    setData(type: string, value: string) {
+      data.set(type, value);
+    },
+  };
 }
 
 function replaceTextRun(
