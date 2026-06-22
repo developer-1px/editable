@@ -14,8 +14,16 @@ export type EditorTraceStep =
     }
   | {
       kind: "selection";
-      path: string;
-      offset: number;
+      anchor?: {
+        offset: number;
+        path: string;
+      };
+      focus?: {
+        offset: number;
+        path: string;
+      };
+      offset?: number;
+      path?: string;
     }
   | {
       kind: "text";
@@ -32,7 +40,8 @@ export type EditorTraceEvent =
   | CompositionTraceEvent
   | InputTraceEvent
   | TransferTraceEvent
-  | FocusTraceEvent;
+  | FocusTraceEvent
+  | PointerTraceEvent;
 
 export type KeyboardTraceEvent = {
   altKey?: boolean;
@@ -63,11 +72,22 @@ export type TransferTraceEvent = {
   data?: Record<string, string>;
   format?: "markdown" | "plain";
   text?: string;
-  type: "drop" | "paste";
+  type: "cut" | "drop" | "paste";
 };
 
 export type FocusTraceEvent = {
   type: "blur" | "focus";
+};
+
+export type PointerTraceEvent = {
+  button?: number;
+  clientX?: number;
+  clientY?: number;
+  detail?: number;
+  pointerId?: number;
+  shiftKey?: boolean;
+  targetPath?: string;
+  type: "pointerdown";
 };
 
 export type EditorTraceExpectation = {
@@ -120,32 +140,35 @@ export async function replayEditorTrace(
 
   for (const step of trace.steps) {
     if (step.kind === "event") {
+      const before = readReplayedEditorState(root);
+      const event = createTraceEvent(root, step.event);
       act(() => {
-        const before = readReplayedEditorState(root);
-        const event = createTraceEvent(root, step.event);
-        root.dispatchEvent(event);
-        const after = readReplayedEditorState(root);
-        assertTraceExpectation({
-          after,
-          before,
-          event: step.event,
-          eventIndex: events.length,
-          expectation: step.expect,
-        });
-        events.push({
-          after,
-          before,
-          defaultPrevented: event.defaultPrevented,
-          event: step.event,
-          index: events.length,
-          stateChanged: !replayedEditorStatesEqual(before, after),
-        });
+        traceEventTarget(root, step.event).dispatchEvent(event);
+      });
+      const after = readReplayedEditorState(root);
+      assertTraceExpectation({
+        after,
+        before,
+        event: step.event,
+        eventIndex: events.length,
+        expectation: step.expect,
+      });
+      events.push({
+        after,
+        before,
+        defaultPrevented: event.defaultPrevented,
+        event: step.event,
+        index: events.length,
+        stateChanged: !replayedEditorStatesEqual(before, after),
       });
       continue;
     }
 
     if (step.kind === "selection") {
-      setTextSelection(root, step.path, step.offset);
+      act(() => {
+        setTraceSelection(root, step);
+        dispatchSelectionChange(root);
+      });
       continue;
     }
 
@@ -160,6 +183,15 @@ export async function replayEditorTrace(
   }
 
   return events;
+}
+
+function dispatchSelectionChange(root: HTMLElement) {
+  const window = root.ownerDocument.defaultView;
+  if (window === null) {
+    throw new Error("Trace replay requires a DOM window.");
+  }
+
+  root.ownerDocument.dispatchEvent(new window.Event("selectionchange"));
 }
 
 export function findReplayedEvent(
@@ -211,13 +243,13 @@ function createTraceEvent(root: HTMLElement, event: EditorTraceEvent): Event {
     return inputEvent;
   }
 
-  if (event.type === "paste" || event.type === "drop") {
+  if (event.type === "paste" || event.type === "drop" || event.type === "cut") {
     const transfer = createTraceTransferData(event);
     const transferEvent = new window.Event(event.type, {
       bubbles: true,
       cancelable: true,
     });
-    if (event.type === "paste") {
+    if (event.type === "paste" || event.type === "cut") {
       defineEventValue(transferEvent, "clipboardData", transfer);
     } else {
       defineEventValue(transferEvent, "dataTransfer", transfer);
@@ -232,6 +264,25 @@ function createTraceEvent(root: HTMLElement, event: EditorTraceEvent): Event {
       bubbles: true,
       cancelable: false,
     });
+  }
+
+  if (event.type === "pointerdown") {
+    const pointerEventInit = {
+      bubbles: true,
+      button: event.button ?? 0,
+      cancelable: true,
+      clientX: event.clientX ?? 0,
+      clientY: event.clientY ?? 0,
+      detail: event.detail ?? 1,
+      pointerId: event.pointerId ?? 1,
+      shiftKey: event.shiftKey ?? false,
+    };
+    const pointerEvent =
+      typeof window.PointerEvent === "function"
+        ? new window.PointerEvent(event.type, pointerEventInit)
+        : new window.MouseEvent(event.type, pointerEventInit);
+    defineEventValue(pointerEvent, "pointerId", event.pointerId ?? 1);
+    return pointerEvent;
   }
 
   const compositionData =
@@ -253,6 +304,19 @@ function createTraceEvent(root: HTMLElement, event: EditorTraceEvent): Event {
         });
   defineEventValue(compositionEvent, "data", compositionData);
   return compositionEvent;
+}
+
+function traceEventTarget(root: HTMLElement, event: EditorTraceEvent): Element {
+  if (event.type !== "pointerdown" || event.targetPath === undefined) {
+    return root;
+  }
+
+  const target = findElementByDataPath(root, event.targetPath);
+  if (target === null) {
+    throw new Error(`Missing event target for ${event.targetPath}.`);
+  }
+
+  return target;
 }
 
 function readReplayedEditorState(root: HTMLElement): ReplayedEditorState {
@@ -500,8 +564,21 @@ function replayedEditorStatesEqual(
     left.selectionFocusOffset === right.selectionFocusOffset &&
     left.selectionFocusEdge === right.selectionFocusEdge &&
     left.selectionRangeCount === right.selectionRangeCount &&
-    left.selectionSelectedPointers === right.selectionSelectedPointers
+    left.selectionSelectedPointers === right.selectionSelectedPointers &&
+    pathTextEqual(left.pathText, right.pathText)
   );
+}
+
+function pathTextEqual(
+  left: Record<string, string>,
+  right: Record<string, string>,
+): boolean {
+  const leftEntries = Object.entries(left);
+  if (leftEntries.length !== Object.keys(right).length) {
+    return false;
+  }
+
+  return leftEntries.every(([path, text]) => right[path] === text);
 }
 
 function createTraceTransferData(event: TransferTraceEvent) {
@@ -553,20 +630,38 @@ function replaceTextRun(
   }
 }
 
-function setTextSelection(root: HTMLElement, path: string, offset: number) {
-  const element = findElementByDataPath(root, path);
-  if (element === null) {
-    throw new Error(`Missing text run for ${path}.`);
+function setTraceSelection(
+  root: HTMLElement,
+  step: Extract<EditorTraceStep, { kind: "selection" }>,
+) {
+  if (step.path !== undefined && step.offset !== undefined) {
+    setTextSelection(root, step.path, step.offset);
+    return;
   }
 
-  const position = textPositionForOffset(element, offset);
-  if (position === null) {
-    throw new Error(`Missing text node for ${path}.`);
+  if (step.anchor !== undefined && step.focus !== undefined) {
+    setTextRangeSelection(root, step.anchor, step.focus);
+    return;
   }
+
+  throw new Error("Selection step requires path/offset or anchor/focus.");
+}
+
+function setTextSelection(root: HTMLElement, path: string, offset: number) {
+  setTextRangeSelection(root, { path, offset }, { path, offset });
+}
+
+function setTextRangeSelection(
+  root: HTMLElement,
+  anchor: { path: string; offset: number },
+  focus: { path: string; offset: number },
+) {
+  const anchorPosition = textPositionForPathOffset(root, anchor);
+  const focusPosition = textPositionForPathOffset(root, focus);
 
   const range = root.ownerDocument.createRange();
-  range.setStart(position.node, position.offset);
-  range.collapse(true);
+  range.setStart(anchorPosition.node, anchorPosition.offset);
+  range.setEnd(focusPosition.node, focusPosition.offset);
 
   const selection = root.ownerDocument.getSelection();
   if (selection === null) {
@@ -575,6 +670,23 @@ function setTextSelection(root: HTMLElement, path: string, offset: number) {
 
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function textPositionForPathOffset(
+  root: HTMLElement,
+  point: { path: string; offset: number },
+) {
+  const element = findElementByDataPath(root, point.path);
+  if (element === null) {
+    throw new Error(`Missing text run for ${point.path}.`);
+  }
+
+  const position = textPositionForOffset(element, point.offset);
+  if (position === null) {
+    throw new Error(`Missing text node for ${point.path}.`);
+  }
+
+  return position;
 }
 
 function textPositionForOffset(

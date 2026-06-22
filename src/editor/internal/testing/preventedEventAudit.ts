@@ -75,6 +75,7 @@ function isAuditedEditingEvent(event: EditorTraceEvent): boolean {
     event.type === "keydown" ||
     event.type === "beforeinput" ||
     event.type === "paste" ||
+    event.type === "cut" ||
     event.type === "drop" ||
     event.type === "compositionstart" ||
     event.type === "compositionupdate" ||

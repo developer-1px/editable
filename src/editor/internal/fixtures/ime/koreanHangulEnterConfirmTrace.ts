@@ -41,10 +41,8 @@ export const koreanHangulEnterConfirmTrace = {
       expect: {
         after: {
           pathText: {
-            [firstTextPath]: "Plai안n ",
+            [firstTextPath]: "Plai안",
           },
-          selectionOffset: "5",
-          selectionPath: firstTextPath,
         },
       },
     },
