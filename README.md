@@ -157,6 +157,8 @@ The intended ownership rule is:
 - `docs/editor-link-mark-audit.md`: link mark command vs URL input policy audit
 - `docs/editor-line-break-policy-audit.md`: current line-break and block split
   policy audit
+- `docs/editor-block-boundary-key-policy-audit.md`: empty block, list item, code
+  block, and atom Enter/Backspace/Delete boundary policy audit
 - `docs/editor-keyboard-input-policy-audit.md`: keyboard ownership vs input
   adapter policy audit
 - `docs/editor-keyboard-shortcut-layout-policy-audit.md`: keyboard shortcut
