@@ -30,7 +30,7 @@
 | `docs/editor-issues.md` | ED-001~ED-029 acceptance criteria가 모두 checked 상태이고 keyboard mapping status도 이 파일로 모였다. |
 | `docs/editor-feature-coverage-audit.md` | required feature list를 implemented/done으로 승격하지 않고 confirmed, partially confirmed, ambiguous 영역으로 분리한다. |
 | `README.md` | Docs 섹션이 design, issue history, product/QA checklist, repo analysis, topic audits를 서로 다른 문서로 설명한다. |
-| docs inventory/evidence check | 현재 top-level `docs/*.md`는 47개이고, README Docs 섹션도 같은 47개를 모두 참조한다. `docs/editor-*.md` 45개도 모두 `## 증거 강도` 섹션을 가진다. 누락되거나 존재하지 않는 extra docs link, duplicate link, editor evidence section 누락은 없다. `pnpm run verify:docs`가 file/link inventory와 editor evidence-section presence를 검증하고, script test가 missing/stale/duplicate inventory와 missing evidence reporting을 고정한다. README bullet description이나 문서 본문 의미의 최신성은 이 gate의 판정 대상이 아니다. |
+| docs inventory/evidence check | 현재 top-level `docs/*.md`는 89개이고, README Docs 섹션도 같은 89개를 모두 참조한다. `docs/editor-*.md` 87개도 모두 `## 증거 강도` 섹션을 가진다. 누락되거나 존재하지 않는 extra docs link, duplicate link, editor evidence section 누락은 없다. `pnpm run verify:docs`가 file/link inventory와 editor evidence-section presence를 검증하고, script test가 missing/stale/duplicate inventory와 missing evidence reporting을 고정한다. README bullet description이나 문서 본문 의미의 최신성은 이 gate의 판정 대상이 아니다. |
 | docs inventory verifier scope | verifier는 `docs/` 바로 아래의 `.md` 파일만 세고, README `## Docs` 섹션 안에서 `- ` bullet line에 있는 backtick path 또는 markdown link path만 추출한다. 현재 nested `docs/**/*.md`는 0개다. | `scripts/verify-docs-inventory.mjs`, `scripts/verify-docs-inventory.test.mjs`, `find docs -mindepth 2 -type f -name '*.md'` |
 | `rg` 확인 | `docs/keyboard-mapping-tbd.md`는 현재 트리에 없고, keyboard status는 `docs/editor-issues.md`로 통합되어 있다. |
 
@@ -58,7 +58,7 @@
 | issue ledger authority | 확정 | `docs/editor-issues.md`가 ED-010, ED-021~ED-029 등 keyboard/input implementation status를 모으고 removed `keyboard-mapping-tbd.md`의 중복 이유를 설명한다. | 외부 issue tracker, PR, close-date linkage는 현재 없다. |
 | required feature list authority | 확정 | `docs/editor-required-feature-list.md`는 product/QA expectation list이고, `docs/editor-feature-coverage-audit.md`가 required list를 confirmed/partially confirmed/ambiguous coverage로 분리한다. | Required list만으로 구현 완료를 증명하지 않는다. |
 | repo analysis and topic audits | 확정 | `docs/repo-analysis-report.md`는 누적 synthesis이고, 각 `docs/editor-*-audit.md`는 좁은 주제의 근거/한계를 보존한다. | Topic 밖 결정이나 product-wide completion claim의 단독 authority가 아니다. |
-| README docs inventory and editor evidence gate | 확정 | `verify:docs`는 현재 README Docs가 top-level `docs/*.md` 47개를 모두 참조하고 `docs/editor-*.md` 45개가 모두 `## 증거 강도` 섹션을 가진다고 확인했다. `verify-docs-inventory.test.mjs`가 matching/missing/stale/duplicate README entry, missing `## Docs`, missing editor evidence reporting을 고정한다. | README bullet description, 문서 본문 의미, non-bullet links는 검증하지 않는다. |
+| README docs inventory and editor evidence gate | 확정 | `verify:docs`는 현재 README Docs가 top-level `docs/*.md` 89개를 모두 참조하고 `docs/editor-*.md` 87개가 모두 `## 증거 강도` 섹션을 가진다고 확인했다. `verify-docs-inventory.test.mjs`가 matching/missing/stale/duplicate README entry, missing `## Docs`, missing editor evidence reporting을 고정한다. | README bullet description, 문서 본문 의미, non-bullet links는 검증하지 않는다. |
 | docs inventory scope | 확정 | `scripts/verify-docs-inventory.mjs`는 top-level `docs/*.md`와 README `## Docs` 섹션의 `- ` bullet line path만 추출하며, 현재 nested markdown 파일은 없다. | Nested docs를 도입하면 recursive inventory 여부를 새로 결정해야 한다. |
 | removed keyboard mapping doc | 확정 | `docs/keyboard-mapping-tbd.md`는 현재 트리에 없고, keyboard status는 `docs/editor-issues.md`와 실행 테스트로 통합되어 있다. | Product-facing shortcut customization이나 OS/browser matrix는 별도 audit/policy 영역이다. |
 | semantic stale review | 미정 | Current gates는 file/link inventory, editor evidence-section presence, whitespace를 확인하지만, 문서 본문 의미가 구현 변경 뒤 stale해졌는지는 자동 판별하지 않는다. | PR checklist나 owner review 규칙으로 둘지 결정해야 한다. |
@@ -85,7 +85,7 @@ schema authority다. `editor-issues.md`는 accepted implementation work ledger,
 따라서 지금 빼야 하는 것은 문서가 아니라 문서의 과한 해석이다. design document를
 status tracker나 exact schema contract로 쓰지 않고, required feature list를 완료
 문서로 쓰지 않는 것이 현재 확정 정책이다. README Docs inventory는 현재 top-level
-47개 docs 파일과 file/link level에서 일치하고, 45개 editor docs의 `## 증거 강도`
+89개 docs 파일과 file/link level에서 일치하고, 87개 editor docs의 `## 증거 강도`
 섹션도 `verify:docs`로 보장한다. 대표 stale inventory와 missing evidence failure는
 script test가 고정한다. 이 보장은 top-level docs, README Docs bullet-line links,
 editor docs heading presence에 한정된다. 아직 운영 정책으로 남은 것은 README

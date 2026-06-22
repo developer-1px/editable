@@ -1,6 +1,7 @@
 # Editor Public Export Audit
 
 작성일: 2026-06-21
+갱신일: 2026-06-22
 
 범위: 현재 dirty workspace 기준. `src/editor/public/index.ts`의 개별 export가
 headless editor embedding interface에 꼭 필요한지, demo/bootstrap 편의인지
@@ -47,6 +48,89 @@ caller에게 Zod schema 객체를 contract로 보장할 근거는 없다. persis
 `parseNoteDocument`로 고정하고, parser가 persisted document validation seam으로
 동작하는지 확인한다. type-only export 판정은
 `docs/editor-public-type-export-audit.md`로 분리했다.
+
+## Public API 전수 구현 체크
+
+이 패키지는 현재 `package.json`에 `"private": true`이고 package `exports` map이
+없다. 따라서 repo 안에서 의도적으로 노출하는 public interface는 두 facade,
+`src/editor/public/index.ts`와 `src/editor/react/index.ts`다.
+
+### Facade Inventory
+
+| Facade | Runtime export | Type export | 구현 상태 | 고정 근거 |
+| --- | --- | --- | --- | --- |
+| `src/editor/public` | `createEditor`, `parseNoteDocument` | `CreateEditorOptions`, `Editor`, `EditorCapability`, `EditorCommand`, `EditorDeleteUnit`, `EditorListener`, `EditorMoveDirection`, `EditorMoveUnit`, `EditorQuery`, `EditorQueryResult`, `EditorResult`, `EditorSnapshot`, `EditorViewAdapter`, `InsertableEditorNode`, `Mark`, `NoteDocument`, `NoteDocumentParseResult`, `RichSelection`, `ToggleMarkCommandType` | 구현됨 | `src/editor/public/index.test.ts`가 runtime/type export exact list를 고정한다. |
+| `src/editor/react` | `BlockEditor` | `BlockEditorProps` | 구현됨 | `src/editor/react/index.test.ts`가 runtime/type export exact list를 고정한다. |
+
+### Headless Runtime API
+
+| API | Interface | 구현 상태 | 고정 근거 |
+| --- | --- | --- | --- |
+| `createEditor(options?)` | `initial`, `history`, `selection`, `view` option을 받아 headless editor를 만든다. | 구현됨 | `editorCore.test.ts`, `public/index.test.ts` |
+| `editor.snapshot()` | `{ document, selection, revision }` 반환 | 구현됨 | `editorCore.test.ts` |
+| `editor.subscribe(listener)` | snapshot listener 등록, unsubscribe 반환 | 구현됨 | `editorCore.test.ts` |
+| `editor.dispatch(command)` | single command 실행 | 구현됨 | `editorCore.test.ts`, command/model tests |
+| `editor.dispatch([...commands])` | batch command를 undo unit 하나로 실행한다. history command batch는 거절한다. | 구현됨 | `editorCore.test.ts`, history audit |
+| `editor.can(command)` | commit 없이 command 가능 여부를 반환한다. | 구현됨 | `editorCore.test.ts` |
+| `editor.query(query)` | typed query result를 반환한다. | 구현됨 | `editorCore.test.ts` |
+| `editor.dispose()` | listener를 비우고 이후 method 호출을 invariant error로 막는다. | 구현됨 | source invariant |
+| `parseNoteDocument(value)` | unknown persisted JSON을 current `NoteDocument`로 좁히거나 generic failure를 반환한다. | 구현됨 | `public/index.test.ts`, schema migration audit |
+
+### Headless Command Inventory
+
+| Command type | Public payload | 구현 상태 | 고정 근거 |
+| --- | --- | --- | --- |
+| `setSelection` | `{ selection: RichSelection }` | 구현됨 | `editorCore.test.ts`, selection audit |
+| `selectAll` | no payload | 구현됨 | `editorCore.test.ts`, input adapter tests |
+| `moveSelection` | `{ unit, direction, extend? }` | 구현됨 | `editorCore.test.ts`, cursor command/input adapter tests |
+| `insertText` | `{ text: string }` | 구현됨 | `editorCore.test.ts`, text command/input adapter tests |
+| `insertNode` | `{ node: InsertableEditorNode }` for mention/figure | 구현됨 | `editorCore.test.ts`, text command tests |
+| `delete` | `{ direction, unit? }` | 구현됨 | `editorCore.test.ts`, deletion tests |
+| `split` | no payload | 구현됨 | `editorCore.test.ts`, line-break tests |
+| `toggleMark` | `{ mark: "bold" | "italic" | "code" | "link" }` | 구현됨 | `editorCore.test.ts`, mark command tests |
+| `undo` | no payload | 구현됨, batch 불가 | `editorCore.test.ts`, history tests |
+| `redo` | no payload | 구현됨, batch 불가 | `editorCore.test.ts`, history tests |
+| `replaceDocument` | `{ document: NoteDocument }` | 구현됨, schema-invalid document는 generic failure | `editorCore.test.ts`, schema migration audit |
+
+`editorCore.test.ts`는 `commandDescriptors` registry key를 위 11개로 고정한다.
+따라서 새 public command는 테스트와 문서 갱신 없이 조용히 추가될 수 없다.
+
+### Headless Query Inventory
+
+| Query type | Result | 구현 상태 | 고정 근거 |
+| --- | --- | --- | --- |
+| `document` | `NoteDocument` | 구현됨 | `editorCore.test.ts` |
+| `selection` | `RichSelection | null` | 구현됨 | `editorCore.test.ts`, selection audit |
+| `activeMarks` | `Mark[]` | 구현됨 | `editorCore.test.ts`, mark command audit |
+| `canUndo` | `boolean` | 구현됨 | `editorCore.test.ts`, history audit |
+| `canRedo` | `boolean` | 구현됨 | `editorCore.test.ts`, history audit |
+| `can` | `EditorCapability` for a command | 구현됨 | `editorCore.test.ts` |
+
+`editorCore.test.ts`는 `queryDescriptors` registry key를 위 6개로 고정한다.
+
+### React Runtime API
+
+| API | Interface | 구현 상태 | 고정 근거 |
+| --- | --- | --- | --- |
+| `BlockEditor` | React editor entrypoint | 구현됨 | `BlockEditor.test.tsx`, route import audit |
+| `BlockEditorProps.readOnly` | optional mutation-blocking React prop | 구현됨 | `BlockEditor.test.tsx`, read-only policy audit |
+
+React facade는 `BlockEditor`와 `BlockEditorProps`만 노출한다. `EditorToolbar`,
+`DocumentRenderer`, overlay, debug recorder 같은 React implementation helper는 public
+interface가 아니다.
+
+### 구현하지 않는 것으로 확정한 public API
+
+| API 후보 | 상태 | 이유 |
+| --- | --- | --- |
+| `NoteDocumentSchema` export | 비공개 확정 | Zod object를 public contract로 보장하지 않는다. validation seam은 `parseNoteDocument`다. |
+| `initialNoteDocument`, `createNoteDocument` | 비공개 확정 | demo seed/helper를 caller contract로 보장하지 않는다. |
+| Markdown runtime API | 비공개 확정 | Markdown adapter는 internal clipboard/import/export implementation이다. |
+| `InlineNode`, `NoteBlock`, `FigureBlockInput`, `MentionInlineInput` | 비공개 확정 | public document shape는 `NoteDocument`, insert payload는 `InsertableEditorNode`로 충분하다. |
+| `DispatchOptions`/`mergeKey` | 제거 확정 | history contract는 batch vs single dispatch로 닫았다. |
+| `createEditor({ readOnly })` | 보류 | React `readOnly`는 구현됐지만 headless embedding 요구는 아직 없다. |
+| migration/field diagnostics API | 보류 | v2 migration target과 import UX가 아직 제품/API 결정으로 닫히지 않았다. |
+| public Markdown import/export API | 보류 | error shape, sanitization, migration, compatibility matrix를 같이 설계해야 한다. |
 
 Markdown adapter 함수인 `importMarkdown`, `exportMarkdown`,
 `exportInlineMarkdown`도 public runtime facade에 없다. 이 함수들은
