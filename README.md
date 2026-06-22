@@ -157,6 +157,8 @@ The intended ownership rule is:
   policy audit
 - `docs/editor-keyboard-input-policy-audit.md`: keyboard ownership vs input
   adapter policy audit
+- `docs/editor-keyboard-shortcut-layout-policy-audit.md`: keyboard shortcut
+  layout, modifier, IME, and macOS Ctrl policy audit
 - `docs/editor-keyboard-fallback-audit.md`: ignored DOM and atom keyboard
   native fallback audit
 - `docs/editor-beforeinput-policy-audit.md`: beforeinput trust boundary and
