@@ -211,6 +211,23 @@ describe("clipboard", () => {
     });
   });
 
+  it("does not treat HTML data-pm-slice context as current paste input", () => {
+    const htmlOnly = transferData({
+      "text/html": '<ul data-pm-slice="1 1 []"><li><p>Nested</p></li></ul>',
+    });
+    const htmlWithPlainFallback = transferData({
+      "text/html":
+        '<table data-pm-slice="0 0 []"><tr><td>Cell</td></tr></table>',
+      "text/plain": "Cell",
+    });
+
+    expect(readClipboardTextFromTransfer(htmlOnly)).toBe(null);
+    expect(readClipboardTextFromTransfer(htmlWithPlainFallback)).toEqual({
+      text: "Cell",
+      format: "plain",
+    });
+  });
+
   it("reads structured plain transfer text before external fallback data", () => {
     expect(
       readClipboardTextFromTransfer(
