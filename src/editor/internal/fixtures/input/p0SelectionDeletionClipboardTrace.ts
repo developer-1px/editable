@@ -281,6 +281,72 @@ export const p0AtomReplacementTrace: EditorTraceReplay = {
   ],
 };
 
+export const p0AtomKeyboardNavigationTrace: EditorTraceReplay = {
+  name: "p0-atom-keyboard-navigation",
+  schema: "editable-trace-replay@1",
+  steps: [
+    {
+      kind: "event",
+      event: { type: "pointerdown", targetPath: mentionPath },
+      expect: {
+        after: {
+          selectionAnchorEdge: "before",
+          selectionAnchorPath: mentionPath,
+          selectionFocusEdge: "after",
+          selectionFocusPath: mentionPath,
+          selectionSelectedPointers: mentionPath,
+        },
+      },
+    },
+    {
+      kind: "event",
+      event: { type: "keydown", key: "ArrowRight" },
+      expect: {
+        before: {
+          selectionSelectedPointers: mentionPath,
+        },
+        after: {
+          selectionEdge: "after",
+          selectionPath: mentionPath,
+          selectionSelectedPointers: "",
+        },
+      },
+    },
+    {
+      kind: "event",
+      event: { type: "keydown", key: "ArrowLeft" },
+      expect: {
+        before: {
+          selectionEdge: "after",
+          selectionPath: mentionPath,
+        },
+        after: {
+          selectionEdge: "before",
+          selectionPath: mentionPath,
+          selectionSelectedPointers: "",
+        },
+      },
+    },
+    {
+      kind: "event",
+      event: { type: "keydown", key: "ArrowRight", shiftKey: true },
+      expect: {
+        before: {
+          selectionEdge: "before",
+          selectionPath: mentionPath,
+        },
+        after: {
+          selectionAnchorEdge: "before",
+          selectionAnchorPath: mentionPath,
+          selectionFocusEdge: "after",
+          selectionFocusPath: mentionPath,
+          selectionSelectedPointers: mentionPath,
+        },
+      },
+    },
+  ],
+};
+
 export const p0PlainPasteTrace: EditorTraceReplay = {
   name: "p0-plain-paste",
   schema: "editable-trace-replay@1",
@@ -355,6 +421,7 @@ export const p0SelectionDeletionClipboardTraces = [
   p0RangeDeleteForwardTrace,
   p0EmptyBlockBackspaceTrace,
   p0AtomReplacementTrace,
+  p0AtomKeyboardNavigationTrace,
   p0PlainPasteTrace,
   p0MarkdownDropTrace,
   p0CutTrace,
