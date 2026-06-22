@@ -99,6 +99,8 @@ The intended ownership rule is:
   editor behavior
 - `docs/editor-input-contract.md`: P0 browser input event to editor
   intent/model/selection/render contract
+- `docs/editor-input-oracle-triage.md`: oracle source and triage procedure for
+  new P0 input expectations
 - `docs/editor-browser-input-gate.md`: Playwright browser smoke gate and IME
   manual capture split
 - `docs/repo-analysis-report.md`: current confirmed-vs-ambiguous repo analysis

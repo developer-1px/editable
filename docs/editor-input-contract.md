@@ -127,6 +127,8 @@ ProseMirror/Lexical 증거는 authority가 아니다. 같은 문제가 반복된
 - command/model 테스트는 document schema, block id uniqueness, normalized marks,
   selection path/offset invariant를 같은 helper로 검사할 수 있어야 한다.
 - 이 문서의 P0 행을 바꾸는 구현은 같은 커밋에서 fixture 또는 감사 문서를 갱신한다.
+- 새 P0 기대값은 `docs/editor-input-oracle-triage.md`의 oracle source와
+  verification level을 먼저 정한다.
 - evidence needed 항목은 임시 구현으로 닫지 않는다.
 
 ## 증거 강도
