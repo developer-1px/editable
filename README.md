@@ -133,6 +133,8 @@ The intended ownership rule is:
   audit
 - `docs/editor-text-mutation-command-audit.md`: text mutation command and
   replacement policy audit
+- `docs/editor-mutation-observer-policy-audit.md`: MutationObserver stale
+  record, pause/resume, and DOM drift policy audit
 - `docs/editor-block-command-audit.md`: list depth block command and block
   editing extension audit
 - `docs/editor-mark-command-audit.md`: rich text mark command and active mark
