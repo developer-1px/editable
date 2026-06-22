@@ -31,7 +31,8 @@ export type EditorTraceEvent =
   | KeyboardTraceEvent
   | CompositionTraceEvent
   | InputTraceEvent
-  | TransferTraceEvent;
+  | TransferTraceEvent
+  | FocusTraceEvent;
 
 export type KeyboardTraceEvent = {
   altKey?: boolean;
@@ -63,6 +64,10 @@ export type TransferTraceEvent = {
   format?: "markdown" | "plain";
   text?: string;
   type: "drop" | "paste";
+};
+
+export type FocusTraceEvent = {
+  type: "blur" | "focus";
 };
 
 export type EditorTraceExpectation = {
@@ -220,6 +225,13 @@ function createTraceEvent(root: HTMLElement, event: EditorTraceEvent): Event {
       defineEventValue(transferEvent, "clientY", event.clientY ?? 0);
     }
     return transferEvent;
+  }
+
+  if (event.type === "blur" || event.type === "focus") {
+    return new window.FocusEvent(event.type, {
+      bubbles: true,
+      cancelable: false,
+    });
   }
 
   const compositionData =

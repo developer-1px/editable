@@ -2,7 +2,14 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { koreanHangulActiveMarkTrace } from "../fixtures/ime/koreanHangulActiveMarkTrace";
+import {
+  koreanHangulAdjacentStaleFinishTrace,
+  koreanHangulAdjacentStaleStartTrace,
+} from "../fixtures/ime/koreanHangulAdjacentStaleTrace";
 import { koreanHangulBasicTrace } from "../fixtures/ime/koreanHangulBasicTrace";
+import { koreanHangulCompositionBlurTrace } from "../fixtures/ime/koreanHangulCompositionBlurTrace";
+import { koreanHangulCompositionHistoryTrace } from "../fixtures/ime/koreanHangulCompositionHistoryTrace";
 import { koreanHangulEnterConfirmTrace } from "../fixtures/ime/koreanHangulEnterConfirmTrace";
 import {
   findReplayedEvent,
@@ -47,122 +54,7 @@ describe("BlockEditor IME trace replay", () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
 
-    await replayEditorTrace(editor, {
-      name: "korean-hangul-adjacent-composition",
-      schema: "editable-trace-replay@1",
-      steps: [
-        {
-          kind: "selection",
-          path: "/root/children/0/children/0/text",
-          offset: 5,
-        },
-        { kind: "event", event: { type: "keydown", key: "ㅇ" } },
-        { kind: "event", event: { type: "compositionstart" } },
-        { kind: "event", event: { type: "compositionupdate", data: "ㅇ" } },
-        {
-          kind: "event",
-          event: {
-            type: "beforeinput",
-            inputType: "insertCompositionText",
-            data: "ㅇ",
-            isComposing: true,
-          },
-        },
-        {
-          kind: "text",
-          path: "/root/children/0/children/0/text",
-          text: "Plainㅇ ",
-          offset: 5,
-        },
-        {
-          kind: "event",
-          event: {
-            type: "input",
-            inputType: "insertCompositionText",
-            data: "ㅇ",
-            isComposing: true,
-          },
-        },
-        { kind: "event", event: { type: "compositionupdate", data: "아" } },
-        {
-          kind: "event",
-          event: {
-            type: "beforeinput",
-            inputType: "insertCompositionText",
-            data: "아",
-            isComposing: true,
-          },
-        },
-        {
-          kind: "text",
-          path: "/root/children/0/children/0/text",
-          text: "Plain아 ",
-          offset: 5,
-        },
-        {
-          kind: "event",
-          event: {
-            type: "input",
-            inputType: "insertCompositionText",
-            data: "아",
-            isComposing: true,
-          },
-        },
-        { kind: "event", event: { type: "compositionupdate", data: "안" } },
-        {
-          kind: "event",
-          event: {
-            type: "beforeinput",
-            inputType: "insertCompositionText",
-            data: "안",
-            isComposing: true,
-          },
-        },
-        {
-          kind: "text",
-          path: "/root/children/0/children/0/text",
-          text: "Plain안 ",
-          offset: 6,
-        },
-        {
-          kind: "event",
-          event: {
-            type: "input",
-            inputType: "insertCompositionText",
-            data: "안",
-            isComposing: true,
-          },
-        },
-        { kind: "event", event: { type: "compositionend", data: "안" } },
-        { kind: "event", event: { type: "compositionstart" } },
-        { kind: "event", event: { type: "compositionupdate", data: "ㄴ" } },
-        {
-          kind: "event",
-          event: {
-            type: "beforeinput",
-            inputType: "insertCompositionText",
-            data: "ㄴ",
-            isComposing: true,
-          },
-        },
-        {
-          kind: "text",
-          path: "/root/children/0/children/0/text",
-          text: "Plain안ㄴ ",
-          offset: 7,
-        },
-        {
-          kind: "event",
-          event: {
-            type: "input",
-            inputType: "insertCompositionText",
-            data: "ㄴ",
-            isComposing: true,
-          },
-        },
-        { kind: "timers" },
-      ],
-    });
+    await replayEditorTrace(editor, koreanHangulAdjacentStaleStartTrace);
 
     expect(
       editor
@@ -170,64 +62,7 @@ describe("BlockEditor IME trace replay", () => {
         ?.getAttribute("data-selection-offset"),
     ).not.toBe("7");
 
-    await replayEditorTrace(editor, {
-      name: "korean-hangul-adjacent-composition-finish",
-      schema: "editable-trace-replay@1",
-      steps: [
-        { kind: "event", event: { type: "compositionupdate", data: "녀" } },
-        {
-          kind: "event",
-          event: {
-            type: "beforeinput",
-            inputType: "insertCompositionText",
-            data: "녀",
-            isComposing: true,
-          },
-        },
-        {
-          kind: "text",
-          path: "/root/children/0/children/0/text",
-          text: "Plain안녀 ",
-          offset: 7,
-        },
-        {
-          kind: "event",
-          event: {
-            type: "input",
-            inputType: "insertCompositionText",
-            data: "녀",
-            isComposing: true,
-          },
-        },
-        { kind: "event", event: { type: "compositionupdate", data: "녕" } },
-        {
-          kind: "event",
-          event: {
-            type: "beforeinput",
-            inputType: "insertCompositionText",
-            data: "녕",
-            isComposing: true,
-          },
-        },
-        {
-          kind: "text",
-          path: "/root/children/0/children/0/text",
-          text: "Plain안녕 ",
-          offset: 7,
-        },
-        {
-          kind: "event",
-          event: {
-            type: "input",
-            inputType: "insertCompositionText",
-            data: "녕",
-            isComposing: true,
-          },
-        },
-        { kind: "event", event: { type: "compositionend", data: "녕" } },
-        { kind: "timers" },
-      ],
-    });
+    await replayEditorTrace(editor, koreanHangulAdjacentStaleFinishTrace);
 
     const firstText = editor.querySelector(
       '[data-path="/root/children/0/children/0/text"]',
@@ -238,6 +73,50 @@ describe("BlockEditor IME trace replay", () => {
         .querySelector(".document-view")
         ?.getAttribute("data-selection-offset"),
     ).toBe("7");
+  });
+
+  it("commits IME text with active marks through the marked text path", async () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await replayEditorTrace(editor, koreanHangulActiveMarkTrace);
+
+    expect(
+      Array.from(editor.querySelectorAll("strong")).some(
+        (element) => element.textContent === "안",
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps history undo explicit no-op while composition is active", async () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    const events = await replayEditorTrace(
+      editor,
+      koreanHangulCompositionHistoryTrace,
+    );
+    const historyUndo = findReplayedEvent(events, "beforeinput", "historyUndo");
+
+    expect(historyUndo?.defaultPrevented).toBe(true);
+    expect(() =>
+      assertPreventedEditingEventsCovered(events, {
+        explicitNoOps: [{ type: "beforeinput", inputType: "historyUndo" }],
+      }),
+    ).not.toThrow();
+    expect(editor.textContent).toContain("Plain");
+  });
+
+  it("flushes active composition text on blur", async () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await replayEditorTrace(editor, koreanHangulCompositionBlurTrace);
+
+    expect(
+      editor.querySelector('[data-path="/root/children/0/children/0/text"]')
+        ?.textContent,
+    ).toBe("Plain안 ");
   });
 
   it("reports the event index and field when a trace expectation fails", async () => {
