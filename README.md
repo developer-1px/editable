@@ -44,6 +44,15 @@ pnpm run verify:internal:stress
 pnpm run verify:internal:soak
 ```
 
+Real browser P0 smoke is separate from the internal fast gate:
+
+```bash
+pnpm run verify:browser
+```
+
+That gate runs the minimal input contract smoke in Chromium, Firefox, and
+WebKit. IME cases remain recorded trace fixtures plus manual browser capture.
+
 ## Editor Boundaries
 
 Public imports should go through these entrypoints:
@@ -90,6 +99,8 @@ The intended ownership rule is:
   editor behavior
 - `docs/editor-input-contract.md`: P0 browser input event to editor
   intent/model/selection/render contract
+- `docs/editor-browser-input-gate.md`: Playwright browser smoke gate and IME
+  manual capture split
 - `docs/repo-analysis-report.md`: current confirmed-vs-ambiguous repo analysis
 - `docs/editor-document-authority-audit.md`: document authority and stale-risk
   audit
