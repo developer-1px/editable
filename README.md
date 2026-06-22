@@ -179,6 +179,8 @@ The intended ownership rule is:
 - `docs/editor-verification-gate-audit.md`: internal verification gate audit
 - `docs/editor-ime-trace-replay-audit.md`: internal IME trace replay audit
 - `docs/editor-style-surface-audit.md`: editor style surface certainty audit
+- `docs/editor-whitespace-css-policy-audit.md`: text block white-space and
+  Gecko hack-node policy audit
 - `docs/editor-app-route-embedding-audit.md`: app route editor embedding audit
 - `docs/editor-package-surface-audit.md`: package script and dependency audit
 - `docs/editor-static-assets-audit.md`: public static asset and starter residue
