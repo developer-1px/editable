@@ -21,17 +21,34 @@ type BrowserEditorState = {
   text: string;
 };
 
+type BrowserInputTraceEntry = {
+  data: string | null;
+  domSelectionCollapsed: string | null;
+  domSelectionFocusOffset: string | null;
+  domSelectionFocusPath: string | null;
+  inputType: string | null;
+  isComposing: boolean | null;
+  key: string | null;
+  scenarioId: string;
+  targetRangeCount: number | null;
+  targetRangeSupported: boolean;
+  type: string;
+};
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   const editor = page.getByRole("textbox", { name: "Document body" });
-  await expect(editor).toBeFocused();
+  await expect(editor).toBeVisible();
   await expect(pathLocator(page, firstTextPath)).toHaveText("Plain ");
+  await focusHydratedEditor(page);
+  await setNativeTextSelection(page, firstTextPath, 0, 0);
+  await expect(editor).toBeFocused();
 });
 
 test("keyboard navigation uses browser DOM selection and canonical selection", async ({
   page,
 }) => {
-  await page.keyboard.press("ArrowRight");
+  await pressEditorKey(page, "ArrowRight");
   await expectEditorState(page, {
     domSelectionCollapsed: "true",
     domSelectionFocusOffset: "1",
@@ -40,7 +57,7 @@ test("keyboard navigation uses browser DOM selection and canonical selection", a
     selectionPath: firstTextPath,
   });
 
-  await page.keyboard.press("ArrowRight");
+  await pressEditorKey(page, "ArrowRight");
   await expectEditorState(page, {
     domSelectionCollapsed: "true",
     domSelectionFocusOffset: "2",
@@ -53,7 +70,7 @@ test("keyboard navigation uses browser DOM selection and canonical selection", a
     domSelectionText: "la",
   });
 
-  await page.keyboard.press("ArrowRight");
+  await pressEditorKey(page, "ArrowRight");
   await expectEditorState(page, {
     domSelectionCollapsed: "true",
     selectionOffset: "3",
@@ -61,14 +78,14 @@ test("keyboard navigation uses browser DOM selection and canonical selection", a
   });
 
   await setNativeTextSelection(page, firstTextPath, 1, 3);
-  await page.keyboard.press("ArrowLeft");
+  await pressEditorKey(page, "ArrowLeft");
   await expectEditorState(page, {
     domSelectionCollapsed: "true",
     selectionOffset: "1",
     selectionPath: firstTextPath,
   });
 
-  await page.keyboard.press("Shift+ArrowRight");
+  await pressEditorKey(page, "Shift+ArrowRight");
   await expectEditorState(page, {
     selectionAnchorOffset: "1",
     selectionAnchorPath: firstTextPath,
@@ -76,6 +93,57 @@ test("keyboard navigation uses browser DOM selection and canonical selection", a
     selectionFocusPath: firstTextPath,
     selectionPath: firstTextPath,
     selectedRangeCount: 1,
+  });
+});
+
+test("printable browser input records event order and target range evidence", async ({
+  page,
+}) => {
+  const scenarioId = "BROWSER-PRINTABLE-EVENT-ORDER";
+  await installBrowserInputTrace(page, scenarioId);
+  await setNativeTextSelection(page, firstTextPath, 0, 0);
+
+  await pressEditorKey(page, "x");
+
+  const trace = await readBrowserInputTrace(page);
+  expect(trace.map((entry) => entry.type)).toContain("keydown");
+  const beforeInput = trace.find(
+    (entry) => entry.type === "beforeinput" && entry.inputType === "insertText",
+  );
+  expect(beforeInput, scenarioId).toBeDefined();
+  expect(beforeInput?.scenarioId).toBe(scenarioId);
+  expect(beforeInput?.domSelectionFocusPath).toBe(firstTextPath);
+  expect(typeof beforeInput?.targetRangeSupported).toBe("boolean");
+  expect(
+    beforeInput?.targetRangeSupported
+      ? typeof beforeInput.targetRangeCount
+      : beforeInput?.targetRangeCount,
+  ).toBe(beforeInput?.targetRangeSupported ? "number" : null);
+
+  await expect(pathLocator(page, firstTextPath)).toHaveText("xPlain ");
+  await expectEditorState(page, {
+    selectionOffset: "1",
+    selectionPath: firstTextPath,
+  });
+});
+
+test("browser trace harness records composition event evidence", async ({
+  page,
+}) => {
+  const scenarioId = "IME-COMPOSITION-COMMIT-ENTER";
+  await installBrowserInputTrace(page, scenarioId);
+  await dispatchSyntheticCompositionTrace(page, "안");
+
+  const trace = await readBrowserInputTrace(page);
+  expect(trace.map((entry) => entry.type)).toEqual([
+    "compositionstart",
+    "compositionupdate",
+    "compositionend",
+  ]);
+  expect(trace[1]).toMatchObject({
+    data: "안",
+    scenarioId,
+    type: "compositionupdate",
   });
 });
 
@@ -116,11 +184,33 @@ function pathLocator(page: Page, path: string) {
   return page.locator(`[data-path="${path}"]`).first();
 }
 
+async function focusHydratedEditor(page: Page) {
+  const title = page.getByRole("textbox", { name: "Title" });
+  const editor = page.getByRole("textbox", { name: "Document body" });
+
+  await expect(async () => {
+    await title.focus();
+    await editor.focus();
+    await expect(editor).toBeFocused({ timeout: 250 });
+    await expect(editor).toHaveAttribute("data-focused", "true", {
+      timeout: 250,
+    });
+  }).toPass({ timeout: 10_000 });
+}
+
 async function expectEditorState(
   page: Page,
   expected: Partial<BrowserEditorState>,
 ) {
   await expect.poll(() => readEditorState(page)).toMatchObject(expected);
+}
+
+async function pressEditorKey(page: Page, key: string) {
+  const editor = page.getByRole("textbox", { name: "Document body" });
+  await editor.focus();
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveAttribute("data-focused", "true");
+  await editor.press(key);
 }
 
 async function readEditorState(page: Page): Promise<BrowserEditorState> {
@@ -147,8 +237,9 @@ async function readEditorState(page: Page): Promise<BrowserEditorState> {
       domSelectionFocusPath: domSelectionPath(selection?.focusNode ?? null),
       domSelectionText: selection?.toString() ?? "",
       mentionCount: document.querySelectorAll(".mention-chip").length,
-      selectedRangeCount: document.querySelectorAll('[data-overlay="selected-range"]')
-        .length,
+      selectedRangeCount: document.querySelectorAll(
+        '[data-overlay="selected-range"]',
+      ).length,
       selectionAnchorOffset:
         documentView.getAttribute("data-selection-anchor-offset"),
       selectionAnchorPath:
@@ -163,6 +254,88 @@ async function readEditorState(page: Page): Promise<BrowserEditorState> {
       text: documentView.textContent ?? "",
     };
   }, documentSelector);
+}
+
+async function installBrowserInputTrace(page: Page, scenarioId: string) {
+  await page.evaluate(
+    ({ scenarioId, selector }) => {
+      const domSelectionOffset = (offset: number | undefined) =>
+        offset === undefined ? null : String(offset);
+      const domSelectionPath = (node: Node | null) => {
+        const element =
+          node instanceof Element ? node : (node?.parentElement ?? null);
+        return (
+          element?.closest("[data-path]")?.getAttribute("data-path") ?? null
+        );
+      };
+      const target = document.querySelector(selector);
+      if (!(target instanceof HTMLElement)) {
+        throw new Error("Editor root was not found.");
+      }
+      const traceWindow = window as Window & {
+        __editableBrowserInputTrace?: BrowserInputTraceEntry[];
+      };
+      traceWindow.__editableBrowserInputTrace = [];
+
+      const record = (event: Event) => {
+        const selection = window.getSelection();
+        const inputEvent =
+          event instanceof InputEvent ? event : (null as InputEvent | null);
+        const keyboardEvent =
+          event instanceof KeyboardEvent
+            ? event
+            : (null as KeyboardEvent | null);
+        const compositionEvent =
+          event instanceof CompositionEvent
+            ? event
+            : (null as CompositionEvent | null);
+        const targetRanges =
+          inputEvent !== null && typeof inputEvent.getTargetRanges === "function"
+            ? inputEvent.getTargetRanges()
+            : null;
+
+        traceWindow.__editableBrowserInputTrace?.push({
+          data: inputEvent?.data ?? compositionEvent?.data ?? null,
+          domSelectionCollapsed:
+            selection === null ? null : String(selection.isCollapsed),
+          domSelectionFocusOffset: domSelectionOffset(selection?.focusOffset),
+          domSelectionFocusPath: domSelectionPath(selection?.focusNode ?? null),
+          inputType: inputEvent?.inputType ?? null,
+          isComposing:
+            inputEvent?.isComposing ?? keyboardEvent?.isComposing ?? null,
+          key: keyboardEvent?.key ?? null,
+          scenarioId,
+          targetRangeCount: targetRanges?.length ?? null,
+          targetRangeSupported: targetRanges !== null,
+          type: event.type,
+        });
+      };
+
+      for (const type of [
+        "keydown",
+        "beforeinput",
+        "input",
+        "compositionstart",
+        "compositionupdate",
+        "compositionend",
+      ]) {
+        target.addEventListener(type, record, { capture: true });
+      }
+    },
+    { scenarioId, selector: '[role="textbox"]' },
+  );
+}
+
+async function readBrowserInputTrace(
+  page: Page,
+): Promise<BrowserInputTraceEntry[]> {
+  return page.evaluate(() => {
+    const traceWindow = window as Window & {
+      __editableBrowserInputTrace?: BrowserInputTraceEntry[];
+    };
+
+    return traceWindow.__editableBrowserInputTrace ?? [];
+  });
 }
 
 async function setNativeTextSelection(
@@ -206,6 +379,32 @@ async function setNativeTextSelection(
       root.dispatchEvent(new Event("select", { bubbles: true }));
     },
     { anchorOffset, focusOffset, path },
+  );
+}
+
+async function dispatchSyntheticCompositionTrace(page: Page, data: string) {
+  await page.evaluate(
+    ({ data }) => {
+      const root = document.querySelector('[role="textbox"]');
+      if (!(root instanceof HTMLElement)) {
+        throw new Error("Editor root was not found.");
+      }
+
+      for (const type of [
+        "compositionstart",
+        "compositionupdate",
+        "compositionend",
+      ] as const) {
+        root.dispatchEvent(
+          new CompositionEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            data: type === "compositionstart" ? "" : data,
+          }),
+        );
+      }
+    },
+    { data },
   );
 }
 

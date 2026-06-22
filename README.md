@@ -101,6 +101,8 @@ The intended ownership rule is:
   intent/model/selection/render contract
 - `docs/editor-input-oracle-triage.md`: oracle source and triage procedure for
   new P0 input expectations
+- `docs/editor-p0-input-conformance-matrix.md`: stable P0 input scenario matrix,
+  headless runner, replay coverage, and browser evidence gate
 - `docs/editor-browser-input-gate.md`: Playwright browser smoke gate and IME
   manual capture split
 - `docs/editor-test-environment-policy-audit.md`: model/jsdom/browser/device

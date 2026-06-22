@@ -4,10 +4,12 @@ const firstTextPath = "/root/children/0/children/0/text";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await expect(
-    page.getByRole("textbox", { name: "Document body" }),
-  ).toBeFocused();
+  const editor = page.getByRole("textbox", { name: "Document body" });
+  await expect(editor).toBeVisible();
   await expect(pathLocator(page, firstTextPath)).toHaveText("Plain ");
+  await focusHydratedEditor(page);
+  await setNativeTextSelection(page, firstTextPath, 0, 0);
+  await expect(editor).toBeFocused();
 });
 
 test("range overlay stays in viewport coordinates through transform and scroll", async ({
@@ -27,8 +29,9 @@ test("range overlay stays in viewport coordinates through transform and scroll",
     pane.style.transformOrigin = "left top";
     window.scrollTo(0, 80);
   });
+  await setNativeTextSelection(page, firstTextPath, 0, 0);
 
-  await page.keyboard.press("Shift+ArrowRight");
+  await pressEditorKey(page, "Shift+ArrowRight");
 
   await expect
     .poll(() => readRangeOverlayProjection(page))
@@ -53,8 +56,9 @@ test("range overlay stays in viewport coordinates through CSS zoom", async ({
 
     pane.style.zoom = "1.2";
   });
+  await setNativeTextSelection(page, firstTextPath, 0, 0);
 
-  await page.keyboard.press("Shift+ArrowRight");
+  await pressEditorKey(page, "Shift+ArrowRight");
 
   await expect
     .poll(() => readRangeOverlayProjection(page))
@@ -67,6 +71,72 @@ test("range overlay stays in viewport coordinates through CSS zoom", async ({
 
 function pathLocator(page: Page, path: string) {
   return page.locator(`[data-path="${path}"]`).first();
+}
+
+async function focusHydratedEditor(page: Page) {
+  const title = page.getByRole("textbox", { name: "Title" });
+  const editor = page.getByRole("textbox", { name: "Document body" });
+
+  await expect(async () => {
+    await title.focus();
+    await editor.focus();
+    await expect(editor).toBeFocused({ timeout: 250 });
+    await expect(editor).toHaveAttribute("data-focused", "true", {
+      timeout: 250,
+    });
+  }).toPass({ timeout: 10_000 });
+}
+
+async function setNativeTextSelection(
+  page: Page,
+  path: string,
+  anchorOffset: number,
+  focusOffset: number,
+) {
+  await page.evaluate(
+    ({ anchorOffset, focusOffset, path }) => {
+      const findDataPathElement = (targetPath: string) =>
+        Array.from(document.querySelectorAll("[data-path]")).find(
+          (element) => element.getAttribute("data-path") === targetPath,
+        );
+      const firstTextNode = (element: Element) => {
+        const walker = document.createTreeWalker(
+          element,
+          NodeFilter.SHOW_TEXT,
+        );
+        return walker.nextNode();
+      };
+      const root = document.querySelector('[role="textbox"]');
+      const run = findDataPathElement(path);
+      if (!(root instanceof HTMLElement) || !(run instanceof HTMLElement)) {
+        throw new Error(`Cannot set selection for ${path}.`);
+      }
+
+      root.focus();
+      const text = firstTextNode(run);
+      if (text === null) {
+        throw new Error(`Selection target has no text node: ${path}.`);
+      }
+
+      const range = document.createRange();
+      range.setStart(text, anchorOffset);
+      range.setEnd(text, focusOffset);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
+      root.dispatchEvent(new Event("select", { bubbles: true }));
+    },
+    { anchorOffset, focusOffset, path },
+  );
+}
+
+async function pressEditorKey(page: Page, key: string) {
+  const editor = page.getByRole("textbox", { name: "Document body" });
+  await editor.focus();
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveAttribute("data-focused", "true");
+  await editor.press(key);
 }
 
 async function readRangeOverlayProjection(page: Page) {

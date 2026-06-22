@@ -2,14 +2,15 @@
 
 작성일: 2026-06-22
 
-범위: P0 입력 계약 중 jsdom trace replay만으로 닫으면 안 되는 실제 browser DOM
-selection, keyboard navigation, paste/drop transfer smoke를 별도 gate로 분리한다.
+범위: P0 입력 계약 중 jsdom/headless matrix와 trace replay만으로 닫으면 안 되는 실제
+browser DOM selection, keyboard navigation, paste/drop transfer smoke와 compact event
+evidence를 별도 gate로 분리한다.
 
 ## 판정
 
 `pnpm run verify:browser`는 `verify:internal`의 fast local gate가 아니다. 실제
-Chromium, Firefox, WebKit에서 Vite dev server를 띄우고 최소 P0 입력 계약 smoke를
-실행하는 browser gate다.
+Chromium, Firefox, WebKit에서 Vite dev server를 띄우고 최소 P0 입력 계약 smoke와
+`p0InputConformanceMatrix` browser scenario evidence를 실행하는 browser gate다.
 
 IME 자동화는 이 gate에 넣지 않는다. OS IME 조합은 Playwright가 deterministic하게
 만들 수 없으므로 `src/editor/internal/fixtures/ime/*` recorded trace와 수동 캡처
@@ -26,6 +27,7 @@ IME 자동화는 이 gate에 넣지 않는다. OS IME 조합은 Playwright가 de
 | DOM selection smoke | test가 browser `Selection`/`Range` API로 `data-path` text node range를 만들고 `selectionchange`를 dispatch한 뒤 canonical `data-selection-*`와 native selection snapshot을 함께 검증한다. | `tests/browser/editor-input-contract.spec.ts` |
 | keyboard navigation smoke | collapsed Arrow, range Arrow collapse, Shift+Arrow extension을 실제 browser keyboard event로 실행한다. | `tests/browser/editor-input-contract.spec.ts` |
 | paste/drop smoke | `DataTransfer`를 browser 안에서 만들고 paste/drop event를 dispatch해 text paste와 markdown mention drop을 검증한다. | `tests/browser/editor-input-contract.spec.ts` |
+| compact browser trace | printable input에서 `keydown`/`beforeinput`/`input` evidence, `getTargetRanges()` 지원 여부/개수, DOM focus path/offset, scenario id를 수집한다. | `tests/browser/editor-input-contract.spec.ts`, `docs/editor-p0-input-conformance-matrix.md` |
 | IME 분리 | Korean composition, stale composition, active mark, blur, history, Enter confirmation은 recorded trace replay가 담당하고 browser/OS matrix는 수동 캡처 대상으로 남긴다. | `docs/editor-ime-trace-replay-audit.md`, `src/editor/internal/fixtures/ime/*` |
 
 ## 수동 IME 캡처 절차
@@ -46,6 +48,7 @@ IME 자동화는 이 gate에 넣지 않는다. OS IME 조합은 Playwright가 de
 | browser project matrix | 확정 | config가 Chromium, Firefox, WebKit projects를 명시한다. |
 | keyboard/selection smoke | 실행 테스트로 닫힘 | browser test가 native `Selection`/`Range`, keyboard event, canonical `data-selection-*`, overlay count를 같이 확인한다. |
 | paste/drop smoke | 실행 테스트로 닫힘 | browser test가 browser `DataTransfer` 기반 paste/drop event를 실행하고 document render result를 확인한다. |
+| compact event evidence | 실행 테스트로 닫힘 | browser test가 printable input event order, `getTargetRanges()` support/count, DOM focus point, scenario id를 남긴다. |
 | browser trace artifact | 부분근거 | failure trace/screenshot은 browser별 차이 조사 evidence를 남긴다. Passing run이 OS/browser IME matrix를 증명하지는 않는다. |
 | IME automation | 미정/분리 | Playwright smoke에 IME 자동화를 넣지 않는다. IME는 recorded trace와 수동 캡처 절차로만 닫는다. |
 | release 필수 여부 | 미정 | `verify:browser`는 추가 gate지만 모든 로컬 변경에서 필수인지는 아직 CI/release policy로 닫지 않았다. |

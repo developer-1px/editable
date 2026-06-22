@@ -12,6 +12,7 @@
     "verify:internal": "node scripts/verify-internal.mjs",
     "verify:internal:stress": "node scripts/verify-internal.mjs --repeat=10",
     "verify:internal:soak": "node scripts/verify-internal.mjs --repeat=30",
+    "verify:p0-input": "pnpm exec vitest run src/editor/internal/model/p0InputConformanceMatrix.test.ts src/editor/internal/testing/editorInputOracleContract.test.ts && pnpm run verify:browser",
     "verify:browser": "playwright test",
     "format": "biome format --write",
     "check": "biome check"
