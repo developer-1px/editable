@@ -133,6 +133,8 @@ The intended ownership rule is:
   audit
 - `docs/editor-mobile-touch-selection-policy-audit.md`: mobile touch selection,
   long press, handle drag, and native menu policy audit
+- `docs/editor-mobile-viewport-caret-policy-audit.md`: mobile visual viewport,
+  virtual keyboard, auto-zoom, scroll, and caret visibility policy audit
 - `docs/editor-text-mutation-command-audit.md`: text mutation command and
   replacement policy audit
 - `docs/editor-mutation-observer-policy-audit.md`: MutationObserver stale
