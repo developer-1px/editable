@@ -45,7 +45,9 @@ browser bug의 effect detector와 fallback trigger로 제한한다.
 
 ## 스펙과 호환성 근거
 
-W3C Input Events는 `inputType`별 cancelability와 target range shape를 정의한다.
+W3C Input Events Level 2는 `inputType`별 cancelability와 target range shape를
+정의한다. 2026-05-01 Working Draft 기준으로 Level 2는 IME composition 내부에서
+발생하는 `beforeinput`을 제외한 `beforeinput` cancelability 요구를 더 명확히 한다.
 예를 들어 `insertCompositionText`는 IME composition 중이며 cancelable이 아니고,
 `deleteContentBackward`, `deleteByCut`, `historyUndo` 등은 cancelable로 정의된다.
 동시에 같은 spec은 browser가 모든 inputType을 지원한다는 뜻은 아니라고 둔다.
@@ -56,10 +58,34 @@ MDN은 `beforeinput`이 널리 지원된다고 정리하지만, 모든 사용자
 
 근거:
 
+- https://www.w3.org/TR/input-events-2/
 - https://w3c.github.io/input-events/
+- https://github.com/w3c/input-events/issues/115
 - https://developer.mozilla.org/docs/Web/API/Element/beforeinput_event
 - https://raw.githubusercontent.com/mdn/browser-compat-data/main/api/Element.json
 - https://raw.githubusercontent.com/mdn/browser-compat-data/main/api/InputEvent.json
+
+## InputType 처리 정책표
+
+이 표는 Input Events Level 2의 cancelability/`getTargetRanges()` 기준과 현재 editor의
+처리 방식을 연결한다. `getTargetRanges()`는 contenteditable editing host에서
+`historyUndo`/`historyRedo`를 제외하면 대체로 non-empty일 수 있지만, 이 editor에서는
+canonical selection을 우선한다. target range는 debug/browser evidence로만 쓴다.
+
+| inputType family | spec cancelable | contenteditable `getTargetRanges()` | 현재 처리 | preventDefault/reconcile 정책 |
+| --- | --- | --- | --- | --- |
+| `insertText` | Yes | non-empty | active text leaf면 native buffer defer, range/atom/block boundary면 command path | command path는 preventDefault. native defer는 `input`/flush에서 reconcile |
+| `insertReplacementText` | Yes | non-empty, `dataTransfer` 가능 | plain replacement text로 command path | preventDefault 후 selection replacement |
+| `insertCompositionText` | No | non-empty | composition preedit/native buffer phase | preventDefault에 의존하지 않는다. composition state와 flush/reset으로 reconcile |
+| browser `insertFromComposition` | divergence | browser/engine별 | composition final commit 후보로만 허용 | spec/engine 차이가 있어 recorded IME trace 없이는 새 기대값 고정 금지 |
+| `insertFromPaste`, `insertFromDrop`, `insertFromYank`, `insertFromPasteAsQuotation` | Yes | non-empty, transfer 계열은 `dataTransfer` | transfer reader로 plain/markdown command path | preventDefault 후 command. transfer가 없으면 paste/drop event fallback |
+| `insertParagraph`, `insertLineBreak` | Yes | non-empty | block-specific split policy | preventDefault 후 paragraph/code split command |
+| `deleteContentBackward`, `deleteContentForward` | Yes | non-empty | text/atom/block boundary delete command 또는 native text leaf phase | command path는 preventDefault. Chrome Android effect failure는 device trace/fallback |
+| `deleteWordBackward`, `deleteWordForward` | Yes | non-empty | word delete command | preventDefault 후 command |
+| `deleteSoftLine*`, `deleteHardLine*`, `deleteEntireSoftLine` | Yes | non-empty | 현재 explicit command 없음 | not-handled. browser trace와 제품 정책 전에는 자동 expected 금지 |
+| `deleteContent`, `deleteByCut`, `deleteByDrag` | Yes | non-empty | range delete/cut path. collapsed `deleteContent`는 no-op | preventDefault 후 command 또는 explicit no-op |
+| `historyUndo`, `historyRedo` | Yes | empty | native buffer flush 후 editor history command | preventDefault. browser undo stack에 맡기지 않음 |
+| `format*`, `insertOrderedList`, `insertUnorderedList`, `insertHorizontalRule`, `insertLink` | Yes | contenteditable에서는 non-empty 가능 | 현재 대부분 explicit command 없음. mark keymap이 별도 owner | unsupported는 pass-through 또는 explicit no-op. DOM 결과를 authority로 채택하지 않음 |
 
 ## Browser Matrix
 
@@ -74,6 +100,18 @@ correctness 신뢰도와는 다르다.
 | Firefox Android | Firefox mirror | Firefox mirror | Firefox mirror | Firefox mirror | mobile keyboard event order는 real-device trace 없이는 닫지 않는다. |
 | Safari | 10.1 | 10.1 | 10.1 | 16.4 | `isComposing`은 16.4부터라 IME path에서 event field만 신뢰하지 않는다. |
 | iOS Safari / WebView iOS | Safari mirror | Safari mirror | Safari mirror | Safari mirror | virtual keyboard/selection handle은 desktop Safari와 분리해서 봐야 한다. |
+
+## Browser cancelability policy
+
+지원 버전은 기능 존재만 말한다. cancelability는 spec, MDN 경고, local trace policy를
+함께 적용한다.
+
+| Browser family | cancelable 판정 | `getTargetRanges()` 판정 | policy |
+| --- | --- | --- | --- |
+| Chromium desktop | Level 2 기준을 기대하되 IME composition 내부는 non-cancelable로 취급 | contenteditable에서는 history를 제외한 inputType에서 range가 올 수 있음 | command-owned input은 preventDefault, IME/native leaf는 reconcile |
+| Chrome Android / WebView | `deleteContentBackward`가 보여도 실제 DOM effect가 없거나 keydown order와 충돌 가능 | feature는 있어도 virtual keyboard trace 없이는 target range authority 금지 | device trace 또는 effect detector 필요 |
+| Firefox desktop/Android | MDN 경고대로 missing/non-cancelable 가능성을 열어 둠 | availability는 확인되나 delete boundary 누락 report가 있음 | `input`/flush/reset fallback 유지 |
+| Safari/iOS WebView | `isComposing` availability가 늦고 IME/selection ordering은 별도 trace 필요 | ShadowRoot/selection fallback과 섞이면 target range만으로 닫지 않음 | target range는 보조 evidence, canonical selection 우선 |
 
 ## Chrome Android Uneditable Backspace Fixture
 
@@ -100,6 +138,20 @@ Fixture spec:
 `src/editor/internal/fixtures/input/p0SelectionDeletionClipboardTrace.ts`다. 이들은 atom을
 cursor unit으로 삭제/선택/대체하는 model policy를 닫지만, Chrome Android native bug를
 재현하지는 않는다.
+
+## Android/IME conflict links
+
+아래 링크는 "beforeinput이 있으니 keydown/DOM mutation 문제를 단순히 대체할 수 있다"는
+주장을 반박하는 근거다.
+
+| 링크 | 충돌 유형 | 이 문서의 결론 |
+| --- | --- | --- |
+| CKEditor #3131: https://github.com/ckeditor/ckeditor5/issues/3131 | Android Backspace에서 `keydown`이 먼저 DOM을 바꾸는 handler와 `beforeinput deleteContentBackward` fallback이 충돌할 수 있고 event order가 일정하지 않다. | keydown과 beforeinput을 동시에 mutation authority로 쓰지 않는다. |
+| ProseMirror Android write-up: https://discuss.prosemirror.net/t/contenteditable-on-android-is-the-absolute-worst/3810 | Android는 많은 입력을 composition처럼 처리하고, Backspace/Delete를 `beforeinput inputType`으로 추정해도 cancel/fallback이 필요하다. | `inputType`은 intent hint이고 effect detector/reconcile이 필요하다. |
+| ProseMirror #903: https://github.com/ProseMirror/prosemirror/issues/903 | mobile inline node Backspace에서 `deleteContentBackward` beforeinput이 보이지만 inline atom delete가 깨질 수 있다. | atom boundary deletion은 canonical command로 닫고 real-device trace는 별도 evidence다. |
+| Lexical #1965: https://github.com/facebook/lexical/issues/1965 | Android Chrome에서 text를 가진 decorator node Backspace가 keyboard dismissal/삭제 실패로 이어진다. | contenteditable=false/decorator/atom boundary는 browser DOM 결과를 신뢰하지 않는다. |
+| W3C input-events #115: https://github.com/w3c/input-events/issues/115 | composition commit과 `insertCompositionText` cancelability/`insertFromComposition` 구분이 Level/browser별로 흔들렸다. | IME commit은 recorded trace와 explicit composition state로만 expected를 고정한다. |
+| ProseMirror beforeinput delete gap: https://discuss.prosemirror.net/t/beforeinput-not-being-triggered-on-delete-events-at-start-and-end-of-lines/5181 | line start/end delete에서 beforeinput이 누락될 수 있다는 field report다. | missing beforeinput은 `input`/flush/reset fallback이 필요하다. |
 
 ## 우선순위
 
@@ -130,9 +182,10 @@ cursor unit으로 삭제/선택/대체하는 model policy를 닫지만, Chrome A
 | --- | --- | --- |
 | `beforeinput` primary truth 금지 | 확정 | ProseMirror-view 최소 의존 전략, MDN non-cancelable/missing 경고, current adapter tests |
 | `inputType` intent classifier | 확정 | W3C Input Events table, current `translateEditorInput` mapping |
+| InputType 처리 정책표 | 확정 정책 | Input Events Level 2 cancelability/target range table과 current adapter command mapping을 연결한다 |
 | transfer/history beforeinput 처리 | 확정 | `contentEditableBeforeInputFromEvent`, `BlockEditor.test.tsx`, clipboard/history tests |
 | active text leaf native buffer | 확정 | `docs/editor-contenteditable-buffer-audit.md`, `contentEditableViewEngine.test.ts` |
+| Android/IME conflict links | 조사 근거 | CKEditor, ProseMirror, Lexical, W3C issue가 keydown/beforeinput/composition 충돌을 각각 보여준다 |
 | browser support matrix | 부분근거 | MDN BCD availability는 feature 존재만 말하고 event order/cancelability correctness를 닫지 않는다 |
 | Chrome Android uneditable Backspace | fixture spec 확정 / 실행 미정 | ProseMirror-view source로 bug class는 확인했지만 real device trace는 아직 없다 |
 | DOMObserver fallback | 보류 | current code는 reset/flush/read path로 복구한다. MutationObserver 기반 authority는 아직 설계하지 않는다 |
-
