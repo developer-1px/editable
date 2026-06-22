@@ -487,6 +487,9 @@ export function useBlockEditorController({
       if (event.button !== 0) {
         return;
       }
+      if (isTouchPointer(event)) {
+        return;
+      }
 
       const selectedAtomPath = selectableAtomPathFromEventTarget(event.target);
       if (selectedAtomPath !== null) {
@@ -545,11 +548,15 @@ export function useBlockEditorController({
                 )
               : selectionFromCursorPoint(normalized);
       document.selection?.restore(selectionAfter);
-      pointerDragRef.current =
-        event.shiftKey || event.detail >= 2
-          ? null
-          : { pointerId: event.pointerId, anchor: normalized };
-      capturePointer(event.currentTarget, event.pointerId);
+      if (!event.shiftKey && event.detail < 2) {
+        pointerDragRef.current = {
+          pointerId: event.pointerId,
+          anchor: normalized,
+        };
+        capturePointer(event.currentTarget, event.pointerId);
+      } else {
+        pointerDragRef.current = null;
+      }
       focusEditor();
       setContentEditableSelection(
         event.currentTarget,
@@ -571,6 +578,10 @@ export function useBlockEditorController({
 
   const handlePointerMove = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
+      if (isTouchPointer(event)) {
+        return;
+      }
+
       const drag = pointerDragRef.current;
       if (drag === null || drag.pointerId !== event.pointerId) {
         return;
@@ -597,16 +608,16 @@ export function useBlockEditorController({
   const handlePointerUp = useCallback((event: PointerEvent<HTMLDivElement>) => {
     if (pointerDragRef.current?.pointerId === event.pointerId) {
       pointerDragRef.current = null;
+      releasePointer(event.currentTarget, event.pointerId);
     }
-    releasePointer(event.currentTarget, event.pointerId);
   }, []);
 
   const handlePointerCancel = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
       if (pointerDragRef.current?.pointerId === event.pointerId) {
         pointerDragRef.current = null;
+        releasePointer(event.currentTarget, event.pointerId);
       }
-      releasePointer(event.currentTarget, event.pointerId);
     },
     [],
   );
@@ -1471,6 +1482,10 @@ function releasePointer(element: HTMLElement, pointerId: number) {
   }
 
   element.releasePointerCapture(pointerId);
+}
+
+function isTouchPointer(event: PointerEvent<HTMLElement>) {
+  return event.pointerType === "touch";
 }
 
 function isPlainEnterKeyDown(event: KeyboardEvent<HTMLDivElement>): boolean {

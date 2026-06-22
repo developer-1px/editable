@@ -28,8 +28,8 @@ mobile touch selection은 desktop mouse drag selection과 같은 owner가 아니
 
 | 경로 | 현재 동작 | 판정 |
 | --- | --- | --- |
-| `useBlockEditorController.handlePointerDown` | primary `button === 0`이면 pointerType과 무관하게 atom/text hit를 처리하고 `preventDefault`, pointer capture, focus, native caret restore를 실행한다. | Desktop mouse adapter로는 확정. Touch long press/scroll owner로는 drift 가능성이 있다. |
-| `useBlockEditorController.handlePointerMove` | 같은 pointer id의 move를 drag range selection으로 만들고 `preventDefault`한다. | Mouse drag selection은 확정. Touch scroll과 selection handle drag에는 위험하다. |
+| `useBlockEditorController.handlePointerDown` | primary `button === 0`이어도 `pointerType === "touch"`는 editor-owned atom/text hit, `preventDefault`, pointer capture를 시작하지 않는다. Mouse primary down만 desktop adapter를 탄다. | Mouse adapter와 touch browser-owner path가 분리됐다. |
+| `useBlockEditorController.handlePointerMove` | mouse-owned pointer id의 move만 drag range selection으로 만들고 `preventDefault`한다. Touch move는 browser owner로 둔다. | Mouse drag selection은 유지하고 touch scroll/handle drag over-capture를 제거했다. |
 | `selectionchange` listener | editor 내부 native range를 읽어 overlay visibility와 collapsed preview를 갱신한다. | Native touch range를 관찰할 수 있는 bridge는 있다. |
 | `selectionForInput` / observed command selection | visible native non-collapsed range가 있으면 input/copy/cut/paste command source로 사용한다. | Long press range는 command 시점에 반영하는 방향이 맞다. |
 | debug recorder | pointer id/type, mouse/pointer move, selection summary를 기록한다. | Touch handle drag는 pointer event를 안 줄 수 있으므로 `selectionchange`/contextmenu 중심 trace가 추가로 필요하다. |
@@ -97,8 +97,8 @@ mobile touch selection은 desktop mouse drag selection과 같은 owner가 아니
 
 | drift | 영향 | 처리 |
 | --- | --- | --- |
-| touch pointerdown에서 immediate `preventDefault` | long press native selection, context menu, scroll 시작을 막을 수 있다. | 별도 구현 이슈로 분리한다. |
-| touch pointermove를 mouse drag selection처럼 처리 | touch scroll이나 selection handle drag가 custom range selection으로 오인될 수 있다. | pointerType/scroll threshold/selectionchange defer 정책이 필요하다. |
+| touch pointerdown에서 immediate `preventDefault` | long press native selection, context menu, scroll 시작을 막을 수 있었다. | `#69`에서 touch pointerdown을 browser-owned path로 분리했다. |
+| touch pointermove를 mouse drag selection처럼 처리 | touch scroll이나 selection handle drag가 custom range selection으로 오인될 수 있었다. | `#69`에서 touch pointermove가 model range selection을 만들지 않도록 분리했다. |
 | touch/contextmenu event가 debug recorder 핵심 trace에 없음 | native menu와 long press evidence가 부족할 수 있다. | 실기기 trace gate에서 recorder 필드를 확장한다. |
 | 실기기 iOS/Android trace 부재 | 완료 기준의 첫 항목을 자동 검증으로 대체할 수 없다. | 별도 manual/device trace 이슈로 분리한다. |
 
@@ -109,7 +109,7 @@ mobile touch selection은 desktop mouse drag selection과 같은 owner가 아니
 | desktop pointer selection adapter | 실행 테스트로 확정 | `docs/editor-pointer-selection-audit.md`, `BlockEditor.test.tsx` |
 | native range command source | 실행 테스트로 확정 | `docs/editor-native-selection-bridge-audit.md`, copy/cut/paste/native range tests |
 | mobile touch long press/handle policy | 외부 근거 기반 정책 | Lexical PRs, ProseMirror Android write-up |
-| touch scroll vs selection drag | 외부 근거 기반 정책 / local 구현 drift | Lexical #7309, current pointermove code |
+| touch scroll vs selection drag | local branch 분기 테스트로 over-capture 제거 확인 / 실제 scroll은 실기기 미검증 | Lexical #7309, `BlockEditor.test.tsx` touch pointer branch |
 | toolbar/popup/native menu conflict | 정책 확정 / 실기기 미검증 | current native range visibility/toolbar flush docs, mobile menu trace 부재 |
 | iOS Safari / Android Chrome trace | 미완료 | 로컬에는 실제 device trace가 없다 |
 
@@ -125,12 +125,11 @@ mobile touch selection은 desktop mouse drag selection과 같은 owner가 아니
 
 ## 결론
 
-현재 editor의 desktop pointer selection adapter는 확정됐지만, mobile touch selection은
-아직 확정되지 않았다. 정석은 touch long press/handle drag를 browser native owner로 두고,
+현재 editor의 desktop pointer selection adapter는 확정됐고, runtime pointer branch는
+touch down/move를 browser owner로 두도록 분리됐다. 정석은 touch long press/handle drag를 browser native owner로 두고,
 `selectionchange`로 native range를 관찰한 뒤 command 시점에만 canonical command source로
 사용하는 것이다. Touch scroll은 selection intent가 아니므로 `pointermove`만으로 custom
 range를 만들면 안 된다.
 
-남은 일은 두 가지다. 첫째, touch pointer over-capture를 제거하는 runtime 구현이다.
-둘째, iOS Safari와 Android Chrome 실기기 trace를 수집해 long press, handle drag,
+남은 일은 iOS Safari와 Android Chrome 실기기 trace를 수집해 long press, handle drag,
 native menu, scroll, atom adjacent selection을 증거로 닫는 것이다.
