@@ -728,6 +728,30 @@ describe("BlockEditor", () => {
     expect(document.body.querySelector(".selection-overlay")).toBe(null);
   });
 
+  it("does not create hidden selection classes across native range and focus transitions", async () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    const firstText = editor.querySelector(
+      '[data-path="/root/children/0/children/0/text"]',
+    )?.firstChild;
+    if (!(firstText instanceof Text)) {
+      throw new Error("Fixture failed to render first text.");
+    }
+
+    setDOMRangeSelection(firstText, 0, firstText, 5);
+    fireEvent(document, new Event("selectionchange"));
+
+    expect(hasHiddenSelectionClass(editor)).toBe(false);
+
+    fireEvent.blur(editor);
+
+    expect(hasHiddenSelectionClass(editor)).toBe(false);
+    expect(document.body.querySelector(".selection-overlay")).toBe(null);
+  });
+
   it("replaces a native DOM range selection when text is typed", async () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
@@ -2407,6 +2431,15 @@ function setDOMRangeSelection(
   range.setEnd(focusNode, focusOffset);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function hasHiddenSelectionClass(root: Element) {
+  const hiddenSelectionSelector =
+    ".ProseMirror-hideselection, .editable-hideselection, .editable-hidden-selection";
+  return (
+    root.matches(hiddenSelectionSelector) ||
+    root.querySelector(hiddenSelectionSelector) !== null
+  );
 }
 
 function createClipboardData(): DataTransfer {
