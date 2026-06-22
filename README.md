@@ -163,6 +163,8 @@ The intended ownership rule is:
   selection bridge audit
 - `docs/editor-selection-visibility-lifecycle-audit.md`: native selection and
   custom overlay visibility lifecycle audit
+- `docs/editor-dom-position-equivalence-audit.md`: DOM position equivalence,
+  bias, and contenteditable=false boundary audit
 - `docs/editor-shadow-selection-fallback-audit.md`: ShadowRoot selection and
   Safari fallback policy audit
 - `docs/editor-scroll-focus-policy-audit.md`: scroll reveal and focus

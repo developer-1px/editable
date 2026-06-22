@@ -104,6 +104,34 @@ function installShadowSelection(shadowRoot: ShadowRoot) {
   return selection;
 }
 
+function setupInlineAtomTextRoot() {
+  const root = document.createElement("div");
+  root.innerHTML = [
+    '<p class="text-block" data-path="/root/children/0">',
+    `<span class="text-run" data-path="${firstTextPath}">Alpha</span>`,
+    '<span class="mention-chip" contenteditable="false" data-path="/root/children/0/children/1">@Ada</span>',
+    '<span class="text-run" data-path="/root/children/0/children/2/text">Beta</span>',
+    "</p>",
+  ].join("");
+  document.body.append(root);
+
+  const block = root.querySelector('[data-path="/root/children/0"]');
+  const mention = root.querySelector(
+    '[data-path="/root/children/0/children/1"]',
+  );
+  if (!(block instanceof HTMLElement) || !(mention instanceof HTMLElement)) {
+    throw new Error("Fixture failed to render inline atom root.");
+  }
+
+  return {
+    root,
+    block,
+    first: textRun(root, firstTextPath),
+    mention,
+    second: textRun(root, "/root/children/0/children/2/text"),
+  };
+}
+
 function textRun(root: ParentNode, path: string): HTMLElement {
   const element = root.querySelector(`[data-path="${path}"]`);
   if (!(element instanceof HTMLElement)) {
@@ -141,6 +169,14 @@ function setDOMRangeSelection(
   const range = document.createRange();
   range.setStart(anchorText, anchorOffset);
   range.setEnd(focusText, focusOffset);
+  document.getSelection()?.removeAllRanges();
+  document.getSelection()?.addRange(range);
+}
+
+function setDOMBoundarySelection(node: Node, offset: number) {
+  const range = document.createRange();
+  range.setStart(node, offset);
+  range.collapse(true);
   document.getSelection()?.removeAllRanges();
   document.getSelection()?.addRange(range);
 }
@@ -423,6 +459,103 @@ describe("createContentEditableViewEngine", () => {
       anchor: { path: firstTextPath, offset: 1 },
       focus: { path: firstTextPath, offset: 4 },
     });
+  });
+
+  it("maps equivalent DOM boundary positions to stable text points without crossing atoms", () => {
+    const afterMentionTextPath = "/root/children/0/children/2/text";
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [
+          { type: "text", text: "Alpha" },
+          { type: "mention", id: "user-ada", label: "Ada" },
+          { type: "text", text: "Beta" },
+        ],
+      },
+    ]);
+    const { root, block, first, second } = setupInlineAtomTextRoot();
+    const firstText = first.firstChild;
+    if (!(firstText instanceof Text)) {
+      throw new Error("Text run must contain a text node.");
+    }
+
+    const cases: Array<{
+      label: string;
+      node: Node;
+      offset: number;
+      expected: { path: string; offset: number };
+    }> = [
+      {
+        label: "text node end",
+        node: firstText,
+        offset: 5,
+        expected: { path: firstTextPath, offset: 5 },
+      },
+      {
+        label: "text-run child boundary end",
+        node: first,
+        offset: 1,
+        expected: { path: firstTextPath, offset: 5 },
+      },
+      {
+        label: "block child boundary before first text",
+        node: block,
+        offset: 0,
+        expected: { path: firstTextPath, offset: 0 },
+      },
+      {
+        label: "block child boundary before atom",
+        node: block,
+        offset: 1,
+        expected: { path: firstTextPath, offset: 5 },
+      },
+      {
+        label: "block child boundary after atom",
+        node: block,
+        offset: 2,
+        expected: { path: afterMentionTextPath, offset: 0 },
+      },
+      {
+        label: "block child boundary after last text",
+        node: block,
+        offset: 3,
+        expected: { path: afterMentionTextPath, offset: 4 },
+      },
+    ];
+
+    for (const current of cases) {
+      setDOMBoundarySelection(current.node, current.offset);
+
+      expect(readContentEditableSelection(root, note)?.focus).toMatchObject(
+        current.expected,
+      );
+    }
+
+    setDOMBoundarySelection(second, 0);
+    expect(readContentEditableSelection(root, note)?.focus).toMatchObject({
+      path: afterMentionTextPath,
+      offset: 0,
+    });
+  });
+
+  it("does not map DOM positions inside contenteditable false atoms as text points", () => {
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [
+          { type: "text", text: "Alpha" },
+          { type: "mention", id: "user-ada", label: "Ada" },
+          { type: "text", text: "Beta" },
+        ],
+      },
+    ]);
+    const { root, mention } = setupInlineAtomTextRoot();
+
+    setDOMBoundarySelection(mention, 0);
+
+    expect(readContentEditableSelection(root, note)).toBe(null);
   });
 
   it("reads and writes selection through ShadowRoot selection when mounted in shadow DOM", () => {

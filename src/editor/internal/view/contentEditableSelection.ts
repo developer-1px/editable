@@ -255,7 +255,7 @@ function textPointFromDOMPosition(
 
   const textRun = closestTextRun(node);
   if (textRun === null) {
-    return null;
+    return textPointFromElementBoundary(root, node, offset);
   }
 
   const path = textRun.getAttribute("data-path");
@@ -267,6 +267,68 @@ function textPointFromDOMPosition(
     path,
     offset: textOffsetInElement(textRun, node, offset),
   };
+}
+
+function textPointFromElementBoundary(
+  root: HTMLElement,
+  node: Node,
+  offset: number,
+): ContentEditableTextPoint | null {
+  if (!(node instanceof Element) || isContentEditableFalse(node)) {
+    return null;
+  }
+
+  const boundaryOffset = clamp(offset, 0, node.childNodes.length);
+  const previous = node.childNodes[boundaryOffset - 1] ?? null;
+  const next = node.childNodes[boundaryOffset] ?? null;
+
+  return (
+    textPointAtBoundarySide(root, previous, "end") ??
+    textPointAtBoundarySide(root, next, "start")
+  );
+}
+
+function textPointAtBoundarySide(
+  root: HTMLElement,
+  node: ChildNode | null,
+  side: "end" | "start",
+): ContentEditableTextPoint | null {
+  if (node === null || !root.contains(node) || isContentEditableFalse(node)) {
+    return null;
+  }
+
+  const textRun = closestTextRun(node) ?? textRunInside(node, side);
+  if (textRun === null) {
+    return null;
+  }
+
+  const path = textRun.getAttribute("data-path");
+  if (path === null) {
+    return null;
+  }
+
+  return {
+    path,
+    offset: side === "end" ? (textRun.textContent?.length ?? 0) : 0,
+  };
+}
+
+function textRunInside(node: ChildNode, side: "end" | "start"): Element | null {
+  if (!(node instanceof Element)) {
+    return null;
+  }
+
+  const textRuns = Array.from(node.querySelectorAll(".text-run[data-path]"));
+  return side === "end"
+    ? (textRuns[textRuns.length - 1] ?? null)
+    : (textRuns[0] ?? null);
+}
+
+function isContentEditableFalse(node: Node): boolean {
+  return (
+    node instanceof Element &&
+    node.closest('[contenteditable="false"]') !== null
+  );
 }
 
 function snapContentEditableTextPoint(
