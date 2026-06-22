@@ -13,7 +13,9 @@ editor focus가 page scroll을 튀게 만드는 문제를 분리한다.
 - focus side effect 보존은 `focusElementPreservingScroll`이 담당한다.
 - focus helper는 editor 주변 ancestor scroll positions를 저장하고, focus 후 복원한다.
 - scroll reveal은 current mounted DOM target에 `scrollIntoView({ block: "nearest", inline:
-  "nearest" })`를 호출한다.
+  "nearest" })`를 호출한다. `visualViewport`가 있으면 caret/target rect bottom이
+  `visualViewport.offsetTop + visualViewport.height` 아래로 내려간 경우 page scroll을
+  추가 보정한다.
 - ProseMirror 수준의 full scroll parent stack, fixed/sticky stop, transform scale 보정,
   mobile virtual keyboard policy는 아직 current contract가 아니다.
 
@@ -45,7 +47,7 @@ editor focus가 page scroll을 튀게 만드는 문제를 분리한다.
 | nested scroll container | focus preserve는 실행 fixture 있음 | helper test가 nested parent scrollTop/scrollLeft를 focus 후 복원한다. |
 | fixed/sticky/absolute parent | 미정 | full scrollRect stack 계산을 current code로 닫지 않는다. |
 | transform/zoom scale | 미정 | geometry adapter와 browser QA 영역이다. |
-| mobile viewport/virtual keyboard | 미정 | focus preserve와 caret reveal만으로 keyboard occlusion을 보장하지 않는다. |
+| mobile viewport/virtual keyboard | 부분 확정 | `visualViewport`가 있으면 focused selection rect bottom 기준으로 page scroll을 보정한다. 실기기 키보드 trace는 별도다. |
 
 ## Focus preserve와 caret visibility 분리
 
@@ -67,7 +69,7 @@ scroll reveal이 발생한다.
 | unsupported focus options | 실행 테스트 있음 | `focus({ preventScroll: true })`가 throw하면 plain focus로 fallback한다. |
 | selection scroll reveal | 실행 테스트 있음 | focused selection target에 `scrollIntoView({ block: "nearest", inline: "nearest" })`를 호출한다. |
 | route autofocus | React 테스트 있음 | 첫 render에서 editor가 focus되고 caret overlay가 보인다. |
-| mobile keyboard occlusion | future/browser | 실제 viewport resize/visualViewport/keyboard inset fixture가 필요하다. |
+| mobile keyboard occlusion | 실행 테스트 있음 / 실기기 미검증 | `visualViewport` stub으로 occluded focused selection rect 보정을 검증한다. 실제 keyboard resize trace는 별도다. |
 | fixed/sticky scroll stack | future/browser | real layout engine과 `getComputedStyle`/rect fixture가 필요하다. |
 
 ## 증거 강도
@@ -78,7 +80,7 @@ scroll reveal이 발생한다.
 | autofocus/focus restore helper 사용 | source와 React tests로 확인 | `useBlockEditorController`가 autofocus, toolbar command focus, atom pointer focus에서 helper를 쓴다. | 모든 future focus caller를 막으려면 lint/AST guard가 더 강하다. |
 | selection scroll reveal | 실행 테스트로 확정 | `contentEditableViewEngine.test.ts`와 `BlockEditor.test.tsx`가 `scrollIntoView(nearest)` 호출을 고정한다. | nested/fixed/sticky scrollRect 계산은 아니다. |
 | desktop nested scroll container | 부분 확정 | focus restore fixture는 nested scroll container를 닫는다. | caret reveal의 nested parent stack은 browser native `scrollIntoView`에 맡긴다. |
-| mobile viewport/keyboard | 미정 | 현재 visualViewport/keyboard fixture가 없다. | #17 범위에서 별도 device/browser trace가 필요하다. |
+| mobile viewport/keyboard | 부분 확정 | visualViewport stub fixture가 focused selection rect bottom 보정을 고정한다. | 실제 iOS/Android virtual keyboard resize와 scroll anchoring은 별도 device trace가 필요하다. |
 | transform/zoom/fixed/sticky | 미정 | current geometry docs/tests가 일부 layout rect를 다루지만 scroll parent stack policy는 아니다. | #24와 함께 browser layout fixture가 필요하다. |
 
 ## /doubt 판정
@@ -89,12 +91,14 @@ scroll reveal이 발생한다.
 | plain `focus()` in editor handlers | 제거 확정 | page/container scroll jump를 만들 수 있다. |
 | `scrollIntoView(nearest)` reveal | 유지 확정 | current mounted DOM에서 selection target visibility를 browser primitive에 맡기는 작은 contract다. |
 | ProseMirror full `scrollRectIntoView` clone | 보류 | fixed/sticky/absolute/transform/mobile layout matrix 없이 구현하면 추측성 코드가 된다. |
-| mobile keyboard compensation | 보류 | visualViewport, safe-area, keyboard inset trace가 필요하다. |
+| mobile keyboard compensation | 부분 구현 | visualViewport bottom 아래 caret/target rect만 page scroll로 보정한다. safe-area, keyboard inset, scroll anchoring trace는 별도다. |
 | timed focus reselection delay | 보류 | 현재 React/native selection tests가 요구하지 않는다. 실제 focus race trace가 있을 때 추가한다. |
 
 ## 현재 결론
 
 현재 정석은 focus와 reveal을 분리하는 것이다. Focus는 scroll을 보존하고, reveal은
-selection target을 보이게 한다. Full scroll parent stack 계산, mobile keyboard 보정,
-fixed/sticky/transform layout 대응은 실제 browser trace와 제품 지원 matrix가 생길 때
-별도 adapter로 확장한다.
+selection target을 보이게 한다. Current reveal은 native `scrollIntoView(nearest)`를
+유지하면서 `visualViewport`가 있을 때 keyboard occlusion으로 보이는 viewport 아래에
+있는 focused selection rect만 page scroll로 보정한다. Full scroll parent stack 계산,
+safe-area/keyboard inset, fixed/sticky/transform layout 대응은 실제 browser trace와
+제품 지원 matrix가 생길 때 별도 adapter로 확장한다.

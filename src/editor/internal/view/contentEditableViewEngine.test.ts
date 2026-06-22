@@ -197,6 +197,67 @@ function setDOMBoundarySelection(node: Node, offset: number) {
   document.getSelection()?.addRange(range);
 }
 
+function installVisualViewport(
+  viewport: Pick<VisualViewport, "height" | "offsetTop" | "width"> | undefined,
+) {
+  const descriptor = Object.getOwnPropertyDescriptor(window, "visualViewport");
+  Object.defineProperty(window, "visualViewport", {
+    configurable: true,
+    value:
+      viewport === undefined
+        ? undefined
+        : {
+            offsetLeft: 0,
+            pageLeft: 0,
+            pageTop: viewport.offsetTop,
+            scale: 1,
+            ...viewport,
+          },
+  });
+
+  return () => {
+    if (descriptor === undefined) {
+      Reflect.deleteProperty(window, "visualViewport");
+      return;
+    }
+
+    Object.defineProperty(window, "visualViewport", descriptor);
+  };
+}
+
+function installWindowScrollBy(scrollBy: typeof window.scrollBy) {
+  const descriptor = Object.getOwnPropertyDescriptor(window, "scrollBy");
+  Object.defineProperty(window, "scrollBy", {
+    configurable: true,
+    value: scrollBy,
+  });
+
+  return () => {
+    if (descriptor === undefined) {
+      Reflect.deleteProperty(window, "scrollBy");
+      return;
+    }
+
+    Object.defineProperty(window, "scrollBy", descriptor);
+  };
+}
+
+function rect(x: number, y: number, width: number, height: number): DOMRect {
+  return {
+    bottom: y + height,
+    height,
+    left: x,
+    right: x + width,
+    top: y,
+    width,
+    x,
+    y,
+    toJSON() {
+      return { x, y, width, height };
+    },
+  } as DOMRect;
+}
+
 function beforeInputTransferEvent(
   inputType: string,
   data: Record<string, string>,
@@ -1554,6 +1615,84 @@ describe("createContentEditableViewEngine", () => {
       block: "nearest",
       inline: "nearest",
     });
+  });
+
+  it("adjusts page scroll when visualViewport occludes the focused selection", () => {
+    const restoreViewport = installVisualViewport({
+      height: 500,
+      offsetTop: 0,
+      width: 360,
+    });
+    const scrollBy = vi.fn();
+    const restoreScrollBy = installWindowScrollBy(scrollBy);
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "Alpha" }],
+      },
+      {
+        id: "block-2",
+        type: "paragraph",
+        children: [{ type: "text", text: "Beta" }],
+      },
+    ]);
+    const { root, second } = setupTextRoot();
+
+    try {
+      Object.defineProperty(second, "getBoundingClientRect", {
+        configurable: true,
+        value: () => rect(10, 480, 100, 40),
+      });
+
+      scrollContentEditableSelectionIntoView(
+        root,
+        note,
+        selectionFromCursorPoint({ path: secondTextPath, offset: 2 }),
+      );
+    } finally {
+      restoreScrollBy();
+      restoreViewport();
+    }
+
+    expect(scrollBy).toHaveBeenCalledWith({ top: 20 });
+  });
+
+  it("keeps the desktop reveal path when visualViewport is unavailable", () => {
+    const restoreViewport = installVisualViewport(undefined);
+    const scrollBy = vi.fn();
+    const restoreScrollBy = installWindowScrollBy(scrollBy);
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "Alpha" }],
+      },
+      {
+        id: "block-2",
+        type: "paragraph",
+        children: [{ type: "text", text: "Beta" }],
+      },
+    ]);
+    const { root, second } = setupTextRoot();
+
+    try {
+      Object.defineProperty(second, "getBoundingClientRect", {
+        configurable: true,
+        value: () => rect(10, 480, 100, 40),
+      });
+
+      scrollContentEditableSelectionIntoView(
+        root,
+        note,
+        selectionFromCursorPoint({ path: secondTextPath, offset: 2 }),
+      );
+    } finally {
+      restoreScrollBy();
+      restoreViewport();
+    }
+
+    expect(scrollBy).not.toHaveBeenCalled();
   });
 
   it("places the native caret inside an empty text run", () => {

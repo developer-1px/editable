@@ -96,6 +96,33 @@ export type SerializedStateSummary = {
     text: string | null;
   } | null;
   selection: string | null;
+  viewport: SerializedViewportSummary | null;
+};
+
+export type SerializedRectSummary = {
+  bottom: number;
+  height: number;
+  left: number;
+  right: number;
+  top: number;
+  width: number;
+};
+
+export type SerializedViewportSummary = {
+  layout: {
+    height: number;
+    scrollX: number;
+    scrollY: number;
+    width: number;
+  };
+  selectionRect: (SerializedRectSummary & { path: string }) | null;
+  visual: {
+    height: number;
+    offsetLeft: number;
+    offsetTop: number;
+    scale: number;
+    width: number;
+  } | null;
 };
 
 export type ConsoleMethod = "error" | "warn";

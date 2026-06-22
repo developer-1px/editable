@@ -220,11 +220,17 @@ function scrollContentEditablePointIntoView(
   );
   const targetPath = contentEditableTextPoint?.path ?? point.path;
   const element = findElementByDataPath(root, targetPath);
-  if (element === null || typeof element.scrollIntoView !== "function") {
+  if (element === null) {
     return;
   }
 
-  element.scrollIntoView({ block: "nearest", inline: "nearest" });
+  if (typeof element.scrollIntoView === "function") {
+    element.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  revealRectInVisualViewport(
+    root.ownerDocument.defaultView,
+    rectForContentEditablePoint(element, contentEditableTextPoint ?? point),
+  );
 }
 
 function selectionSnapshotPoint(selection: SelectionSnap): CursorPoint | null {
@@ -459,6 +465,55 @@ function textPositionForOffset(
   const emptyTextNode = element.ownerDocument.createTextNode("");
   element.append(emptyTextNode);
   return { node: emptyTextNode, offset: 0 };
+}
+
+function rectForContentEditablePoint(
+  element: Element,
+  point: CursorPoint | ContentEditableTextPoint,
+): DOMRect | null {
+  if (point.offset === undefined) {
+    return element.getBoundingClientRect();
+  }
+
+  const position = textPositionForOffset(element, point.offset);
+  if (position === null) {
+    return element.getBoundingClientRect();
+  }
+
+  const range = element.ownerDocument.createRange();
+  try {
+    range.setStart(position.node, position.offset);
+    range.collapse(true);
+    const rect = range.getBoundingClientRect();
+    if (rect.width !== 0 || rect.height !== 0) {
+      return rect;
+    }
+  } catch {
+    // Fall back to the mounted text run rect when jsdom/browser cannot provide a caret rect.
+  } finally {
+    range.detach();
+  }
+
+  return element.getBoundingClientRect();
+}
+
+function revealRectInVisualViewport(view: Window | null, rect: DOMRect | null) {
+  if (view === null || rect === null) {
+    return;
+  }
+
+  const visualViewport = view.visualViewport;
+  if (
+    visualViewport == null ||
+    typeof view.scrollBy !== "function" ||
+    rect.bottom <= visualViewport.offsetTop + visualViewport.height
+  ) {
+    return;
+  }
+
+  view.scrollBy({
+    top: rect.bottom - (visualViewport.offsetTop + visualViewport.height),
+  });
 }
 
 function textOffsetInElement(

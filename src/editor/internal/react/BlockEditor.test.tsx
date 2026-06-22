@@ -354,7 +354,7 @@ describe("BlockEditor", () => {
     ).toBeDefined();
   });
 
-  it("keeps only the five most recent raw debug reports", async () => {
+  it("keeps only the five most recent raw debug reports", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -384,9 +384,9 @@ describe("BlockEditor", () => {
         metaKey: true,
         shiftKey: true,
       });
-      await waitFor(() => expect(writeText).toHaveBeenCalledTimes(index + 1));
     }
 
+    expect(writeText).toHaveBeenCalledTimes(6);
     expect(
       (
         window as Window & {

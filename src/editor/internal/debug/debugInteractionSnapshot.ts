@@ -6,6 +6,7 @@ import { type NoteDocument, readBlockText } from "../model/noteDocument";
 import {
   collapseWhitespace,
   cssIdentifier,
+  roundMs,
   safeStringify,
   stripTags,
   truncate,
@@ -14,6 +15,7 @@ import type {
   LatestSnapshot,
   SerializedStateSummary,
   SerializedTarget,
+  SerializedViewportSummary,
 } from "./debugInteractionTypes";
 import {
   formatDocumentSurfaceIssue,
@@ -45,6 +47,7 @@ export function readSnapshot({
       document: summarizeDocument(note, rootElement),
       dom: summarizeDom(dom),
       selection: summarizeSelection(selection),
+      viewport: summarizeViewport(rootElement, selection),
     },
   };
 }
@@ -247,6 +250,89 @@ function selectionPointsEqual(left: SelectionPoint, right: SelectionPoint) {
     left.offset === right.offset &&
     left.edge === right.edge
   );
+}
+
+function summarizeViewport(
+  rootElement: HTMLElement | null,
+  selection: SelectionSnap | undefined,
+): SerializedStateSummary["viewport"] {
+  const view = rootElement?.ownerDocument.defaultView ?? null;
+  if (view === null) {
+    return null;
+  }
+
+  const visualViewport = view.visualViewport;
+
+  return {
+    layout: {
+      height: finiteNumber(view.innerHeight),
+      scrollX: finiteNumber(view.scrollX),
+      scrollY: finiteNumber(view.scrollY),
+      width: finiteNumber(view.innerWidth),
+    },
+    selectionRect: summarizeSelectionRect(rootElement, selection),
+    visual:
+      visualViewport == null
+        ? null
+        : {
+            height: finiteNumber(visualViewport.height),
+            offsetLeft: finiteNumber(visualViewport.offsetLeft),
+            offsetTop: finiteNumber(visualViewport.offsetTop),
+            scale: finiteNumber(visualViewport.scale),
+            width: finiteNumber(visualViewport.width),
+          },
+  };
+}
+
+function summarizeSelectionRect(
+  rootElement: HTMLElement | null,
+  selection: SelectionSnap | undefined,
+): SerializedViewportSummary["selectionRect"] {
+  const path = selectionFocusPath(selection);
+  if (rootElement === null || path === null) {
+    return null;
+  }
+
+  const element = findElementByDataPath(rootElement, path);
+  if (element === null) {
+    return null;
+  }
+
+  const rect = element.getBoundingClientRect();
+  return {
+    bottom: roundMs(rect.bottom),
+    height: roundMs(rect.height),
+    left: roundMs(rect.left),
+    path,
+    right: roundMs(rect.right),
+    top: roundMs(rect.top),
+    width: roundMs(rect.width),
+  };
+}
+
+function selectionFocusPath(selection: SelectionSnap | undefined) {
+  const focus = selection?.focus;
+  if (focus === undefined || focus === null || typeof focus === "string") {
+    return null;
+  }
+
+  return focus.path;
+}
+
+function findElementByDataPath(rootElement: HTMLElement, path: string) {
+  for (const element of Array.from(
+    rootElement.querySelectorAll("[data-path]"),
+  )) {
+    if (element.getAttribute("data-path") === path) {
+      return element;
+    }
+  }
+
+  return null;
+}
+
+function finiteNumber(value: number) {
+  return Number.isFinite(value) ? roundMs(value) : 0;
 }
 
 function duplicateValues(values: string[]): string[] {
