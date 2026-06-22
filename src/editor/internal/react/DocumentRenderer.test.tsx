@@ -360,6 +360,7 @@ describe("DocumentRenderer", () => {
     expect(html).toContain('contentEditable="false"');
     expect(html).toContain('data-mention-id="user-1"');
     expect(html).toContain("@Ada</span>");
+    expect(html).not.toContain("draggable");
   });
 
   it("renders figures as non-editable block atom nodes with stable data paths", () => {
@@ -377,6 +378,7 @@ describe("DocumentRenderer", () => {
     expect(html).toContain('data-path="/root/children/0"');
     expect(html).toContain('contentEditable="false"');
     expect(html).toContain('<img alt="Image" src="/image.png"/>');
+    expect(html).not.toContain("draggable");
   });
 
   it("renders figures without alt text as decorative images", () => {
