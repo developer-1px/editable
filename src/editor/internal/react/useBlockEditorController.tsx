@@ -72,6 +72,7 @@ import {
 import { createDOMCursorGeometry } from "../view/cursorGeometry";
 import { isHeadlessKeyDown } from "../view/editorKeyboardPolicy";
 import { matchEditorKeymap } from "../view/editorKeymap";
+import { focusElementPreservingScroll } from "../view/focusScroll";
 import { dispatchEditorCommandToDocument } from "./editorCommandBridge";
 
 export type BlockEditorProps = {
@@ -181,8 +182,7 @@ export function useBlockEditorController({
     }
 
     didAutofocusRef.current = true;
-    root.focus({ preventScroll: true });
-    setEditorFocused(root.ownerDocument.activeElement === root);
+    setEditorFocused(focusElementPreservingScroll(root));
 
     const point =
       selectionSnapshotPoint(document.selection?.snapshot()) ??
@@ -301,10 +301,7 @@ export function useBlockEditorController({
 
   const focusEditor = useCallback(() => {
     const root = editorSurfaceRef.current;
-    root?.focus();
-    setEditorFocused(
-      root !== null && root.ownerDocument.activeElement === root,
-    );
+    setEditorFocused(focusElementPreservingScroll(root));
     setNativeCursorPreview(readContentEditableCursorPoint(root));
   }, []);
 
@@ -507,11 +504,7 @@ export function useBlockEditorController({
           );
         }
         event.currentTarget.ownerDocument.getSelection()?.removeAllRanges();
-        event.currentTarget.focus();
-        setEditorFocused(
-          event.currentTarget.ownerDocument.activeElement ===
-            event.currentTarget,
-        );
+        setEditorFocused(focusElementPreservingScroll(event.currentTarget));
         setNativeCursorPreview(null);
         return;
       }

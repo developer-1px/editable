@@ -159,6 +159,8 @@ The intended ownership rule is:
   adapter audit
 - `docs/editor-native-selection-bridge-audit.md`: DOM selection to canonical
   selection bridge audit
+- `docs/editor-scroll-focus-policy-audit.md`: scroll reveal and focus
+  preventScroll policy audit
 - `docs/editor-custom-selection-handoff-audit.md`: custom node selection owner
   handoff audit
 - `docs/editor-widget-decoration-lifecycle-audit.md`: widget-like DOM identity,
