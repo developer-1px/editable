@@ -151,6 +151,8 @@ The intended ownership rule is:
   adapter audit
 - `docs/editor-native-selection-bridge-audit.md`: DOM selection to canonical
   selection bridge audit
+- `docs/editor-custom-selection-handoff-audit.md`: custom node selection owner
+  handoff audit
 - `docs/editor-cursor-geometry-audit.md`: cursor geometry adapter audit
 - `docs/editor-model-command-surface-audit.md`: headless model command surface
   audit
