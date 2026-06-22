@@ -24,7 +24,8 @@ recorder report replay compatibility를 증명하지 않는다.
 | internal 위치 | replay helper와 fixture는 `src/editor/internal/testing`, `src/editor/internal/fixtures/ime` 아래에 있고 public/react facade export가 아니다. | `editorTraceReplay.ts`, `koreanHangulBasicTrace.ts`, `koreanHangulEnterConfirmTrace.ts`, `scripts/verify-editor-boundaries.mjs` |
 | trace schema | fixture shape는 `schema: "editable-trace-replay@1"` literal type으로 고정되어 있다. | `editorTraceReplay.ts`, IME fixture files |
 | source inventory | current trace surface는 replay helper, prevented-event audit helper, IME fixture 2개다. Adjacent composition trace는 test 안의 inline fixture로 남아 있다. | `rg --files src/editor/internal/fixtures/ime src/editor/internal/testing`, `BlockEditor.imeTrace.test.tsx` |
-| replay interface | `replayEditorTrace(root, trace)`는 replayed events의 `defaultPrevented`, event 전후 document-view text/selection snapshot, stateChanged 결과 배열을 반환하고, `findReplayedEvent`는 type/inputType으로 그 결과를 찾는다. | `editorTraceReplay.ts`, `BlockEditor.imeTrace.test.tsx` |
+| replay interface | `replayEditorTrace(root, trace)`는 replayed events의 `defaultPrevented`, event 전후 document-view text/selection snapshot, DOM selection snapshot, stateChanged 결과 배열을 반환하고, `findReplayedEvent`는 type/inputType으로 그 결과를 찾는다. | `editorTraceReplay.ts`, `BlockEditor.imeTrace.test.tsx` |
+| replay expectation | event step은 `expect.before`/`expect.after`로 canonical renderer text, path text, selection, DOM selection 기대값을 표현할 수 있다. mismatch는 event index, event name, phase, field를 포함해 실패한다. | `editorTraceReplay.ts`, `BlockEditor.imeTrace.test.tsx` |
 | replay steps | 지원 step은 `event`, `selection`, `text`, `timers`다. selection/text step은 `data-path` text run을 직접 조작하고, event step은 keyboard/composition/input/paste/drop event를 dispatch한다. Pointer, focus/blur, selectionchange replay는 없다. | `editorTraceReplay.ts` |
 | prevented-event audit | prevented editing event는 즉시 state change, deferred command, explicit no-op 중 하나로 설명되어야 한다. Pass-through로 선언된 event가 prevent되면 실패한다. | `preventedEventAudit.ts`, `preventedEventAudit.test.ts`, `BlockEditor.imeTrace.test.tsx` |
 | Korean basic trace | Hangul starter key가 두 번 commit되지 않고 final text와 selection offset이 canonical state로 남는 것을 검증한다. | `koreanHangulBasicTrace.ts`, `BlockEditor.imeTrace.test.tsx` |
@@ -37,8 +38,8 @@ recorder report replay compatibility를 증명하지 않는다.
 
 | 강도 | 해당 항목 | 현재 의미 |
 | --- | --- | --- |
-| test interface 확정 | `EditorTraceReplay` schema, `event`/`selection`/`text`/`timers` step union, `replayEditorTrace` return shape, prevented-event audit helper, fixture 2개 | jsdom React regression test가 배워야 하는 replay interface다. Public editor caller가 배워야 하는 interface는 아니다. |
-| 실행 테스트로 닫힘 | Korean starter key duplicate commit 방지, adjacent composition stale timer 방지, Enter confirmation commit-then-split, final commit `defaultPrevented` assertion, prevented Enter deferred command audit | 현재 regression gate가 직접 잡는 IME trace replay 기준선이다. |
+| test interface 확정 | `EditorTraceReplay` schema, `event`/`selection`/`text`/`timers` step union, event `expect.before`/`expect.after`, `replayEditorTrace` return shape, prevented-event audit helper, fixture 2개 | jsdom React regression test가 배워야 하는 replay interface다. Public editor caller가 배워야 하는 interface는 아니다. |
+| 실행 테스트로 닫힘 | Korean starter key duplicate commit 방지, adjacent composition stale timer 방지, Enter confirmation commit-then-split, final commit `defaultPrevented` assertion, prevented Enter deferred command audit, trace expectation failure message | 현재 regression gate가 직접 잡는 IME trace replay 기준선이다. |
 | engine-level complement | final commit once, no observed DOM text fallback, duplicate final removal, differing final commit, repeated-text preedit, history ignore, retargeted composition | trace replay가 모든 composition logic을 직접 증명하지 않고, lower-level view adapter tests가 보완한다. |
 | boundary verifier로 닫힘 | runtime implementation의 testing/fixture import 금지, test file import 허용, testing helper implementation import 금지, fixture non-testing import 금지 | replay helper와 fixture가 test-only surface로 남아야 한다는 module direction이다. |
 
@@ -68,8 +69,9 @@ recorder report replay compatibility를 증명하지 않는다.
 
 IME trace replay는 빼면 안 되는 내부 회귀 재현 surface다. 확정 범위는
 `editable-trace-replay@1` fixture, `event`/`selection`/`text`/`timers` replay,
-keyboard/composition/input/paste/drop event 재생, event 전후 snapshot, prevented-event
-audit, Korean composition duplicate commit 방지, stale composition end 방지, Enter
-confirmation commit-then-split 처리, test-only boundary다. 반대로 실제 browser/OS IME
-matrix, trace capture/import pipeline, debug recorder 호환성, focus/blur/pointer replay,
-external JSON validation은 아직 제품/운영/QA 결정으로 남긴다.
+keyboard/composition/input/paste/drop event 재생, event 전후 canonical/DOM selection
+snapshot, event expectation 검증, prevented-event audit, Korean composition duplicate
+commit 방지, stale composition end 방지, Enter confirmation commit-then-split 처리,
+test-only boundary다. 반대로 실제 browser/OS IME matrix, trace capture/import
+pipeline, debug recorder 호환성, focus/blur/pointer replay, external JSON validation은
+아직 제품/운영/QA 결정으로 남긴다.

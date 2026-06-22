@@ -100,7 +100,14 @@ function event({
 function state(
   overrides: Partial<ReplayedEditorState> = {},
 ): ReplayedEditorState {
-  return {
+  const base: ReplayedEditorState = {
+    domSelectionAnchorOffset: null,
+    domSelectionAnchorPath: null,
+    domSelectionCollapsed: null,
+    domSelectionFocusOffset: null,
+    domSelectionFocusPath: null,
+    domSelectionText: "",
+    pathText: {},
     selectionAnchorEdge: null,
     selectionAnchorOffset: "1",
     selectionAnchorPath: "/root/children/0/children/0/text",
@@ -113,6 +120,7 @@ function state(
     selectionRangeCount: "1",
     selectionSelectedPointers: "",
     text: "AB",
-    ...overrides,
   };
+
+  return Object.assign(base, overrides);
 }

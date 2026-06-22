@@ -38,6 +38,15 @@ export const koreanHangulEnterConfirmTrace = {
         data: "안",
         isComposing: false,
       },
+      expect: {
+        after: {
+          pathText: {
+            [firstTextPath]: "Plai안n ",
+          },
+          selectionOffset: "5",
+          selectionPath: firstTextPath,
+        },
+      },
     },
     { kind: "timers" },
   ],

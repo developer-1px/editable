@@ -10,6 +10,7 @@ export type EditorTraceStep =
   | {
       kind: "event";
       event: EditorTraceEvent;
+      expect?: EditorTraceExpectation;
     }
   | {
       kind: "selection";
@@ -64,7 +65,25 @@ export type TransferTraceEvent = {
   type: "drop" | "paste";
 };
 
+export type EditorTraceExpectation = {
+  after?: ReplayedEditorStateExpectation;
+  before?: ReplayedEditorStateExpectation;
+};
+
+export type ReplayedEditorStateExpectation = Partial<
+  Omit<ReplayedEditorState, "pathText">
+> & {
+  pathText?: Record<string, string>;
+};
+
 export type ReplayedEditorState = {
+  domSelectionAnchorOffset: string | null;
+  domSelectionAnchorPath: string | null;
+  domSelectionCollapsed: string | null;
+  domSelectionFocusOffset: string | null;
+  domSelectionFocusPath: string | null;
+  domSelectionText: string;
+  pathText: Record<string, string>;
   selectionAnchorEdge: string | null;
   selectionAnchorOffset: string | null;
   selectionAnchorPath: string | null;
@@ -101,6 +120,13 @@ export async function replayEditorTrace(
         const event = createTraceEvent(root, step.event);
         root.dispatchEvent(event);
         const after = readReplayedEditorState(root);
+        assertTraceExpectation({
+          after,
+          before,
+          event: step.event,
+          eventIndex: events.length,
+          expectation: step.expect,
+        });
         events.push({
           after,
           before,
@@ -219,8 +245,11 @@ function createTraceEvent(root: HTMLElement, event: EditorTraceEvent): Event {
 
 function readReplayedEditorState(root: HTMLElement): ReplayedEditorState {
   const view = root.querySelector(".document-view");
+  const domSelection = readDomSelectionState(root);
 
   return {
+    ...domSelection,
+    pathText: readPathText(root),
     selectionAnchorEdge:
       view?.getAttribute("data-selection-anchor-edge") ?? null,
     selectionAnchorOffset:
@@ -240,6 +269,207 @@ function readReplayedEditorState(root: HTMLElement): ReplayedEditorState {
       view?.getAttribute("data-selection-selected-pointers") ?? null,
     text: view?.textContent ?? "",
   };
+}
+
+function assertTraceExpectation({
+  after,
+  before,
+  event,
+  eventIndex,
+  expectation,
+}: {
+  after: ReplayedEditorState;
+  before: ReplayedEditorState;
+  event: EditorTraceEvent;
+  eventIndex: number;
+  expectation?: EditorTraceExpectation;
+}) {
+  if (expectation === undefined) {
+    return;
+  }
+
+  assertStateExpectation({
+    actual: before,
+    event,
+    eventIndex,
+    expectation: expectation.before,
+    phase: "before",
+  });
+  assertStateExpectation({
+    actual: after,
+    event,
+    eventIndex,
+    expectation: expectation.after,
+    phase: "after",
+  });
+}
+
+function assertStateExpectation({
+  actual,
+  event,
+  eventIndex,
+  expectation,
+  phase,
+}: {
+  actual: ReplayedEditorState;
+  event: EditorTraceEvent;
+  eventIndex: number;
+  expectation?: ReplayedEditorStateExpectation;
+  phase: "after" | "before";
+}) {
+  if (expectation === undefined) {
+    return;
+  }
+
+  for (const [key, expected] of Object.entries(expectation)) {
+    if (key === "pathText") {
+      continue;
+    }
+    const actualValue = actual[key as keyof ReplayedEditorState];
+    if (actualValue !== expected) {
+      throw traceExpectationError({
+        actual: actualValue,
+        event,
+        eventIndex,
+        expected,
+        field: `${phase}.${key}`,
+      });
+    }
+  }
+
+  for (const [path, expected] of Object.entries(expectation.pathText ?? {})) {
+    const actualValue = actual.pathText[path];
+    if (actualValue !== expected) {
+      throw traceExpectationError({
+        actual: actualValue,
+        event,
+        eventIndex,
+        expected,
+        field: `${phase}.pathText[${path}]`,
+      });
+    }
+  }
+}
+
+function traceExpectationError({
+  actual,
+  event,
+  eventIndex,
+  expected,
+  field,
+}: {
+  actual: unknown;
+  event: EditorTraceEvent;
+  eventIndex: number;
+  expected: unknown;
+  field: string;
+}): Error {
+  return new Error(
+    `Trace expectation failed at #${eventIndex} ${describeTraceEvent(
+      event,
+    )} ${field}: expected ${JSON.stringify(expected)}, received ${JSON.stringify(
+      actual,
+    )}`,
+  );
+}
+
+function readPathText(root: HTMLElement): Record<string, string> {
+  const pathText: Record<string, string> = {};
+  for (const element of Array.from(root.querySelectorAll("[data-path]"))) {
+    const path = element.getAttribute("data-path");
+    if (path !== null) {
+      pathText[path] = element.textContent ?? "";
+    }
+  }
+
+  return pathText;
+}
+
+function readDomSelectionState(
+  root: HTMLElement,
+): Pick<
+  ReplayedEditorState,
+  | "domSelectionAnchorOffset"
+  | "domSelectionAnchorPath"
+  | "domSelectionCollapsed"
+  | "domSelectionFocusOffset"
+  | "domSelectionFocusPath"
+  | "domSelectionText"
+> {
+  const selection = root.ownerDocument.getSelection();
+  if (
+    selection === null ||
+    selection.rangeCount === 0 ||
+    selection.anchorNode === null ||
+    selection.focusNode === null ||
+    !root.contains(selection.anchorNode) ||
+    !root.contains(selection.focusNode)
+  ) {
+    return {
+      domSelectionAnchorOffset: null,
+      domSelectionAnchorPath: null,
+      domSelectionCollapsed: null,
+      domSelectionFocusOffset: null,
+      domSelectionFocusPath: null,
+      domSelectionText: "",
+    };
+  }
+
+  return {
+    domSelectionAnchorOffset: domTextOffsetForNode(
+      selection.anchorNode,
+      selection.anchorOffset,
+    ),
+    domSelectionAnchorPath: dataPathForNode(selection.anchorNode),
+    domSelectionCollapsed: String(selection.isCollapsed),
+    domSelectionFocusOffset: domTextOffsetForNode(
+      selection.focusNode,
+      selection.focusOffset,
+    ),
+    domSelectionFocusPath: dataPathForNode(selection.focusNode),
+    domSelectionText: selection.toString(),
+  };
+}
+
+function dataPathForNode(node: Node): string | null {
+  const element = node instanceof Element ? node : node.parentElement;
+  return element?.closest("[data-path]")?.getAttribute("data-path") ?? null;
+}
+
+function domTextOffsetForNode(node: Node, offset: number): string | null {
+  const element = node instanceof Element ? node : node.parentElement;
+  const pathElement = element?.closest("[data-path]");
+  if (pathElement === null || pathElement === undefined) {
+    return null;
+  }
+
+  let textOffset = 0;
+  const walker = pathElement.ownerDocument.createTreeWalker(pathElement, 4);
+  let current = walker.nextNode();
+  while (current !== null) {
+    const textNode = current as Text;
+    if (textNode === node) {
+      return String(
+        clamp(textOffset + offset, 0, pathElement.textContent?.length ?? 0),
+      );
+    }
+    textOffset += textNode.data.length;
+    current = walker.nextNode();
+  }
+
+  return null;
+}
+
+function describeTraceEvent(event: EditorTraceEvent): string {
+  const parts: string[] = [event.type];
+  if ("key" in event) {
+    parts.push(event.key);
+  }
+  if ("inputType" in event) {
+    parts.push(event.inputType);
+  }
+
+  return parts.join(" ");
 }
 
 function replayedEditorStatesEqual(

@@ -240,6 +240,29 @@ describe("BlockEditor IME trace replay", () => {
     ).toBe("7");
   });
 
+  it("reports the event index and field when a trace expectation fails", async () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await expect(
+      replayEditorTrace(editor, {
+        name: "bad-expectation",
+        schema: "editable-trace-replay@1",
+        steps: [
+          {
+            kind: "event",
+            event: { type: "keydown", key: "F1" },
+            expect: {
+              after: {
+                selectionOffset: "999",
+              },
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/#0 keydown F1 after\.selectionOffset/);
+  });
+
   it("commits IME text and splits the paragraph when Enter confirms composition", async () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
