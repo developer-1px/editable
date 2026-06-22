@@ -153,6 +153,8 @@ The intended ownership rule is:
   selection bridge audit
 - `docs/editor-custom-selection-handoff-audit.md`: custom node selection owner
   handoff audit
+- `docs/editor-widget-decoration-lifecycle-audit.md`: widget-like DOM identity,
+  key, and destroy lifecycle audit
 - `docs/editor-cursor-geometry-audit.md`: cursor geometry adapter audit
 - `docs/editor-model-command-surface-audit.md`: headless model command surface
   audit

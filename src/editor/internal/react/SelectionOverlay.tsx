@@ -20,16 +20,17 @@ export function SelectionOverlay({
   }
 
   const selectedRanges = selectionRangeRects(geometry, selection);
+  const selectedRangeItems = rangeOverlayItems(selectedRanges);
   const selectedAtoms = selectedAtomRects(geometry, selection);
 
   return (
     <div aria-hidden={true} className="selection-overlay">
-      {selectedRanges.map((rect) => (
+      {selectedRangeItems.map((item) => (
         <div
           className="selection-range"
           data-overlay="selected-range"
-          key={`range:${rect.left}:${rect.top}:${rect.width}:${rect.height}`}
-          style={rectStyle(rect)}
+          key={item.key}
+          style={rectStyle(item.rect)}
         />
       ))}
       {selectedAtoms.map((atom) => (
@@ -61,6 +62,20 @@ function selectionRangeRects(
   }
 
   return geometry.rectsForRange(anchor, focus);
+}
+
+function rangeOverlayItems(rects: DOMRect[]) {
+  const occurrences = new Map<string, number>();
+  return rects.map((rect) => {
+    const signature = `${rect.left}:${rect.top}:${rect.width}:${rect.height}`;
+    const occurrence = occurrences.get(signature) ?? 0;
+    occurrences.set(signature, occurrence + 1);
+
+    return {
+      key: `range:${signature}:${occurrence}`,
+      rect,
+    };
+  });
 }
 
 function selectedAtomRects(geometry: CursorGeometry, selection: SelectionSnap) {

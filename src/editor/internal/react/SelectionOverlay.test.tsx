@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
+
+import { render } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { selectionFromCursorPoint } from "../model/cursorCommands";
 import type { CursorGeometry } from "../view/cursorGeometry";
 import { SelectionOverlay } from "./SelectionOverlay";
@@ -111,6 +114,64 @@ describe("SelectionOverlay", () => {
     expect(html).toContain('data-overlay="selected-range"');
     expect(html).toContain("left:20px");
     expect(html).toContain("width:24px");
+  });
+
+  it("keeps range overlay keys stable when two rects share geometry", () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    let unmount: (() => void) | undefined;
+
+    try {
+      const view = render(
+        <SelectionOverlay
+          geometry={geometryFor({
+            "/root/children/0/children/0/text:1": rect(20, 10, 1, 20),
+            "/root/children/0/children/0/text:3": rect(44, 10, 1, 20),
+            "/root/children/0/children/0/text:1->/root/children/0/children/0/text:3":
+              [rect(20, 10, 24, 20), rect(20, 10, 24, 20)],
+          })}
+          selection={{
+            ...selectionFromCursorPoint({
+              path: "/root/children/0/children/0/text",
+              offset: 3,
+            }),
+            selectionRanges: [
+              {
+                anchor: {
+                  path: "/root/children/0/children/0/text",
+                  offset: 1,
+                },
+                focus: {
+                  path: "/root/children/0/children/0/text",
+                  offset: 3,
+                },
+              },
+            ],
+            anchor: { path: "/root/children/0/children/0/text", offset: 1 },
+            focus: { path: "/root/children/0/children/0/text", offset: 3 },
+          }}
+        />,
+      );
+      unmount = view.unmount;
+
+      expect(
+        view.container.querySelectorAll('[data-overlay="selected-range"]'),
+      ).toHaveLength(2);
+      expect(
+        consoleError.mock.calls.some((call) =>
+          call.some(
+            (value) =>
+              typeof value === "string" &&
+              value.includes("same key") &&
+              value.includes("range:"),
+          ),
+        ),
+      ).toBe(false);
+    } finally {
+      unmount?.();
+      consoleError.mockRestore();
+    }
   });
 
   it("draws distinct selected states for mention and figure atoms", () => {
