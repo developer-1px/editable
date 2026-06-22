@@ -150,6 +150,8 @@ The intended ownership rule is:
   paste restore audit
 - `docs/editor-clipboard-slice-context-audit.md`: clipboard HTML slice context
   and data-pm-slice policy audit
+- `docs/editor-paste-html-security-policy-audit.md`: pasted HTML,
+  Trusted Types, sanitizer, URL, and source sample corpus policy audit
 - `docs/editor-hidden-clipboard-fallback-audit.md`: hidden clipboard DOM
   fallback and blur/refocus policy audit
 - `docs/editor-drag-dom-mutation-audit.md`: drag preparation DOM mutation and
