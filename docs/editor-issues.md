@@ -14,6 +14,36 @@
 - Atom nodes are one cursor unit with `before` and `after` edges.
 - All mutations commit patches with `selectionAfter`.
 
+## Keyboard Mapping Status
+
+`docs/keyboard-mapping-tbd.md` was removed because it duplicated completed issue
+status. Keyboard implementation status now lives in this file:
+
+- ED-010 covers the first broad keyboard, `beforeinput`, composition, and paste
+  adapter.
+- ED-021 covers browser-specific `beforeinput` variants.
+- ED-022, ED-028 cover mark shortcuts.
+- ED-023 covers Tab/list behavior.
+- ED-024, ED-025, ED-027 cover page, word, and block-boundary navigation.
+- ED-026 covers word deletion.
+- ED-029 covers explicit non-mutating key policy.
+
+Product expectations remain in `docs/editor-required-feature-list.md`.
+Executable coverage remains in `inputAdapter.test.ts`, `editorKeyboardPolicy.test.ts`,
+`BlockEditor.test.tsx`, and the cursor/text command tests.
+
+## 증거 강도
+
+| 항목 | 강도 | 이유 |
+| --- | --- | --- |
+| repo-local implementation ledger | 확정 현재 상태 | 이 파일은 ED-001~ED-029 implementation issue history와 accepted work를 담는다. 현재 ED heading은 29개이고 unchecked acceptance checkbox는 없다. |
+| baseline/principle record | 확정 문서 기준 | Current Baseline과 Principles는 editor work가 따르는 repo-local 기준을 적는다. 다만 각 원칙의 executable proof는 model/view/react tests와 topic audit에서 확인해야 한다. |
+| keyboard mapping status consolidation | 확정 | `docs/keyboard-mapping-tbd.md`는 현재 트리에 없고, keyboard/input status는 ED-010, ED-021~ED-029와 실행 테스트로 이 파일에 통합되어 있다. |
+| acceptance checkbox as proof | 부분확정 | checkbox는 accepted implementation ledger로는 유효하지만 독립 실행 증거가 아니다. 실제 기능 coverage는 `docs/editor-feature-coverage-audit.md`와 관련 test files가 함께 증명한다. |
+| required feature/product completion | 미정 | 이 파일이 ED work를 완료 상태로 기록해도 `docs/editor-required-feature-list.md`의 제품/QA 기대 전체 완료를 증명하지는 않는다. |
+| external issue tracker linkage | 미정 | 외부 issue id, PR, close date, release linkage는 현재 없다. 운영상 필요하면 별도 tracker/ADR linkage 규칙을 정해야 한다. |
+| `docs/keyboard-mapping-tbd.md` 복구 | 제거 확정 | 같은 상태를 중복 문서로 되살리면 keyboard status authority가 분산된다. 현재는 이 파일과 executable tests가 더 좁은 source of truth다. |
+
 ## ED-001 - Stabilize Document And Cursor Contracts
 
 What to build:
@@ -441,8 +471,9 @@ Acceptance criteria:
 - [x] `Cmd/Ctrl+E` toggles the inline code mark on selected inline text.
 - [x] Collapsed `Cmd/Ctrl+E` stores `code` in selection context active marks.
 - [x] `Cmd/Ctrl+K` toggles a link mark on selected inline text.
-- [x] Link toggle uses `selection.context.pendingLinkHref` when present and `https://example.com` as the no-prompt demo fallback.
-- [x] Collapsed `Cmd/Ctrl+K` stores an active link mark for the next text insertion.
+- [x] Link toggle uses `selection.context.pendingLinkHref` when present.
+- [x] Link toggle does not create a new link without an explicit href.
+- [x] Collapsed `Cmd/Ctrl+K` stores an active link mark for the next text insertion when an explicit href is pending.
 - [x] The demo renders the resulting canonical `code` and `link` marks.
 
 Blocked by:

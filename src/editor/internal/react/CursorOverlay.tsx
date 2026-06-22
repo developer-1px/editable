@@ -1,0 +1,43 @@
+import type { CSSProperties } from "react";
+import type { CursorPoint } from "../model/cursor";
+import type { CursorGeometry } from "../view/cursorGeometry";
+
+type CursorOverlayProps = {
+  geometry: CursorGeometry;
+  point: CursorPoint | null;
+};
+
+export function CursorOverlay({ geometry, point }: CursorOverlayProps) {
+  if (point === null) {
+    return null;
+  }
+
+  const rect = geometry.rectForPoint(point);
+  if (rect === null) {
+    return null;
+  }
+
+  return (
+    <div aria-hidden={true} className="cursor-overlay">
+      <div
+        className="selection-caret"
+        data-edge={"edge" in point ? point.edge : undefined}
+        data-offset={"offset" in point ? point.offset : undefined}
+        data-overlay="caret"
+        data-path={point.path}
+        style={caretStyle(rect)}
+      />
+    </div>
+  );
+}
+
+function caretStyle(rect: DOMRect): CSSProperties {
+  const horizontal = rect.width > rect.height;
+
+  return {
+    height: horizontal ? Math.max(rect.height, 2) : rect.height,
+    left: rect.left,
+    top: rect.top,
+    width: horizontal ? rect.width : Math.max(rect.width, 2),
+  };
+}
