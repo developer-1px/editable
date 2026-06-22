@@ -84,20 +84,20 @@ same-text wrapper DOM mutation을 만들 때이고, 이는 mark import가 아니
 
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
-| native formatting DOM authority 금지 | 정책 확정 | beforeinput audit, DOM dirty range audit, mark command audit가 모두 canonical command authority를 지지한다. | beforeinput 없이 발생하는 실제 OS menu DOM drift는 runtime guardrail test가 아직 없다. |
+| native formatting DOM authority 금지 | 실행 테스트로 확정 | beforeinput audit, DOM dirty range audit, mark command audit와 `contentEditableViewEngine.test.ts` same-text wrapper drift fixture가 canonical command/render authority를 지지한다. | 실제 OS menu event order는 실기기 trace가 필요하다. |
 | `format*`/`insertLink` inputType 존재와 cancelability | 스펙 근거 확정 | W3C Input Events Level 2 table | browser별 event support/order는 실기기 trace가 필요하다. |
 | iOS context menu mark mutation class | 외부 구현 근거 확정 | ProseMirror-view changelog 0.15.0 | current editor에서 직접 재현한 trace는 아직 없다. |
 | keyboard mark command ownership | 실행 테스트로 확정 | `inputAdapter.test.ts`, `markCommands.test.ts` | context menu native action test와는 별개다. |
 | link href safety seam | 실행 테스트로 확정 | `markCommands.test.ts`, `docs/editor-link-mark-audit.md` | native `insertLink.data`를 safe UI로 받을 제품 결정은 없다. |
-| active text leaf only DOM flush | 실행 테스트로 확정 | `contentEditableViewEngine.test.ts`, DOM dirty range audit | same-text wrapper drift 복구는 별도 guardrail test가 필요하다. |
+| active text leaf only DOM flush | 실행 테스트로 확정 | `contentEditableViewEngine.test.ts`, DOM dirty range audit | rich HTML/mark wrapper를 model patch로 import하지 않는다. |
 | IME format/style stale inheritance 위험 | 외부 최신 근거 | Lexical PR #8148 | current editor의 IME + native format menu real trace는 없다. |
 
 ## 후속 이슈화 대상
 
 | 항목 | 왜 별도인가 |
 | --- | --- |
-| `format*`/`insertLink` beforeinput 차단 regression test | 현재 코드 흐름은 차단하지만 명시 fixture가 없어 future refactor에서 pass-through로 바뀔 수 있다. |
-| native formatting same-text DOM drift guardrail | DOM wrapper drift는 document patch가 아니라 canonical reset/surface integrity 문제다. MutationObserver policy와 연결해야 한다. |
+| `format*`/`insertLink` beforeinput 차단 regression test | 완료. Controller fixture가 prevent/no-op과 keyboard shortcut command path 분리를 고정한다. |
+| native formatting same-text DOM drift guardrail | 완료. `flush` changed=false path가 document patch 없이 canonical text DOM으로 복구한다. |
 | iOS BIU/context menu 실기기 trace | 실제 event order, cancelability, focus/selection 변화는 desktop/jsdom으로 닫을 수 없다. |
 
 ## 현재 결론

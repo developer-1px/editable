@@ -72,7 +72,7 @@ beforeinput/input
 | 상황 | 처리 |
 | --- | --- |
 | active leaf를 찾을 수 없음 | flush 실패로 반환하고 renderer/model path가 DOM을 다시 그리게 한다. |
-| active leaf text가 model과 같음 | document patch 없이 selectionAfter만 갱신한다. Foreign child DOM은 reset에서 canonical text node로 정리한다. |
+| active leaf text가 model과 같음 | document patch 없이 selectionAfter만 갱신하고, same-text foreign child DOM은 canonical text node로 즉시 정리한다. |
 | active leaf text가 model과 다름 | `{ op: "replace", path, value: nextText }` 한 개만 반환한다. |
 | leaf 밖 DOM이 오염됨 | flush가 patch로 읽지 않는다. `reset(root, document)` 또는 React render가 canonical model에서 복원한다. |
 | composition final commit 중복 | leaf text normalization만 수행한다. Mark/widget/block reparse로 확장하지 않는다. |
@@ -83,6 +83,7 @@ beforeinput/input
 | --- | --- | --- | --- |
 | leaf-only native flush | 실행 테스트로 확정 | `contentEditableViewEngine.test.ts`가 native text mutation을 one text-path replace patch로 검증한다. | jsdom text mutation fixture이며 real IME event ordering은 trace tests가 보강한다. |
 | mark boundary fixture | 실행 테스트로 확정 | mark wrapper 내부 text mutation도 text-run `textContent`만 patch로 읽고 wrapper DOM을 parser source로 삼지 않는 test가 있다. | mark split/merge DOM structural mutation은 headless command 범위다. |
+| same-text wrapper drift guardrail | 실행 테스트로 확정 | native formatting wrapper가 같은 `textContent`를 유지하면 patch 없이 canonical text node로 복구하는 test가 있다. | 실제 OS context menu event order는 별도 trace가 필요하다. |
 | widget boundary fixture | 실행 테스트로 확정 | `contenteditable=false` mention 내부 selection에서 native dirty edit을 시작하지 않는 test가 있다. | pointer/node selection UX는 별도 selection tests가 담당한다. |
 | block boundary fixture | 실행 테스트로 확정 | active leaf flush가 sibling block DOM 오염을 patch에 넣지 않고 reset이 canonical text로 복원하는 test가 있다. | React reconciliation 전체 restore는 integration tests와 renderer contract에 의존한다. |
 | no general DOM parser | source 구조로 확정 | view engine에는 DOMParser/sanitizer/full subtree diff가 없고, model mutation은 command patch와 leaf text patch로 들어간다. | rich paste/HTML import 요구가 생기면 별도 sanitized import path가 필요하다. |

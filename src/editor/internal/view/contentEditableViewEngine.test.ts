@@ -461,6 +461,47 @@ describe("createContentEditableViewEngine", () => {
     expect(first.querySelector("strong")).not.toBe(null);
   });
 
+  it("restores same-text native formatting wrapper drift without creating a patch", () => {
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "Alpha" }],
+      },
+    ]);
+    const { root, first } = setupTextRoot();
+    const session = createContentEditableViewEngine();
+
+    setDOMSelection(first, 5);
+    expect(
+      session.planBeforeInput(
+        root,
+        note,
+        selectionFromCursorPoint({ path: firstTextPath, offset: 5 }),
+        { inputType: "insertText", data: "!" },
+      ),
+    ).toEqual({ kind: "deferToContentEditable" });
+
+    first.innerHTML = '<strong data-native-format="true">Alpha</strong>';
+    setDOMBoundarySelection(firstTextNodeInside(first), 5);
+
+    const result = session.flush(root, note);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("Expected flush result.");
+    }
+    expect(result.changed).toBe(false);
+    expect(result.selectionAfter.focus).toMatchObject({
+      path: firstTextPath,
+      offset: 5,
+    });
+    expect(first.querySelector("[data-native-format]")).toBe(null);
+    expect(first.childNodes).toHaveLength(1);
+    expect(first.firstChild).toBeInstanceOf(Text);
+    expect(first.textContent).toBe("Alpha");
+  });
+
   it("keeps offset zero insertText native at editable text starts after inline boundaries", () => {
     const afterBoldTextPath = "/root/children/0/children/2/text";
     const afterLinkTextPath = "/root/children/0/children/4/text";

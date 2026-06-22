@@ -334,6 +334,7 @@ export function createContentEditableViewEngine() {
       });
 
       if (currentText === nextText) {
+        restoreTextElement(root, path, nextText);
         return { ok: true, changed: false, selectionAfter };
       }
 
