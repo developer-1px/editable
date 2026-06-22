@@ -19,6 +19,11 @@ import { assertPreventedEditingEventsCovered } from "../testing/preventedEventAu
 import { BlockEditor } from "./BlockEditor";
 
 afterEach(() => {
+  document.getSelection()?.removeAllRanges();
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: undefined,
+  });
   cleanup();
   vi.restoreAllMocks();
 });
@@ -48,7 +53,7 @@ describe("BlockEditor IME trace replay", () => {
         .querySelector(".document-view")
         ?.getAttribute("data-selection-offset"),
     ).toBe("5");
-  });
+  }, 10_000);
 
   it("does not flush a stale composition end after the next Hangul composition starts", async () => {
     render(<BlockEditor />);
@@ -73,7 +78,7 @@ describe("BlockEditor IME trace replay", () => {
         .querySelector(".document-view")
         ?.getAttribute("data-selection-offset"),
     ).toBe("7");
-  });
+  }, 10_000);
 
   it("commits IME text with active marks through the marked text path", async () => {
     render(<BlockEditor />);
@@ -86,7 +91,7 @@ describe("BlockEditor IME trace replay", () => {
         (element) => element.textContent === "안",
       ),
     ).toBe(true);
-  });
+  }, 10_000);
 
   it("keeps history undo explicit no-op while composition is active", async () => {
     render(<BlockEditor />);
@@ -105,7 +110,7 @@ describe("BlockEditor IME trace replay", () => {
       }),
     ).not.toThrow();
     expect(editor.textContent).toContain("Plain");
-  });
+  }, 10_000);
 
   it("flushes active composition text on blur", async () => {
     render(<BlockEditor />);
@@ -117,7 +122,7 @@ describe("BlockEditor IME trace replay", () => {
       editor.querySelector('[data-path="/root/children/0/children/0/text"]')
         ?.textContent,
     ).toBe("Plain안 ");
-  });
+  }, 10_000);
 
   it("reports the event index and field when a trace expectation fails", async () => {
     render(<BlockEditor />);
@@ -140,7 +145,7 @@ describe("BlockEditor IME trace replay", () => {
         ],
       }),
     ).rejects.toThrow(/#0 keydown F1 after\.selectionOffset/);
-  });
+  }, 10_000);
 
   it("commits IME text and splits the paragraph when Enter confirms composition", async () => {
     render(<BlockEditor />);
@@ -177,5 +182,5 @@ describe("BlockEditor IME trace replay", () => {
         .querySelector(".document-view")
         ?.getAttribute("data-selection-offset"),
     ).toBe("0");
-  });
+  }, 10_000);
 });

@@ -17,6 +17,11 @@ import { readContentEditableSelection } from "../view/contentEditableViewEngine"
 import { BlockEditor } from "./BlockEditor";
 
 afterEach(() => {
+  document.getSelection()?.removeAllRanges();
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: undefined,
+  });
   cleanup();
   vi.restoreAllMocks();
 });
@@ -775,6 +780,35 @@ describe("BlockEditor", () => {
     expect(document.getSelection()?.toString()).toBe("Plain");
   });
 
+  it("copies selection from keymap without waiting for native copy events", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    const firstText = editor.querySelector(
+      '[data-path="/root/children/0/children/0/text"]',
+    )?.firstChild;
+    if (!(firstText instanceof Text)) {
+      throw new Error("Fixture failed to render first text.");
+    }
+
+    setDOMRangeSelection(firstText, 0, firstText, 5);
+    const keydown = dispatchKeyboard(editor, "keydown", {
+      key: "c",
+      metaKey: true,
+    });
+
+    expect(keydown.defaultPrevented).toBe(true);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Plain"));
+    expect(editor.textContent).toContain("Plain bold");
+  });
+
   it("flushes active native edits before copying the current DOM range", async () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
@@ -824,6 +858,109 @@ describe("BlockEditor", () => {
         .querySelector(".document-view")
         ?.getAttribute("data-selection-offset"),
     ).toBe("0");
+  });
+
+  it("cuts selection from keymap after clipboard write succeeds", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    const firstText = editor.querySelector(
+      '[data-path="/root/children/0/children/0/text"]',
+    )?.firstChild;
+    if (!(firstText instanceof Text)) {
+      throw new Error("Fixture failed to render first text.");
+    }
+
+    setDOMRangeSelection(firstText, 0, firstText, 5);
+    const keydown = dispatchKeyboard(editor, "keydown", {
+      key: "x",
+      metaKey: true,
+    });
+
+    expect(keydown.defaultPrevented).toBe(true);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Plain"));
+    await waitFor(() => expect(editor.textContent).not.toContain("Plain bold"));
+    expect(editor.textContent).toContain(" bold");
+  });
+
+  it("does not delete selection from keymap when clipboard write fails", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    const firstText = editor.querySelector(
+      '[data-path="/root/children/0/children/0/text"]',
+    )?.firstChild;
+    if (!(firstText instanceof Text)) {
+      throw new Error("Fixture failed to render first text.");
+    }
+
+    setDOMRangeSelection(firstText, 0, firstText, 5);
+    dispatchKeyboard(editor, "keydown", {
+      key: "x",
+      metaKey: true,
+    });
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Plain"));
+    expect(editor.textContent).toContain("Plain bold");
+  });
+
+  it("lets paste keymap shortcuts continue to the paste event", async () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    const keydown = dispatchKeyboard(editor, "keydown", {
+      key: "v",
+      metaKey: true,
+    });
+
+    expect(keydown.defaultPrevented).toBe(false);
+    expect(editor.textContent).toContain("Plain bold");
+  });
+
+  it("does not run clipboard keymap mutation while composition owns keydown", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    const firstText = editor.querySelector(
+      '[data-path="/root/children/0/children/0/text"]',
+    )?.firstChild;
+    if (!(firstText instanceof Text)) {
+      throw new Error("Fixture failed to render first text.");
+    }
+
+    setDOMRangeSelection(firstText, 0, firstText, 5);
+    fireEvent.compositionStart(editor);
+    const keydown = dispatchKeyboard(editor, "keydown", {
+      key: "x",
+      metaKey: true,
+    });
+
+    expect(keydown.defaultPrevented).toBe(true);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(editor.textContent).toContain("Plain bold");
   });
 
   it("flushes active native edits before cutting the current DOM range", async () => {

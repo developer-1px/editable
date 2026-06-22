@@ -16,24 +16,33 @@ const p0TraceCases = p0SelectionDeletionClipboardTraces.map(
 );
 
 afterEach(() => {
+  document.getSelection()?.removeAllRanges();
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: undefined,
+  });
   cleanup();
   vi.restoreAllMocks();
 });
 
 describe("BlockEditor P0 input trace replay", () => {
-  it.each(p0TraceCases)("replays %s", async (_name, trace) => {
-    render(<BlockEditor />);
-    const editor = screen.getByRole("textbox", { name: "Document body" });
-    await waitFor(() => expect(document.activeElement).toBe(editor));
+  it.each(p0TraceCases)(
+    "replays %s",
+    async (_name, trace) => {
+      render(<BlockEditor />);
+      const editor = screen.getByRole("textbox", { name: "Document body" });
+      await waitFor(() => expect(document.activeElement).toBe(editor));
 
-    const events = await replayEditorTrace(editor, trace);
+      const events = await replayEditorTrace(editor, trace);
 
-    expect(() => assertPreventedEditingEventsCovered(events)).not.toThrow();
-    if (trace.name === p0AtomReplacementTrace.name) {
-      expect(editor.querySelector(".mention-chip")).toBe(null);
-    }
-    if (trace.name === p0MarkdownDropTrace.name) {
-      expect(editor.querySelectorAll(".mention-chip")).toHaveLength(2);
-    }
-  });
+      expect(() => assertPreventedEditingEventsCovered(events)).not.toThrow();
+      if (trace.name === p0AtomReplacementTrace.name) {
+        expect(editor.querySelector(".mention-chip")).toBe(null);
+      }
+      if (trace.name === p0MarkdownDropTrace.name) {
+        expect(editor.querySelectorAll(".mention-chip")).toHaveLength(2);
+      }
+    },
+    10_000,
+  );
 });

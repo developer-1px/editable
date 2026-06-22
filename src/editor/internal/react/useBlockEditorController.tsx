@@ -71,6 +71,7 @@ import {
 } from "../view/contentEditableViewEngine";
 import { createDOMCursorGeometry } from "../view/cursorGeometry";
 import { isHeadlessKeyDown } from "../view/editorKeyboardPolicy";
+import { matchEditorKeymap } from "../view/editorKeymap";
 import { dispatchEditorCommandToDocument } from "./editorCommandBridge";
 
 export type BlockEditorProps = {
@@ -622,6 +623,60 @@ export function useBlockEditorController({
     [document.selection, document.value],
   );
 
+  const handleClipboardKeymapCommand = useCallback(
+    async (command: "copy" | "cut") => {
+      const selectionBeforeFlush = selectionForInput();
+      const selection = readOnly
+        ? selectionBeforeFlush
+        : (flushContentEditableViewBeforeCommand() ?? selectionBeforeFlush);
+      const data = serializeSelectionForClipboard(document.value, selection);
+      if (data === null) {
+        if (readOnly) {
+          resetContentEditableView(selection);
+        }
+        return;
+      }
+
+      const clipboard =
+        editorSurfaceRef.current?.ownerDocument.defaultView?.navigator
+          .clipboard ??
+        (typeof navigator === "undefined" ? undefined : navigator.clipboard);
+      if (clipboard?.writeText === undefined) {
+        return;
+      }
+
+      try {
+        await clipboard.writeText(data["text/plain"]);
+      } catch {
+        return;
+      }
+
+      if (command !== "cut") {
+        return;
+      }
+      if (readOnly) {
+        resetContentEditableView(selection);
+        return;
+      }
+
+      runInput(
+        {
+          type: "beforeinput",
+          inputType: "deleteByCut",
+        },
+        selection,
+      );
+    },
+    [
+      document.value,
+      flushContentEditableViewBeforeCommand,
+      readOnly,
+      resetContentEditableView,
+      runInput,
+      selectionForInput,
+    ],
+  );
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (!readOnly && contentEditableEngine.shouldIgnoreKeyDown()) {
@@ -632,34 +687,26 @@ export function useBlockEditorController({
         return;
       }
 
-      if (event.metaKey || event.ctrlKey) {
-        const key = event.key.toLowerCase();
-        if (key === "z") {
-          event.preventDefault();
-          if (readOnly) {
-            return;
-          }
-
-          const selectionAfterFlush = flushContentEditableViewBeforeCommand();
-          dispatchCommand(
-            { type: event.shiftKey ? "redo" : "undo" },
-            selectionAfterFlush ?? selectionForInput(),
-          );
+      const keymapCommand = matchEditorKeymap(event);
+      if (keymapCommand !== null) {
+        if (keymapCommand === "paste") {
           return;
         }
-        if (key === "y") {
-          event.preventDefault();
-          if (readOnly) {
-            return;
-          }
-
-          const selectionAfterFlush = flushContentEditableViewBeforeCommand();
-          dispatchCommand(
-            { type: "redo" },
-            selectionAfterFlush ?? selectionForInput(),
-          );
+        event.preventDefault();
+        if (keymapCommand === "copy" || keymapCommand === "cut") {
+          void handleClipboardKeymapCommand(keymapCommand);
           return;
         }
+        if (readOnly) {
+          return;
+        }
+
+        const selectionAfterFlush = flushContentEditableViewBeforeCommand();
+        dispatchCommand(
+          { type: keymapCommand },
+          selectionAfterFlush ?? selectionForInput(),
+        );
+        return;
       }
 
       if (
@@ -721,6 +768,7 @@ export function useBlockEditorController({
     [
       dispatchCommand,
       flushContentEditableViewBeforeCommand,
+      handleClipboardKeymapCommand,
       contentEditableEngine,
       readOnly,
       runInput,
