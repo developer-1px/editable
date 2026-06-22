@@ -36,6 +36,7 @@ const TEST_SCAN_EXCLUDED_DIRECTORIES = new Set([
   "dist",
   "node_modules",
 ]);
+const TEST_SCAN_EXCLUDED_RELATIVE_DIRECTORIES = new Set(["tests/browser"]);
 const commands = [
   ["pnpm", ["run", "verify:docs"]],
   ["pnpm", ["run", "verify:boundaries"]],
@@ -331,10 +332,10 @@ function findTestFiles(root) {
   if (!existsSync(root)) {
     return [];
   }
-  return findTestFilesInDirectory(root).sort();
+  return findTestFilesInDirectory(root, root).sort();
 }
 
-function findTestFilesInDirectory(directory) {
+function findTestFilesInDirectory(root, directory) {
   const files = [];
   for (const entry of readdirSync(directory)) {
     if (TEST_SCAN_EXCLUDED_DIRECTORIES.has(entry)) {
@@ -343,7 +344,11 @@ function findTestFilesInDirectory(directory) {
     const path = join(directory, entry);
     const stats = statSync(path);
     if (stats.isDirectory()) {
-      files.push(...findTestFilesInDirectory(path));
+      const relativePath = relative(root, path).split(sep).join("/");
+      if (TEST_SCAN_EXCLUDED_RELATIVE_DIRECTORIES.has(relativePath)) {
+        continue;
+      }
+      files.push(...findTestFilesInDirectory(root, path));
       continue;
     }
     if (stats.isFile() && isTestFile(path)) {

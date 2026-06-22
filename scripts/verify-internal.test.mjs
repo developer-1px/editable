@@ -117,11 +117,16 @@ describe("verify-internal test marker scan", () => {
     const root = mkdtempSync(join(tmpdir(), "editable-verify-internal-"));
     try {
       mkdirSync(join(root, "tests"), { recursive: true });
+      mkdirSync(join(root, "tests", "browser"), { recursive: true });
       mkdirSync(join(root, "node_modules"), { recursive: true });
       mkdirSync(join(root, "dist"), { recursive: true });
       writeFileSync(
         join(root, "tests", "focused.test.ts"),
         "import { test } from 'vitest';\ntest.only('case', () => {});\n",
+      );
+      writeFileSync(
+        join(root, "tests", "browser", "ignored.spec.ts"),
+        "import { test } from '@playwright/test';\ntest.only('case', () => {});\n",
       );
       writeFileSync(
         join(root, "node_modules", "ignored.test.ts"),
