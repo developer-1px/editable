@@ -1840,6 +1840,58 @@ describe("text commands", () => {
     });
   });
 
+  it("rejects unsafe figure sources before writing command patches", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB" }],
+      },
+    ]);
+
+    const command = insertFigure(
+      document,
+      selectionFromCursorPoint({
+        path: "/root/children/0/children/0/text",
+        offset: 1,
+      }),
+      { id: "figure-1", type: "figure", src: "javascript:alert(1)" },
+    );
+
+    expect(command).toEqual({
+      ok: false,
+      reason: "Figure src is invalid.",
+    });
+  });
+
+  it("normalizes safe figure sources before writing command patches", () => {
+    const document = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "AB" }],
+      },
+    ]);
+
+    const command = insertFigure(
+      document,
+      selectionFromCursorPoint({
+        path: "/root/children/0/children/0/text",
+        offset: 1,
+      }),
+      { id: "figure-1", type: "figure", src: " /image.png " },
+    );
+
+    expectOk(command);
+    expect(command.patch).toMatchObject([
+      {},
+      {
+        value: { id: "figure-1", type: "figure", src: "/image.png" },
+      },
+      {},
+    ]);
+  });
+
   it("replaces a selected text range with a mention atom", () => {
     const document = documentWithBlocks([
       {

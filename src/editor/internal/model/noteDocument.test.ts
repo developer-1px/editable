@@ -315,6 +315,72 @@ describe("note document schema", () => {
     ).toBe(false);
   });
 
+  it("rejects unsafe persisted figure sources", () => {
+    for (const src of [
+      "javascript:alert(1)",
+      "data:image/svg+xml,<svg></svg>",
+      "blob:https://example.com/id",
+      "//example.com/image.png",
+      "https://example.com/image.svg",
+    ]) {
+      expect(
+        NoteDocumentSchema.safeParse({
+          schemaVersion: 1,
+          id: "note-1",
+          title: "Figure",
+          tags: [],
+          root: {
+            id: "root",
+            kind: "element",
+            type: "doc",
+            flow: "block",
+            children: [
+              {
+                id: "figure-1",
+                kind: "atom",
+                type: "figure",
+                flow: "block",
+                src,
+              },
+            ],
+          },
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("accepts relative and http persisted figure sources", () => {
+    for (const src of [
+      "/sample-figure.svg",
+      "./image.png",
+      "https://example.com/image.png",
+    ]) {
+      expect(
+        NoteDocumentSchema.safeParse({
+          schemaVersion: 1,
+          id: "note-1",
+          title: "Figure",
+          tags: [],
+          root: {
+            id: "root",
+            kind: "element",
+            type: "doc",
+            flow: "block",
+            children: [
+              {
+                id: "figure-1",
+                kind: "atom",
+                type: "figure",
+                flow: "block",
+                src,
+              },
+            ],
+          },
+        }).success,
+      ).toBe(true);
+    }
+  });
+
   it("reads figure blocks as empty block text", () => {
     const note = createNoteDocument(
       [{ id: "figure-1", type: "figure", src: "/image.png", alt: "Image" }],

@@ -264,4 +264,55 @@ describe("editor public facade", () => {
       reason: "Document is invalid.",
     });
   });
+
+  it("validates persisted figure sources without exposing schema details", () => {
+    const documentWithFigure = {
+      schemaVersion: 1,
+      id: "persisted-note",
+      title: "Persisted note",
+      tags: [],
+      root: {
+        id: "root",
+        kind: "element",
+        type: "doc",
+        flow: "block",
+        children: [
+          {
+            id: "figure-1",
+            kind: "atom",
+            type: "figure",
+            flow: "block",
+            src: "/sample-figure.svg",
+            alt: "Figure",
+          },
+        ],
+      },
+    };
+
+    const parsed = publicEditor.parseNoteDocument(documentWithFigure);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.ok ? parsed.document.root.children[0] : null).toMatchObject({
+      type: "figure",
+      src: "/sample-figure.svg",
+      alt: "Figure",
+    });
+
+    const unsafe = publicEditor.parseNoteDocument({
+      ...documentWithFigure,
+      root: {
+        ...documentWithFigure.root,
+        children: [
+          {
+            ...documentWithFigure.root.children[0],
+            src: "data:image/png;base64,AAAA",
+          },
+        ],
+      },
+    });
+
+    expect(unsafe).toEqual({
+      ok: false,
+      reason: "Document is invalid.",
+    });
+  });
 });

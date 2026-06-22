@@ -129,6 +129,48 @@ describe("markdown adapter", () => {
     });
   });
 
+  it("drops unsafe markdown figure sources while preserving alt text", () => {
+    expect(
+      importMarkdown(
+        [
+          "![Unsafe javascript](javascript:alert)",
+          "![Unsafe data](data:image/png;base64,AAAA)",
+          "![](blob:https://example.com/id)",
+          "![Unsafe external svg](https://example.com/icon.svg)",
+          "![Safe relative](/sample-figure.svg)",
+          "![Safe remote](https://example.com/image.png)",
+        ].join("\n\n"),
+      ),
+    ).toMatchObject({
+      root: {
+        children: [
+          {
+            type: "paragraph",
+            children: [{ type: "text", text: "Unsafe javascript" }],
+          },
+          {
+            type: "paragraph",
+            children: [{ type: "text", text: "Unsafe data" }],
+          },
+          {
+            type: "paragraph",
+            children: [{ type: "text", text: "Unsafe external svg" }],
+          },
+          {
+            type: "figure",
+            src: "/sample-figure.svg",
+            alt: "Safe relative",
+          },
+          {
+            type: "figure",
+            src: "https://example.com/image.png",
+            alt: "Safe remote",
+          },
+        ],
+      },
+    });
+  });
+
   it("exports supported rich model shapes to stable markdown", () => {
     const note = createNoteDocument(
       [

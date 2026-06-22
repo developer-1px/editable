@@ -1,4 +1,5 @@
 import { normalizeLinkHref } from "./linkHref";
+import { normalizeFigureSrc } from "./mediaSrc";
 import { normalizeDocument, normalizeInlineChildren } from "./normalizer";
 import {
   createNoteDocument,
@@ -64,13 +65,23 @@ export function importMarkdown(
 
     const figure = parseFigureLine(line.trim());
     if (figure !== null) {
-      blocks.push({
-        id: blockId("figure", blockIndex),
-        type: "figure",
-        src: figure.src,
-        ...(figure.alt.length === 0 ? {} : { alt: figure.alt }),
-      });
-      blockIndex += 1;
+      const src = normalizeFigureSrc(figure.src);
+      if (src !== null) {
+        blocks.push({
+          id: blockId("figure", blockIndex),
+          type: "figure",
+          src,
+          ...(figure.alt.length === 0 ? {} : { alt: figure.alt }),
+        });
+        blockIndex += 1;
+      } else if (figure.alt.length > 0) {
+        blocks.push({
+          id: blockId("paragraph", blockIndex),
+          type: "paragraph",
+          children: [textInline(figure.alt)],
+        });
+        blockIndex += 1;
+      }
       lineIndex += 1;
       continue;
     }

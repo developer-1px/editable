@@ -4,6 +4,7 @@ import type {
 } from "@interactive-os/json-document";
 import type { ReactNode } from "react";
 import { renderableLinkHref } from "../model/linkHref";
+import { renderableFigureSrc } from "../model/mediaSrc";
 import type {
   InlineNode,
   Mark,
@@ -97,6 +98,7 @@ function BlockView({
   const blockPath = `/root/children/${blockIndex}`;
 
   if (block.type === "figure") {
+    const src = renderableFigureSrc(block.src);
     return (
       <figure
         className="figure-block"
@@ -104,7 +106,7 @@ function BlockView({
         data-path={blockPath}
         {...cursorAttributes(blockPath, focus)}
       >
-        <img alt={block.alt ?? ""} src={block.src} />
+        <img alt={block.alt ?? ""} src={src} />
       </figure>
     );
   }

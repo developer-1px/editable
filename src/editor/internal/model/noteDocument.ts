@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { normalizeLinkHref } from "./linkHref";
+import { normalizeFigureSrc } from "./mediaSrc";
 
 export type JSONValue =
   | null
@@ -140,7 +141,10 @@ export const FigureBlockSchema = z.object({
   kind: z.literal("atom").default("atom"),
   type: z.literal("figure"),
   flow: z.literal("block").default("block"),
-  src: z.string().min(1),
+  src: z
+    .string()
+    .min(1)
+    .refine((src) => normalizeFigureSrc(src) !== null),
   alt: z.string().optional(),
 });
 
@@ -330,13 +334,15 @@ export function figureBlock(
   src: string,
   alt?: string,
 ): FigureBlock {
+  const canonicalSrc = normalizeFigureSrc(src) ?? src;
   return FigureBlockSchema.parse({
     id,
     kind: "atom",
     type: "figure",
     flow: "block",
-    attrs: alt === undefined ? { src } : { src, alt },
-    src,
+    attrs:
+      alt === undefined ? { src: canonicalSrc } : { src: canonicalSrc, alt },
+    src: canonicalSrc,
     ...(alt === undefined ? {} : { alt }),
   });
 }

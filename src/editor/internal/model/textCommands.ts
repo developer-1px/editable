@@ -18,6 +18,7 @@ import {
   selectionFromCursorPoint,
 } from "./cursorCommands";
 import { activeMarksFromSelection } from "./markCommands";
+import { normalizeFigureSrc } from "./mediaSrc";
 import {
   mergeAdjacentText,
   normalizeBlocks,
@@ -330,7 +331,12 @@ export function insertFigure(
   selection: SelectionSnap,
   figure: FigureBlockInput,
 ): TextCommandResult {
-  const canonicalFigure = FigureBlockSchema.parse(figure);
+  const src = normalizeFigureSrc(figure.src);
+  if (src === null) {
+    return { ok: false, reason: "Figure src is invalid." };
+  }
+
+  const canonicalFigure = FigureBlockSchema.parse({ ...figure, src });
   const selectedTextRange = selectedSingleTextRange(document, selection);
   if (selectedTextRange !== null) {
     return insertFigureAtTextRange(

@@ -381,6 +381,36 @@ describe("DocumentRenderer", () => {
     expect(html).not.toContain("draggable");
   });
 
+  it("does not render unsafe legacy figure sources as fetchable image sources", () => {
+    const legacyUnsafeDocument = {
+      schemaVersion: 1,
+      id: "legacy-note",
+      title: "Legacy renderer input",
+      tags: [],
+      root: {
+        id: "root",
+        kind: "element",
+        type: "doc",
+        flow: "block",
+        children: [
+          {
+            id: "figure-1",
+            kind: "atom",
+            type: "figure",
+            flow: "block",
+            src: "javascript:alert(1)",
+            alt: "Unsafe",
+          },
+        ],
+      },
+    } as NoteDocument;
+
+    const html = renderDocument(legacyUnsafeDocument);
+
+    expect(html).toContain('<img alt="Unsafe"/>');
+    expect(html).not.toContain("javascript:");
+  });
+
   it("renders figures without alt text as decorative images", () => {
     const html = renderDocument(
       documentWithBlocks([
