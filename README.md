@@ -191,6 +191,8 @@ The intended ownership rule is:
   surface audit
 - `docs/editor-read-only-policy-audit.md`: React read-only mutation policy audit
 - `docs/editor-toolbar-command-audit.md`: React toolbar command bridge audit
+- `docs/editor-popup-ime-selection-policy-audit.md`: popup, toolbar, IME, and
+  selection ownership policy audit
 - `docs/editor-debug-recorder-audit.md`: internal debug recorder certainty audit
 - `docs/editor-verification-gate-audit.md`: internal verification gate audit
 - `docs/editor-ime-trace-replay-audit.md`: internal IME trace replay audit
