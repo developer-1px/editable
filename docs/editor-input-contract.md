@@ -62,6 +62,48 @@ ProseMirror/Lexical 증거는 authority가 아니다. 같은 문제가 반복된
 | RO-01 | read-only | mutating key/beforeinput/paste/drop | explicit no-op | document mutation 없음 | 기존 canonical selection 보존 | native DOM mutation rollback, focus affordance 유지 | read-only tests | `readonly/block-mutating-input` |
 | RO-02 | read-only/platform | unsupported shortcuts, function keys | pass-through 또는 명시적 no-op | document mutation 없음 | selection mutation 없음. editor-owned no-op만 기록 가능 | browser/system 동작 방해 금지 | keyboard policy audit | `readonly/unsupported-keys` |
 
+## Evidence Cards
+
+| ID | 종류 | 근거 | 이 계약에서 쓰는 방식 |
+| --- | --- | --- | --- |
+| SPEC-INPUT | spec | W3C Input Events Level 2: `beforeinput`/`input`은 contenteditable editing host에 dispatch되고, `inputType`, `dataTransfer`, `getTargetRanges()`, cancelability, paste order를 정의한다. Source: https://www.w3.org/TR/input-events-2/ | 입력을 DOM mutation이 아니라 editor intent로 분류하는 1차 oracle. |
+| SPEC-IME-DIVERGENCE | spec + browser trace 필요 | Input Events Level 2는 `compositionupdate` 뒤 `beforeinput`/`input` pair를 설명하지만, UI Events는 composition 중 `beforeinput` -> `compositionupdate` -> `input` 순서를 설명한다. Input Events Level 2의 cancelability table도 IME composition 관련 `beforeinput`은 취소 가능하지 않은 경로를 포함한다. Source: https://www.w3.org/TR/input-events-2/#input-event-order-during-composition, https://www.w3.org/TR/input-events-2/#interface-InputEvent-Attributes, https://www.w3.org/TR/uievents/#events-composition-input-events | IME event order와 `beforeinput` cancelability는 spec만으로 닫지 않고 recorded browser trace fixture를 같이 요구한다. |
+| SPEC-UI-KEY | spec | UI Events는 `keydown`이 같은 key의 `beforeinput`/`input`/`keyup`보다 먼저 오고, 취소되면 관련 event/action이 dispatch되지 않는다고 정의한다. Source: https://www.w3.org/TR/uievents/#event-type-keydown | keyboard route와 pass-through/no-op 정책의 상위 oracle. |
+| SPEC-SELECTION | spec | Selection API는 anchor/focus node/offset, `isCollapsed`, `rangeCount`, type/direction을 정의한다. Source: https://www.w3.org/TR/selection-api/ | canonical selection이 anchor/focus/collapsed를 명시해야 하는 근거. |
+| SPEC-HTML-EDITING-HOST | spec | WHATWG HTML은 `contenteditable=true/false/plaintext-only`와 editing host를 정의한다. Source: https://html.spec.whatwg.org/multipage/interaction.html#contenteditable | `plaintext-only` editing host는 native text buffer일 뿐 document authority가 아니라는 근거. |
+| WPT-INPUT | WPT | WPT live input-events directory contains typing, cut/paste, delete-selection, getTargetRanges tests. Source: https://wpt.live/input-events/ | browser gate에서 selection/deletion/clipboard smoke를 고를 후보 suite. |
+| WPT-SELECTION | WPT | WPT live selection directory contains collapse, extend, isCollapsed, contenteditable, selectionchange tests. Source: https://wpt.live/selection/ | browser gate에서 selection/caret smoke를 고를 후보 suite. |
+| TRACE-IME-KO | browser trace fixture | Korean Hangul basic, stale composition, active mark, history, blur, Enter confirmation fixture corpus. | spec divergence와 OS/IME 차이를 닫는 repo-local 실행 근거. |
+| TRACE-P0 | browser-like replay fixture | P0 input fixture corpus: horizontal selection, range replacement/deletion, empty block Backspace, atom replacement, paste/drop/cut. | P0 user-visible contract를 jsdom replay로 고정하는 실행 근거. |
+| REF-PM-POLICY | reference editor | ProseMirror Guide/Reference: document state is a schema-controlled data structure, updates go through transactions, leaf/atom nodes and sorted mark sets are explicit concepts. Source: https://prosemirror.net/docs/guide/, https://prosemirror.net/docs/ref/ | 구현 복사가 아니라 canonical model, atom unit, mark normalization policy의 참고 카드. |
+| REF-LEXICAL-POLICY | reference editor | Lexical docs: source of truth is not DOM; editor state contains node tree and selection; selection has Range/Node variants; line breaks are explicit nodes for cross-browser consistency. Source: https://lexical.dev/docs/concepts/editor-state, https://lexical.dev/docs/concepts/selection, https://lexical.dev/docs/concepts/nodes | DOM을 truth로 삼지 않는 정책과 range/node selection 분리의 참고 카드. |
+| PRODUCT-POLICY | product policy | 이 문서의 P0 행, required feature list, local regression tests. | spec/WPT/reference가 애매하거나 제품 선택이 필요한 영역을 닫는 명시 정책. |
+
+## P0 Evidence Map
+
+| P0 ID | oracle cards | 판정 |
+| --- | --- | --- |
+| IME-01 | SPEC-INPUT, SPEC-IME-DIVERGENCE, TRACE-IME-KO, REF-LEXICAL-POLICY | composition order는 spec 차이가 있어 Korean trace를 최종 실행 근거로 둔다. |
+| IME-02 | SPEC-UI-KEY, TRACE-IME-KO, PRODUCT-POLICY | Enter는 IME commit 뒤 paragraph split까지 수행하는 제품 계약이다. |
+| IME-03 | SPEC-IME-DIVERGENCE, TRACE-IME-KO | stale compositionend는 spec만으로 닫지 않고 recorded trace로 고정한다. |
+| IME-04 | SPEC-INPUT, TRACE-IME-KO, REF-PM-POLICY, REF-LEXICAL-POLICY | active mark composition은 canonical model mark 정책과 trace fixture가 함께 닫는다. |
+| SEL-01 | SPEC-SELECTION, WPT-SELECTION, TRACE-P0 | collapsed 좌우 이동은 anchor/focus/collapsed state와 replay corpus로 고정한다. |
+| SEL-02 | SPEC-SELECTION, WPT-SELECTION, TRACE-P0, PRODUCT-POLICY | range에서 plain 좌우 Arrow는 collapse만 하고 추가 이동하지 않는 제품 계약이다. |
+| SEL-03 | SPEC-SELECTION, WPT-SELECTION, TRACE-P0 | Shift+Arrow는 anchor 유지, focus 이동으로 표현한다. |
+| SEL-04 | SPEC-SELECTION, REF-PM-POLICY, REF-LEXICAL-POLICY, TRACE-P0 | atom은 cursor stream의 한 unit이고 range/node affordance는 분리한다. |
+| MUT-01 | SPEC-INPUT, SPEC-SELECTION, TRACE-P0 | non-collapsed range replacement는 input intent와 selection range 근거가 있다. |
+| MUT-02 | SPEC-SELECTION, REF-PM-POLICY, REF-LEXICAL-POLICY, TRACE-P0 | atom replacement는 node selection/atom policy와 replay가 닫는다. |
+| DEL-01 | SPEC-INPUT, WPT-INPUT, TRACE-P0, PRODUCT-POLICY | collapsed deletion은 inputType 근거가 있으나 grapheme/atom/block 단위는 제품 정책으로 명시한다. |
+| DEL-02 | SPEC-INPUT, SPEC-SELECTION, WPT-INPUT, TRACE-P0 | range deletion은 `deleteContent*` inputType과 range selection으로 닫는다. |
+| DEL-03 | SPEC-INPUT, WPT-INPUT, TRACE-P0, PRODUCT-POLICY | empty block boundary merge/delete는 browser intent 위에 제품 정책이 필요하다. |
+| CLIP-01 | SPEC-INPUT, WPT-INPUT, TRACE-P0 | paste event와 `insertFromPaste` order/dataTransfer 근거가 있다. |
+| CLIP-02 | SPEC-INPUT, WPT-INPUT, TRACE-P0, PRODUCT-POLICY | markdown/rich fragment restore는 transfer 근거 위에 제품 포맷 정책으로 닫는다. |
+| CLIP-03 | SPEC-INPUT, WPT-INPUT, TRACE-P0 | cut은 `deleteByCut`, clipboard event, replay corpus가 함께 닫는다. |
+| HIST-01 | SPEC-INPUT, REF-PM-POLICY, PRODUCT-POLICY | undo/redo는 transaction/history-style policy와 local tests로 닫는다. |
+| HIST-02 | SPEC-INPUT, TRACE-IME-KO, PRODUCT-POLICY | native `historyUndo/historyRedo`는 editor history route로 흡수한다. |
+| RO-01 | SPEC-INPUT, SPEC-HTML-EDITING-HOST, PRODUCT-POLICY | mutating input을 explicit no-op으로 만드는 read-only 제품 정책이다. |
+| RO-02 | SPEC-UI-KEY, PRODUCT-POLICY | browser/system shortcut은 pass-through를 기본으로 하고 editor-owned no-op만 명시한다. |
+
 ## Evidence Needed
 
 아래 항목은 추측으로 닫지 않는다. 구현이 필요하면 먼저 trace와 fixture를 추가한다.
@@ -95,5 +137,7 @@ ProseMirror/Lexical 증거는 authority가 아니다. 같은 문제가 반복된
 | IME Enter policy | 확정 제품 계약 | Enter는 composition commit 뒤 paragraph split까지 실행해야 한다. 이 동작은 IME P0에 포함한다. |
 | range Arrow collapse policy | 확정 제품 계약 | non-collapsed selection에서 plain 좌우 Arrow는 range를 edge로 collapse하고 추가 이동하지 않는다. |
 | P0 trace corpus | 실행 테스트로 닫힘 | `BlockEditor.inputTrace.test.tsx`가 selection movement/collapse/extension, range replacement, range Backspace/Delete, empty block Backspace, atom replacement, plain paste, markdown drop, cut을 replay fixture로 고정한다. |
+| evidence cards/map | 확정 근거 색인 | `Evidence Cards`와 `P0 Evidence Map`은 각 P0 행이 어떤 spec/WPT/trace/reference/product policy로 닫혔는지 추적한다. |
+| IME event order/cancelability | trace 필요 | Input Events와 UI Events가 composition 중 event order를 다르게 설명하고, composition `beforeinput` cancelability도 경로별 차이가 있어 recorded browser trace 없이 기대값을 확정하지 않는다. |
 | unsupported/evidence-needed cases | 미정 명시 | 브라우저/OS/접근성 matrix가 없는 항목은 `Evidence Needed`로 남긴다. |
 | mature editor evidence | 부분근거 | ProseMirror/Lexical은 반복 문제의 증거로 쓰되, 이 프로젝트의 canonical model contract를 대신하지 않는다. |
