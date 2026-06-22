@@ -145,6 +145,8 @@ The intended ownership rule is:
   context audit
 - `docs/editor-cursor-navigation-model-audit.md`: logical cursor stream and
   navigation command audit
+- `docs/editor-unicode-grapheme-rtl-offset-policy-audit.md`: Unicode grapheme,
+  DOM offset, deletion, logical movement, and RTL/BiDi policy audit
 - `docs/editor-coordinate-hit-testing-audit.md`: coordinate to cursor point
   hit-testing fallback policy audit
 - `docs/editor-markdown-adapter-audit.md`: markdown import/export adapter audit
