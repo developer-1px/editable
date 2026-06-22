@@ -580,6 +580,74 @@ describe("BlockEditor", () => {
     );
   });
 
+  it("keeps native format beforeinput as a prevented no-op separate from shortcut mark commands", async () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    const firstText = editor.querySelector(
+      '[data-path="/root/children/0/children/0/text"]',
+    )?.firstChild;
+    const documentView = editor.querySelector(".document-view");
+    if (!(firstText instanceof Text) || documentView === null) {
+      throw new Error("Fixture failed to render first text.");
+    }
+    setDOMRangeSelection(firstText, 0, firstText, 5);
+    fireEvent(editor.ownerDocument, new Event("selectionchange"));
+    const beforeHtml = documentView.innerHTML;
+    const beforeText = documentView.textContent;
+
+    for (const inputType of ["formatBold", "formatItalic", "formatRemove"]) {
+      const beforeInput = fireBeforeInput(editor, { inputType });
+
+      expect(beforeInput.defaultPrevented).toBe(true);
+      expect(documentView.innerHTML).toBe(beforeHtml);
+      expect(documentView.textContent).toBe(beforeText);
+    }
+  });
+
+  it("prevents native insertLink beforeinput from bypassing the pending href command seam", async () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    const firstText = editor.querySelector(
+      '[data-path="/root/children/0/children/0/text"]',
+    )?.firstChild;
+    const documentView = editor.querySelector(".document-view");
+    if (!(firstText instanceof Text) || documentView === null) {
+      throw new Error("Fixture failed to render first text.");
+    }
+    setDOMRangeSelection(firstText, 0, firstText, 5);
+    fireEvent(editor.ownerDocument, new Event("selectionchange"));
+    const beforeHtml = documentView.innerHTML;
+    const beforeText = documentView.textContent;
+
+    const beforeInput = fireBeforeInput(editor, {
+      inputType: "insertLink",
+      data: "https://example.com",
+    });
+
+    expect(beforeInput.defaultPrevented).toBe(true);
+    expect(documentView.innerHTML).toBe(beforeHtml);
+    expect(documentView.textContent).toBe(beforeText);
+    expect(
+      Array.from(editor.querySelectorAll("a")).some((element) =>
+        element.textContent?.includes("Plain"),
+      ),
+    ).toBe(false);
+
+    const linkShortcut = dispatchKeyboard(editor, "keydown", {
+      key: "k",
+      ctrlKey: true,
+    });
+
+    expect(linkShortcut.defaultPrevented).toBe(true);
+    expect(documentView.innerHTML).toBe(beforeHtml);
+  });
+
   it("pastes structured clipboard data through the transfer reader", async () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
