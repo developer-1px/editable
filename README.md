@@ -209,6 +209,8 @@ The intended ownership rule is:
 - `docs/editor-model-command-surface-audit.md`: headless model command surface
   audit
 - `docs/editor-history-grouping-audit.md`: undo unit and history grouping audit
+- `docs/editor-composition-history-policy-audit.md`: IME composition,
+  native buffer flush, and undo/redo grouping policy audit
 - `docs/editor-public-surface-audit.md`: public headless and React editor
   surface audit
 - `docs/editor-read-only-policy-audit.md`: React read-only mutation policy audit
