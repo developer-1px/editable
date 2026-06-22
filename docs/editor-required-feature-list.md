@@ -6,6 +6,12 @@ This is the wiki checklist for editor behavior that users expect to work by defa
 Core rule:
 Every editor-owned input must translate into canonical document and selection state first. The DOM may provide native text buffering and geometry, but it must not become the source of document truth.
 
+Input contract:
+`docs/editor-input-contract.md` maps P0 browser event sequences to expected
+editor intent, model result, selectionAfter, and render state. This checklist
+defines the expected behavior surface; the input contract defines the executable
+shape for owned inputs.
+
 ## 증거 강도
 
 | 항목 | 강도 | 이유 |
@@ -13,6 +19,7 @@ Every editor-owned input must translate into canonical document and selection st
 | product/QA checklist role | 확정 | Purpose가 명시하듯 이 문서는 사용자가 기본으로 기대하는 editor behavior checklist다. 구현 상태 문서가 아니다. |
 | checklist scope inventory | 확정 현재 상태 | 현재 checklist는 Selection State부터 Platform And Browser Policy까지 15개 섹션이다. `docs/editor-feature-coverage-audit.md`도 같은 15개 섹션을 coverage map으로 대조한다. |
 | canonical-state rule | 확정 제품 원칙 | 모든 editor-owned input이 먼저 canonical document/selection state로 들어가야 한다는 기대를 고정한다. 실제 구현 증거는 model/view/react tests와 topic audit에서 확인해야 한다. |
+| P0 input contract | 확정 계약 | `docs/editor-input-contract.md`가 브라우저 event sequence를 editor intent, model result, selectionAfter, render state로 연결한다. |
 | implementation-complete interpretation | 제거 확정 | 이 문서의 bullet을 체크리스트처럼 읽어 전체 완료로 선언하면 browser/OS/assistive-tech matrix, link UX, rich clipboard graph restore, history grouping 같은 미정 범위를 지운다. 완료/부분확정/미정 분류는 feature coverage audit이 맡는다. |
 | executable coverage | 이 파일만으로는 미정 | 이 파일은 test names, ED acceptance, browser smoke 결과를 직접 담지 않는다. 실행 증거는 `docs/editor-issues.md`, `docs/editor-feature-coverage-audit.md`, topic audits, Vitest/verify output을 같이 봐야 한다. |
 | future product options | 미정 | `insertLineBreak`, Tab outside list, accessibility announcement, browser-specific behavior처럼 checklist가 열어 둔 옵션은 현재 product/API/QA 결정으로 남을 수 있다. |

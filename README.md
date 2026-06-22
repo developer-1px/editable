@@ -88,6 +88,8 @@ The intended ownership rule is:
 - `docs/editor-issues.md`: implementation issue history and accepted work
 - `docs/editor-required-feature-list.md`: product/QA checklist of expected
   editor behavior
+- `docs/editor-input-contract.md`: P0 browser input event to editor
+  intent/model/selection/render contract
 - `docs/repo-analysis-report.md`: current confirmed-vs-ambiguous repo analysis
 - `docs/editor-document-authority-audit.md`: document authority and stale-risk
   audit

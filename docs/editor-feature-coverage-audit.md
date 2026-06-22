@@ -4,7 +4,8 @@
 갱신일: 2026-06-22
 
 범위: 현재 dirty workspace 기준. `docs/editor-required-feature-list.md`의 15개
-섹션을 `docs/editor-issues.md`의 ED-001~ED-029 상태와
+섹션과 `docs/editor-input-contract.md`의 P0 입력 계약을
+`docs/editor-issues.md`의 ED-001~ED-029 상태와
 `src/editor/internal/**/*.test.*` 실행 테스트에 대조했다.
 
 이 문서는 `docs/editor-required-feature-list.md`를 구현 완료 문서로 바꾸지
@@ -19,6 +20,9 @@
   더 넓은 제품/브라우저/UX 보장을 요구한다.
 - 애매: 코드나 테스트 근거가 직접 보이지 않거나, 구현 의도만 있고 회귀 근거가
   부족하다.
+- P0 입력: `docs/editor-input-contract.md`의 event sequence, intent, model
+  result, selectionAfter, render state 중 하나라도 직접 근거가 없으면 부분확정
+  또는 애매로 둔다.
 
 ## 요약
 
@@ -45,6 +49,7 @@
 | 항목 | 강도 | 이유 |
 | --- | --- | --- |
 | required feature list authority | 확정 | `docs/editor-required-feature-list.md`는 15개 제품/QA 기대 섹션을 담지만 구현 완료 문서가 아니다. 이 문서가 required list와 ED/test coverage 사이의 coverage map 역할을 한다. |
+| P0 input contract authority | 확정 계약 | `docs/editor-input-contract.md`는 브라우저 event sequence를 editor intent, model result, selectionAfter, render state로 연결하는 기준표다. coverage는 이 계약의 각 필드가 실행 근거를 갖는지로도 판정한다. |
 | ED implementation ledger | 확정 현재 상태 | `docs/editor-issues.md`는 ED-001~ED-029의 acceptance를 모두 체크 완료로 둔다. 단, ED ledger만으로 required list 전체 제품 완료를 증명하지는 않는다. |
 | editor executable coverage inventory | 확정 snapshot | 현재 editor test file inventory는 `src/editor/internal`, `src/editor/public`, `src/editor/react` 아래 26개 test file이고, 전체 `pnpm test` 기준선은 29 files/755 tests다. |
 | fully confirmed checklist sections | 확정 | Text Input And Replacement, Horizontal Keyboard Navigation, Vertical And Page Keyboard Navigation, Line/Block/Document Boundary Navigation, Deletion, Block Editing, Rendering And Scrolling은 현재 command/model/local rendering gate 범위에서 직접 깨지는 테스트가 있다. |
