@@ -102,7 +102,7 @@ export function previousTextBoundaryOffset(
 }
 
 function segmentText(text: string): string[] {
-  if (typeof Intl !== "undefined" && "Segmenter" in Intl) {
+  if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
     const segmenter = new Intl.Segmenter(undefined, {
       granularity: "grapheme",
     });

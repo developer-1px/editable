@@ -28,10 +28,12 @@ RTL/BiDi visual movement와 browser geometry parity는 아직 지원 contract가
 | `src/editor/internal/model/textCommands.ts` | collapsed text deletion은 previous/next grapheme boundary를 기준으로 range를 삭제한다. |
 | `src/editor/internal/view/contentEditableSelection.ts` | DOM selection offset을 text-run `data-path`와 document text 기준 grapheme boundary로 변환한다. |
 | `src/editor/internal/view/contentEditableViewEngine.ts` | native edit flush 후 caret offset을 `snapTextOffset`으로 보정한다. |
-| `src/editor/internal/model/cursor.test.ts` | emoji surrogate pair와 decomposed letter movement를 고정한다. |
-| `src/editor/internal/model/textCommands.test.ts` | grapheme cluster Backspace/Delete를 고정한다. |
-| `src/editor/internal/view/contentEditableViewEngine.test.ts` | DOM selection과 native flush caret이 grapheme boundary로 snap되는 것을 고정한다. |
-| `src/editor/internal/model/clipboard.test.ts` | multi-code-unit grapheme range serialization이 text를 누락하지 않는 것을 고정한다. |
+| `src/editor/internal/fixtures/unicodeGraphemeCorpus.ts` | variation selector, keycap, ZWJ emoji, combining mark, committed Hangul jamo corpus를 공유한다. |
+| `src/editor/internal/model/textBoundaries.test.ts` | `Intl.Segmenter` grapheme boundary와 `Intl.Segmenter` 미지원 code point fallback을 고정한다. |
+| `src/editor/internal/model/cursor.test.ts` | emoji surrogate pair, decomposed letter, Unicode corpus movement를 고정한다. |
+| `src/editor/internal/model/textCommands.test.ts` | grapheme cluster Backspace/Delete와 Unicode corpus deletion을 고정한다. |
+| `src/editor/internal/view/contentEditableViewEngine.test.ts` | DOM selection과 native flush caret이 grapheme boundary로 snap되는 것을 Unicode corpus로 고정한다. |
+| `src/editor/internal/model/clipboard.test.ts` | multi-code-unit grapheme range serialization이 text를 누락하지 않는 것을 Unicode corpus로 고정한다. |
 | Lexical PR #7175 | BMP code point + variation selector emoji인 `❤️` deletion이 surrogate-pair workaround만으로는 부족하다고 설명한다. |
 | Lexical changelog | emoji, Japanese/Korean IME, RTL selection/direction, composition 관련 수정이 반복된다. |
 | ProseMirror view changelog | RTL `coordsAtPos`, line wrap coordinates, right-to-left arrow, `inclusiveStart`/`inclusiveEnd` 명명 변경, composition/cursor 수정이 반복된다. |
@@ -48,7 +50,7 @@ RTL/BiDi visual movement와 browser geometry parity는 아직 지원 contract가
 | DOM selection input | DOM offset은 raw observation이다. `readContentEditableSelection`이 document text 기준으로 snap한다. |
 | beforeinput target range | intent/evidence로만 사용한다. Grapheme 일부를 가리킬 수 있으므로 command policy가 최종 단위다. |
 | composition/preedit | IME composition 중 내부 jamo/partial character deletion은 native composition owner가 우선한다. Composition이 끝난 canonical text는 grapheme boundary contract를 따른다. |
-| fallback segmentation | `Intl.Segmenter`가 없으면 `Array.from(text)` code point fallback이다. ZWJ/combining/keycap 같은 full grapheme 보장은 아니다. |
+| fallback segmentation | `Intl.Segmenter`가 없으면 `Array.from(text)` code point fallback이다. ZWJ/combining/keycap 같은 full grapheme 보장은 하지 않으며 실행 테스트로 명시한다. |
 
 ## DOM offset to model offset rule
 
@@ -85,11 +87,11 @@ atom boundary에서 stale 또는 illegal cursor가 생긴다.
 | decomposed letter | `e\u0301 y` | 실행 테스트 있음 | decomposed grapheme을 word character로 본다. |
 | DOM mid-grapheme selection | offset inside `😀` | 실행 테스트 있음 | DOM offset 2는 legal boundary offset 3으로 snap한다. |
 | grapheme clipboard range | `A😀B` | 실행 테스트 있음 | `[0,4)` slice를 그대로 serialize하고 emoji를 누락하지 않는다. |
-| BMP + variation selector emoji | `❤️` | missing | delete once, intermediate `❤` state를 만들지 않는다. #79. |
-| keycap sequence | `#️⃣` | missing | hashtag/text matcher와 delete/move가 sequence를 한 grapheme으로 다룬다. #79. |
-| ZWJ emoji sequence | `👨‍👩‍👧‍👦` | missing | one grapheme movement/delete 또는 명시 unsupported를 결정한다. #79. |
-| combining mark sequence | `a\u0301`, multiple combining marks | partial | delete/move boundary corpus를 확장한다. #79. |
-| Hangul jamo sequence | `한` | IME trace는 있음, committed jamo fixture는 missing | composition 중은 native owner, committed jamo는 grapheme policy를 따른다. #79. |
+| BMP + variation selector emoji | `❤️` | 실행 테스트 있음 | delete once, intermediate `❤` state를 만들지 않는다. |
+| keycap sequence | `#️⃣` | 실행 테스트 있음 | delete/move가 sequence를 한 grapheme으로 다룬다. |
+| ZWJ emoji sequence | `👨‍👩‍👧‍👦` | 실행 테스트 있음 | `Intl.Segmenter`가 있으면 one grapheme movement/delete로 다룬다. |
+| combining mark sequence | `a\u0301`, multiple combining marks | 실행 테스트 있음 | delete/move boundary corpus가 multiple combining marks를 포함한다. |
+| Hangul jamo sequence | `한` | 실행 테스트 있음 | composition 중은 native owner, committed jamo는 grapheme policy를 따른다. |
 | RTL plain text | Hebrew/Arabic word | missing | logical movement와 visual movement를 분리한다. #80. |
 | mixed BiDi text | `abc שלום def` | missing | ArrowLeft/Right, Home/End, geometry rect policy를 별도 matrix로 정한다. #80. |
 | RTL + atom/mark boundary | RTL text + mention/link/code | missing | atom edge와 mark boundary가 visual cursor를 깨는지 browser fixture가 필요하다. #80. |
@@ -113,14 +115,14 @@ ProseMirror가 `inclusiveLeft`/`inclusiveRight`를 `inclusiveStart`/`inclusiveEn
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
 | stored offset is UTF-16 index | source 확정 | text node path+offset과 JSON string slice/replace가 UTF-16 index를 사용한다. | Public API 문서로 노출할 때는 grapheme boundary 제약을 같이 적어야 한다. |
-| legal cursor boundary is grapheme | 실행 테스트로 확정 | `textBoundaries.ts`, cursor/textCommands/contentEditable tests가 emoji/decomposed/snap/delete를 고정한다. | Fixture corpus가 ZWJ/keycap/variation selector/Hangul jamo까지 충분하지 않다. |
+| legal cursor boundary is grapheme | 실행 테스트로 확정 | `textBoundaries.ts`, cursor/textCommands/contentEditable tests가 emoji/decomposed/Unicode corpus snap/delete를 고정한다. | RTL/BiDi visual movement는 별도다. |
 | DOM offset is not canonical | 실행 테스트로 확정 | native selection bridge tests가 root containment, text-run mapping, grapheme snap, mark boundary mapping을 검증한다. | Real browser DOM Range boundary matrix는 별도다. |
 | collapsed text delete is grapheme-owned | 실행 테스트로 확정 | `textCommands.test.ts`가 grapheme cluster backward/forward deletion을 검증한다. | IME preedit 내부 삭제는 native composition owner 영역이다. |
 | `getTargetRanges()` can be partial grapheme | spec 확정 | W3C Input Events Level 2가 target ranges may cover only code points even when part of grapheme cluster라고 명시한다. | Browser implementation differences는 separate trace가 필요하다. |
 | Unicode upstream risk | 외부 사례 확정 | Lexical #7175, Lexical changelog, ProseMirror changelog가 emoji/IME/RTL/cursor fixes를 반복한다. | 각 upstream fix를 current implementation에 그대로 적용한다는 뜻은 아니다. |
 | logical movement current status | 실행 테스트로 확정 | cursor and cursorCommands tests가 logical stream movement/range extension을 고정한다. | RTL/BiDi visual movement는 미확정이다. |
 | RTL/BiDi visual movement | 미정 | docs/cursor geometry audits도 LTR horizontal 중심이라고 분리한다. | #80에서 browser matrix가 필요하다. |
-| `Intl.Segmenter` fallback | 미정 | fallback은 `Array.from(text)` code point segmentation이다. | Full grapheme contract를 보장하려면 polyfill/guard/fixture가 필요하다. #79. |
+| `Intl.Segmenter` fallback | 실행 테스트로 명시 | fallback은 `Array.from(text)` code point segmentation이다. | Full grapheme contract가 필요한 runtime이면 polyfill/guard를 별도 도입해야 한다. |
 
 ## /doubt 판정
 
@@ -130,7 +132,7 @@ ProseMirror가 `inclusiveLeft`/`inclusiveRight`를 `inclusiveStart`/`inclusiveEn
 | collapsed delete를 code unit 단위로 구현 | 제거 확정 | surrogate pair와 variation selector emoji를 깨뜨린다. |
 | grapheme boundary를 persisted offset unit으로 바꾸기 | 제거 | JSON string/DOM Range와의 interop가 어려워진다. UTF-16 index + legal boundary 제약이 더 작은 contract다. |
 | browser `getTargetRanges()`를 delete 단위로 신뢰 | 제거 | spec상 grapheme 일부만 가리킬 수 있다. |
-| `Intl.Segmenter` 없이 full grapheme 보장 선언 | 제거 | fallback은 code point 수준이다. 보장하려면 #79가 필요하다. |
+| `Intl.Segmenter` 없이 full grapheme 보장 선언 | 제거 | fallback은 code point 수준임을 실행 테스트로 고정했다. |
 | RTL/BiDi visual movement 완료 선언 | 제거 | current tests와 geometry는 LTR 중심이다. |
 | logical movement contract | 유지 | model command, deletion, selection extension의 안정적 기준이다. |
 
@@ -138,7 +140,7 @@ ProseMirror가 `inclusiveLeft`/`inclusiveRight`를 `inclusiveStart`/`inclusiveEn
 
 | issue | 목적 |
 | --- | --- |
-| #79 | Unicode grapheme fixture matrix와 `Intl.Segmenter` fallback/polyfill 정책을 구현한다. |
+| #79 | Unicode grapheme fixture matrix와 `Intl.Segmenter` fallback policy를 구현한다. |
 | #80 | BiDi/RTL visual cursor movement와 geometry browser matrix를 설계한다. |
 
 ## 현재 결론
@@ -147,6 +149,6 @@ ProseMirror가 `inclusiveLeft`/`inclusiveRight`를 `inclusiveStart`/`inclusiveEn
 grapheme cluster로 제한하는 것이다. DOM selection과 beforeinput target range는
 그대로 믿지 않고 document text 기준으로 snap한다.
 
-확정하지 말아야 할 것은 full Unicode corpus, `Intl.Segmenter` 미지원 보장, RTL/BiDi
-visual movement parity다. 이 둘은 #79와 #80에서 별도 실행 fixture와 browser matrix로
-닫아야 한다.
+확정하지 말아야 할 것은 `Intl.Segmenter` 미지원 환경의 full grapheme 보장과 RTL/BiDi
+visual movement parity다. Unicode corpus의 model/view/clipboard fixture는 #79 범위에서
+닫고, RTL/BiDi visual movement는 #80에서 별도 browser matrix로 닫아야 한다.

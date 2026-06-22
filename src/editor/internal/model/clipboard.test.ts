@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  unicodeFixtureClusterEnd,
+  unicodeFixtureClusterStart,
+  unicodeFixtureText,
+  unicodeGraphemeCorpus,
+} from "../fixtures/unicodeGraphemeCorpus";
+import {
   EDITABLE_CLIPBOARD_MIME,
   readClipboardTextFromTransfer,
   readTextFromTransfer,
@@ -84,6 +90,40 @@ describe("clipboard", () => {
 
     expect(data?.["text/plain"]).toBe("A😀B");
     expect(data?.["text/markdown"]).toBe("A😀B");
+  });
+
+  it("serializes the Unicode grapheme corpus without dropping cluster text", () => {
+    for (const fixture of unicodeGraphemeCorpus) {
+      const document = documentWithBlocks([
+        {
+          id: "block-1",
+          type: "paragraph",
+          children: [{ type: "text", text: unicodeFixtureText(fixture) }],
+        },
+      ]);
+
+      const data = serializeSelectionForClipboard(
+        document,
+        selectionFromCursorRange(
+          document,
+          {
+            path: "/root/children/0/children/0/text",
+            offset: unicodeFixtureClusterStart(),
+          },
+          {
+            path: "/root/children/0/children/0/text",
+            offset: unicodeFixtureClusterEnd(fixture),
+          },
+        ),
+      );
+
+      expect(data?.["text/plain"], fixture.id).toBe(fixture.grapheme);
+      expect(data?.["text/markdown"], fixture.id).toBe(fixture.grapheme);
+      expect(
+        JSON.parse(data?.[EDITABLE_CLIPBOARD_MIME] ?? "{}").plainText,
+        fixture.id,
+      ).toBe(fixture.grapheme);
+    }
   });
 
   it("serializes paragraph boundaries as markdown paragraph breaks", () => {

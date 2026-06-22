@@ -1,6 +1,12 @@
 import { createJSONDocument } from "@interactive-os/json-document";
 import { describe, expect, it } from "vitest";
 import {
+  unicodeFixtureClusterEnd,
+  unicodeFixtureClusterStart,
+  unicodeFixtureText,
+  unicodeGraphemeCorpus,
+} from "../fixtures/unicodeGraphemeCorpus";
+import {
   selectionFromCursorPoint,
   selectionFromCursorRange,
 } from "./cursorCommands";
@@ -621,6 +627,60 @@ describe("text commands", () => {
       path: "/root/children/0/children/0/text",
       offset: 1,
     });
+  });
+
+  it("deletes one Unicode grapheme corpus cluster backward and forward", () => {
+    for (const fixture of unicodeGraphemeCorpus) {
+      const document = documentWithBlocks([
+        {
+          id: "block-1",
+          type: "paragraph",
+          children: [{ type: "text", text: unicodeFixtureText(fixture) }],
+        },
+      ]);
+      const start = unicodeFixtureClusterStart();
+      const end = unicodeFixtureClusterEnd(fixture);
+
+      const backward = deleteBackward(
+        document,
+        selectionFromCursorPoint({
+          path: "/root/children/0/children/0/text",
+          offset: end,
+        }),
+      );
+      const forward = deleteForward(
+        document,
+        selectionFromCursorPoint({
+          path: "/root/children/0/children/0/text",
+          offset: start,
+        }),
+      );
+
+      expectOk(backward);
+      expectOk(forward);
+      expect(backward.patch, fixture.id).toMatchObject([
+        {
+          op: "replace",
+          path: "/root/children/0/children/0/text",
+          value: "AB",
+        },
+      ]);
+      expect(backward.selectionAfter.focus, fixture.id).toMatchObject({
+        path: "/root/children/0/children/0/text",
+        offset: start,
+      });
+      expect(forward.patch, fixture.id).toMatchObject([
+        {
+          op: "replace",
+          path: "/root/children/0/children/0/text",
+          value: "AB",
+        },
+      ]);
+      expect(forward.selectionAfter.focus, fixture.id).toMatchObject({
+        path: "/root/children/0/children/0/text",
+        offset: start,
+      });
+    }
   });
 
   it("deletes word ranges backward and forward through the same text leaf", () => {

@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  unicodeFixtureClusterEnd,
+  unicodeFixtureClusterStart,
+  unicodeFixtureText,
+  unicodeGraphemeCorpus,
+} from "../fixtures/unicodeGraphemeCorpus";
 import { EDITABLE_CLIPBOARD_MIME } from "../model/clipboard";
 import {
   selectionFromCursorPoint,
@@ -722,6 +728,32 @@ describe("createContentEditableViewEngine", () => {
     });
   });
 
+  it("snaps collapsed DOM selection across the Unicode grapheme corpus", () => {
+    for (const fixture of unicodeGraphemeCorpus) {
+      const text = unicodeFixtureText(fixture);
+      const note = documentWithBlocks([
+        {
+          id: "block-1",
+          type: "paragraph",
+          children: [{ type: "text", text }],
+        },
+      ]);
+      const { root, first } = setupTextRoot();
+      first.textContent = text;
+
+      setDOMSelection(first, unicodeFixtureClusterEnd(fixture) - 1);
+
+      expect(
+        readContentEditableSelection(root, note)?.focus,
+        fixture.id,
+      ).toMatchObject({
+        path: firstTextPath,
+        offset: unicodeFixtureClusterEnd(fixture),
+      });
+      root.remove();
+    }
+  });
+
   it("ignores native selections outside the editor root", () => {
     const note = documentWithBlocks([
       {
@@ -934,6 +966,48 @@ describe("createContentEditableViewEngine", () => {
       path: firstTextPath,
       offset: 3,
     });
+  });
+
+  it("snaps flushed native caret offsets across the Unicode grapheme corpus", () => {
+    for (const fixture of unicodeGraphemeCorpus) {
+      const text = unicodeFixtureText(fixture);
+      const note = documentWithBlocks([
+        {
+          id: "block-1",
+          type: "paragraph",
+          children: [{ type: "text", text }],
+        },
+      ]);
+      const { root, first } = setupTextRoot();
+      first.textContent = text;
+      const session = createContentEditableViewEngine();
+
+      setDOMSelection(first, unicodeFixtureClusterEnd(fixture) - 1);
+      expect(
+        session.planBeforeInput(
+          root,
+          note,
+          selectionFromCursorPoint({
+            path: firstTextPath,
+            offset: unicodeFixtureClusterStart(),
+          }),
+          { inputType: "insertText", data: "x" },
+        ),
+        fixture.id,
+      ).toEqual({ kind: "deferToContentEditable" });
+
+      const result = session.flush(root, note);
+
+      expect(result.ok, fixture.id).toBe(true);
+      if (!result.ok) {
+        throw new Error("Expected flush result.");
+      }
+      expect(result.selectionAfter.focus, fixture.id).toMatchObject({
+        path: firstTextPath,
+        offset: unicodeFixtureClusterEnd(fixture),
+      });
+      root.remove();
+    }
   });
 
   it("consumes the final composition commit once after composition ends", () => {
