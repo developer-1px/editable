@@ -580,7 +580,7 @@ describe("BlockEditor", () => {
 
     const toggleBold = dispatchKeyboard(editor, "keydown", {
       key: "b",
-      ctrlKey: true,
+      metaKey: true,
     });
     expect(toggleBold.defaultPrevented).toBe(true);
     fireBeforeInput(editor, { inputType: "insertText", data: "x" });
@@ -656,7 +656,7 @@ describe("BlockEditor", () => {
 
     const linkShortcut = dispatchKeyboard(editor, "keydown", {
       key: "k",
-      ctrlKey: true,
+      metaKey: true,
     });
 
     expect(linkShortcut.defaultPrevented).toBe(true);
@@ -2056,7 +2056,7 @@ describe("BlockEditor", () => {
 
     await waitFor(() => expect(document.activeElement).toBe(editor));
 
-    fireEvent.keyDown(editor, { key: "b", ctrlKey: true });
+    fireEvent.keyDown(editor, { key: "b", metaKey: true });
 
     const firstText = editor.querySelector(
       '[data-path="/root/children/0/children/0/text"]',

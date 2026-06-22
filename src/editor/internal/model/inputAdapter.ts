@@ -32,6 +32,15 @@ import {
   isInlineTextBlock,
   type NoteDocument,
 } from "./noteDocument";
+import {
+  type EditorKeyboardModifiers,
+  type EditorPlatform,
+  hasExactPlatformPrimaryModifier,
+  hasMacControlNavigationModifier,
+  hasNoShortcutModifier,
+  hasOnlyAltModifier,
+  hasPlatformPrimaryModifier,
+} from "./platformModifier";
 import { selectionIsCollapsed } from "./richSelection";
 import {
   deleteBackward,
@@ -54,6 +63,8 @@ export type EditorInput =
       metaKey?: boolean;
       ctrlKey?: boolean;
       altKey?: boolean;
+      altGraphKey?: boolean;
+      code?: string;
       isComposing?: boolean;
     }
   | {
@@ -71,6 +82,7 @@ export type EditorInput =
 
 export type EditorInputAdapterOptions = {
   geometry?: CursorGeometryAdapter;
+  platform?: EditorPlatform;
   readOnly?: boolean;
 };
 
@@ -92,11 +104,12 @@ export type EditorInputResult =
 
 export function isReadOnlyEditingKeyDown(
   input: Extract<EditorInput, { type: "keydown" }>,
+  options: { platform?: EditorPlatform } = {},
 ): boolean {
   return isReadOnlyEditingKey(
     input.key,
-    input.metaKey === true || input.ctrlKey === true,
-    input.altKey === true,
+    keyModifiers(input),
+    editorPlatform(options),
   );
 }
 
@@ -119,9 +132,7 @@ export function translateEditorInput(
       document,
       selection,
       input.key,
-      input.shiftKey === true,
-      input.metaKey === true || input.ctrlKey === true,
-      input.altKey === true,
+      keyModifiers(input),
       options,
     );
   }
@@ -177,12 +188,14 @@ function translateKeyDown(
   document: NoteDocument,
   selection: SelectionSnap,
   key: string,
-  shiftKey: boolean,
-  commandKey: boolean,
-  altKey: boolean,
+  modifiers: EditorKeyboardModifiers,
   options: EditorInputAdapterOptions,
 ): EditorInputResult {
-  if (commandKey && !altKey && key.toLowerCase() === "a") {
+  const platform = editorPlatform(options);
+  if (
+    hasExactPlatformPrimaryModifier(modifiers, platform) &&
+    key.toLowerCase() === "a"
+  ) {
     return selectionResult(selectAll(document).selectionAfter);
   }
   if (options.readOnly === true) {
@@ -190,83 +203,93 @@ function translateKeyDown(
       document,
       selection,
       key,
-      shiftKey,
-      commandKey,
-      altKey,
+      modifiers,
       options,
     );
 
     return (
       navigationResult ??
-      readOnlyBlockedKeyResult(selection, key, commandKey, altKey)
+      readOnlyBlockedKeyResult(selection, key, modifiers, platform)
     );
   }
 
-  if (commandKey && !altKey && key.toLowerCase() === "b") {
+  if (
+    hasExactPlatformPrimaryModifier(modifiers, platform) &&
+    key.toLowerCase() === "b"
+  ) {
     return textCommandResult(toggleMark(document, selection, "bold"));
   }
-  if (commandKey && !altKey && key.toLowerCase() === "i") {
+  if (
+    hasExactPlatformPrimaryModifier(modifiers, platform) &&
+    key.toLowerCase() === "i"
+  ) {
     return textCommandResult(toggleMark(document, selection, "italic"));
   }
-  if (commandKey && !altKey && key.toLowerCase() === "e") {
+  if (
+    hasExactPlatformPrimaryModifier(modifiers, platform) &&
+    key.toLowerCase() === "e"
+  ) {
     return textCommandResult(toggleMark(document, selection, "code"));
   }
-  if (commandKey && !altKey && key.toLowerCase() === "k") {
+  if (
+    hasExactPlatformPrimaryModifier(modifiers, platform) &&
+    key.toLowerCase() === "k"
+  ) {
     return textCommandResult(toggleLink(document, selection));
   }
 
-  if (!commandKey && !altKey && key === "Tab") {
+  if (hasNoShortcutModifier(modifiers) && key === "Tab") {
     const listDepth = adjustSelectedListDepth(
       document,
       selection,
-      shiftKey ? "outdent" : "indent",
+      modifiers.shiftKey === true ? "outdent" : "indent",
     );
     if (listDepth !== null) {
       return blockCommandResult(listDepth);
     }
 
-    return shiftKey
+    return modifiers.shiftKey === true
       ? selectionResult(selection)
       : textCommandResult(insertText(document, selection, "\t"));
   }
   if (key === "Backspace") {
-    if (commandKey) {
+    if (hasPlatformPrimaryModifier(modifiers, platform)) {
       return selectionResult(selection);
     }
 
-    return textCommandResult(
-      altKey
-        ? deleteWordBackward(document, selection)
-        : deleteBackward(document, selection),
-    );
+    if (hasOnlyAltModifier(modifiers)) {
+      return textCommandResult(deleteWordBackward(document, selection));
+    }
+    if (hasNoShortcutModifier(modifiers)) {
+      return textCommandResult(deleteBackward(document, selection));
+    }
+    return notHandled();
   }
   if (key === "Delete") {
-    if (commandKey) {
+    if (hasPlatformPrimaryModifier(modifiers, platform)) {
       return selectionResult(selection);
     }
 
-    return textCommandResult(
-      altKey
-        ? deleteWordForward(document, selection)
-        : deleteForward(document, selection),
-    );
+    if (hasOnlyAltModifier(modifiers)) {
+      return textCommandResult(deleteWordForward(document, selection));
+    }
+    if (hasNoShortcutModifier(modifiers)) {
+      return textCommandResult(deleteForward(document, selection));
+    }
+    return notHandled();
   }
   if (key === "Enter") {
-    return commandKey || altKey
+    return hasPlatformPrimaryModifier(modifiers, platform) ||
+      hasOnlyAltModifier(modifiers)
       ? selectionResult(selection)
-      : textCommandResult(splitParagraph(document, selection));
+      : hasNoShortcutModifier(modifiers)
+        ? textCommandResult(splitParagraph(document, selection))
+        : notHandled();
   }
 
   return (
-    translateNavigationKeyDown(
-      document,
-      selection,
-      key,
-      shiftKey,
-      commandKey,
-      altKey,
-      options,
-    ) ?? notHandled()
+    translateNavigationKeyDown(document, selection, key, modifiers, options) ??
+    notHandled()
   );
 }
 
@@ -274,16 +297,49 @@ function translateNavigationKeyDown(
   document: NoteDocument,
   selection: SelectionSnap,
   key: string,
-  shiftKey: boolean,
-  commandKey: boolean,
-  altKey: boolean,
+  modifiers: EditorKeyboardModifiers,
   options: EditorInputAdapterOptions,
 ): EditorInputResult | null {
-  if (!commandKey && !altKey && key === "Escape") {
+  const platform = editorPlatform(options);
+  const primaryModifier = hasPlatformPrimaryModifier(modifiers, platform);
+  const shiftKey = modifiers.shiftKey === true;
+  const altKey = modifiers.altKey === true;
+  const macControlNavigation = macControlNavigationKey(
+    key,
+    modifiers,
+    platform,
+  );
+
+  if (hasNoShortcutModifier(modifiers) && key === "Escape") {
     return selectionResult(selectionWithoutTransientContext(selection));
   }
 
-  if (commandKey && !altKey && key === "ArrowLeft") {
+  if (macControlNavigation === "left") {
+    return selectionResult(
+      moveLeft(document, selection, { extend: shiftKey }).selectionAfter,
+    );
+  }
+  if (macControlNavigation === "right") {
+    return selectionResult(
+      moveRight(document, selection, { extend: shiftKey }).selectionAfter,
+    );
+  }
+  if (macControlNavigation === "up" && options.geometry !== undefined) {
+    return selectionResult(
+      moveUp(document, selection, options.geometry, {
+        extend: shiftKey,
+      }).selectionAfter,
+    );
+  }
+  if (macControlNavigation === "down" && options.geometry !== undefined) {
+    return selectionResult(
+      moveDown(document, selection, options.geometry, {
+        extend: shiftKey,
+      }).selectionAfter,
+    );
+  }
+
+  if (primaryModifier && key === "ArrowLeft") {
     return selectionResult(
       options.geometry === undefined
         ? moveBlockStart(document, selection, { extend: shiftKey })
@@ -293,7 +349,7 @@ function translateNavigationKeyDown(
           }).selectionAfter,
     );
   }
-  if (commandKey && !altKey && key === "ArrowRight") {
+  if (primaryModifier && key === "ArrowRight") {
     return selectionResult(
       options.geometry === undefined
         ? moveBlockEnd(document, selection, { extend: shiftKey }).selectionAfter
@@ -302,79 +358,94 @@ function translateNavigationKeyDown(
           }).selectionAfter,
     );
   }
-  if (commandKey && !altKey && key === "ArrowUp") {
+  if (primaryModifier && key === "ArrowUp") {
     return selectionResult(
       moveStart(document, selection, { extend: shiftKey }).selectionAfter,
     );
   }
-  if (commandKey && !altKey && key === "ArrowDown") {
+  if (primaryModifier && key === "ArrowDown") {
     return selectionResult(
       moveEnd(document, selection, { extend: shiftKey }).selectionAfter,
     );
   }
-  if (!altKey && key === "PageUp") {
+  const noShortcutModifier = hasNoShortcutModifier(modifiers);
+  const altOnlyModifier = hasOnlyAltModifier(modifiers);
+
+  if (!altKey && (primaryModifier || noShortcutModifier) && key === "PageUp") {
     return selectionResult(
-      commandKey || options.geometry === undefined
+      primaryModifier || options.geometry === undefined
         ? moveStart(document, selection, { extend: shiftKey }).selectionAfter
         : movePageUp(document, selection, options.geometry, {
             extend: shiftKey,
           }).selectionAfter,
     );
   }
-  if (!altKey && key === "PageDown") {
+  if (
+    !altKey &&
+    (primaryModifier || noShortcutModifier) &&
+    key === "PageDown"
+  ) {
     return selectionResult(
-      commandKey || options.geometry === undefined
+      primaryModifier || options.geometry === undefined
         ? moveEnd(document, selection, { extend: shiftKey }).selectionAfter
         : movePageDown(document, selection, options.geometry, {
             extend: shiftKey,
           }).selectionAfter,
     );
   }
-  if (!commandKey && altKey && key === "ArrowLeft") {
+  if (altOnlyModifier && key === "ArrowLeft") {
     return selectionResult(
       moveWordLeft(document, selection, { extend: shiftKey }).selectionAfter,
     );
   }
-  if (!commandKey && altKey && key === "ArrowRight") {
+  if (altOnlyModifier && key === "ArrowRight") {
     return selectionResult(
       moveWordRight(document, selection, { extend: shiftKey }).selectionAfter,
     );
   }
-  if (!commandKey && altKey && key === "ArrowUp") {
+  if (altOnlyModifier && key === "ArrowUp") {
     return selectionResult(
       moveBlockStart(document, selection, { extend: shiftKey }).selectionAfter,
     );
   }
-  if (!commandKey && altKey && key === "ArrowDown") {
+  if (altOnlyModifier && key === "ArrowDown") {
     return selectionResult(
       moveBlockEnd(document, selection, { extend: shiftKey }).selectionAfter,
     );
   }
-  if (key === "ArrowLeft") {
+  if (noShortcutModifier && key === "ArrowLeft") {
     return selectionResult(
       moveLeft(document, selection, { extend: shiftKey }).selectionAfter,
     );
   }
-  if (key === "ArrowRight") {
+  if (noShortcutModifier && key === "ArrowRight") {
     return selectionResult(
       moveRight(document, selection, { extend: shiftKey }).selectionAfter,
     );
   }
-  if (key === "ArrowUp" && options.geometry !== undefined) {
+  if (
+    noShortcutModifier &&
+    key === "ArrowUp" &&
+    options.geometry !== undefined
+  ) {
     return selectionResult(
       moveUp(document, selection, options.geometry, {
         extend: shiftKey,
       }).selectionAfter,
     );
   }
-  if (key === "ArrowDown" && options.geometry !== undefined) {
+  if (
+    noShortcutModifier &&
+    key === "ArrowDown" &&
+    options.geometry !== undefined
+  ) {
     return selectionResult(
       moveDown(document, selection, options.geometry, {
         extend: shiftKey,
       }).selectionAfter,
     );
   }
-  if (key === "Home") {
+  if (noShortcutModifier && key === "Home") {
     return selectionResult(
       options.geometry === undefined
         ? moveStart(document, selection, { extend: shiftKey }).selectionAfter
@@ -383,7 +454,7 @@ function translateNavigationKeyDown(
           }).selectionAfter,
     );
   }
-  if (key === "End") {
+  if (noShortcutModifier && key === "End") {
     return selectionResult(
       options.geometry === undefined
         ? moveEnd(document, selection, { extend: shiftKey }).selectionAfter
@@ -398,10 +469,10 @@ function translateNavigationKeyDown(
 function readOnlyBlockedKeyResult(
   selection: SelectionSnap,
   key: string,
-  commandKey: boolean,
-  altKey: boolean,
+  modifiers: EditorKeyboardModifiers,
+  platform: EditorPlatform,
 ): EditorInputResult {
-  if (isReadOnlyEditingKey(key, commandKey, altKey)) {
+  if (isReadOnlyEditingKey(key, modifiers, platform)) {
     return selectionResult(selection);
   }
 
@@ -410,12 +481,11 @@ function readOnlyBlockedKeyResult(
 
 function isReadOnlyEditingKey(
   key: string,
-  commandKey: boolean,
-  altKey: boolean,
+  modifiers: EditorKeyboardModifiers,
+  platform: EditorPlatform,
 ): boolean {
   if (
-    commandKey &&
-    !altKey &&
+    hasExactPlatformPrimaryModifier(modifiers, platform) &&
     ["b", "e", "i", "k", "u"].includes(key.toLowerCase())
   ) {
     return true;
@@ -430,7 +500,47 @@ function isReadOnlyEditingKey(
     return true;
   }
 
-  return !commandKey && !altKey && isPrintableEditingKey(key);
+  return hasNoShortcutModifier(modifiers) && isPrintableEditingKey(key);
+}
+
+function keyModifiers(
+  input: Extract<EditorInput, { type: "keydown" }>,
+): EditorKeyboardModifiers {
+  return {
+    altGraphKey: input.altGraphKey === true,
+    altKey: input.altKey === true,
+    ctrlKey: input.ctrlKey === true,
+    metaKey: input.metaKey === true,
+    shiftKey: input.shiftKey === true,
+  };
+}
+
+function editorPlatform(options: {
+  platform?: EditorPlatform;
+}): EditorPlatform {
+  return options.platform ?? "other";
+}
+
+function macControlNavigationKey(
+  key: string,
+  modifiers: EditorKeyboardModifiers,
+  platform: EditorPlatform,
+): "left" | "right" | "up" | "down" | null {
+  if (!hasMacControlNavigationModifier(modifiers, platform)) {
+    return null;
+  }
+
+  const normalizedKey = key.toLowerCase();
+  if (normalizedKey === "b") {
+    return "left";
+  }
+  if (normalizedKey === "f") {
+    return "right";
+  }
+  if (normalizedKey === "p") {
+    return "up";
+  }
+  return normalizedKey === "n" ? "down" : null;
 }
 
 function isPrintableEditingKey(key: string): boolean {

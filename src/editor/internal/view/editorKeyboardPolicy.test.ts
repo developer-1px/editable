@@ -20,12 +20,26 @@ describe("isHeadlessKeyDown", () => {
       }),
     ).toBe(true);
     expect(
-      isHeadlessKeyDown({
-        altKey: false,
-        ctrlKey: true,
-        key: "k",
-        metaKey: false,
-      }),
+      isHeadlessKeyDown(
+        {
+          altKey: false,
+          ctrlKey: true,
+          key: "k",
+          metaKey: false,
+        },
+        "other",
+      ),
+    ).toBe(true);
+    expect(
+      isHeadlessKeyDown(
+        {
+          altKey: false,
+          ctrlKey: false,
+          key: "k",
+          metaKey: true,
+        },
+        "mac",
+      ),
     ).toBe(true);
   });
 
@@ -66,20 +80,26 @@ describe("isHeadlessKeyDown", () => {
 
   it("owns unsupported command structural shortcuts so native editing cannot run", () => {
     expect(
-      isHeadlessKeyDown({
-        altKey: false,
-        ctrlKey: false,
-        key: "Backspace",
-        metaKey: true,
-      }),
+      isHeadlessKeyDown(
+        {
+          altKey: false,
+          ctrlKey: false,
+          key: "Backspace",
+          metaKey: true,
+        },
+        "mac",
+      ),
     ).toBe(true);
     expect(
-      isHeadlessKeyDown({
-        altKey: false,
-        ctrlKey: true,
-        key: "Delete",
-        metaKey: false,
-      }),
+      isHeadlessKeyDown(
+        {
+          altKey: false,
+          ctrlKey: true,
+          key: "Delete",
+          metaKey: false,
+        },
+        "other",
+      ),
     ).toBe(true);
     expect(
       isHeadlessKeyDown({
@@ -89,6 +109,22 @@ describe("isHeadlessKeyDown", () => {
         metaKey: false,
       }),
     ).toBe(true);
+  });
+
+  it("owns macOS Ctrl-B/F/P/N as navigation keys", () => {
+    for (const key of ["b", "f", "p", "n"]) {
+      expect(
+        isHeadlessKeyDown(
+          {
+            altKey: false,
+            ctrlKey: true,
+            key,
+            metaKey: false,
+          },
+          "mac",
+        ),
+      ).toBe(true);
+    }
   });
 
   it("passes browser/system shortcuts that are not editor commands through", () => {
@@ -117,12 +153,15 @@ describe("isHeadlessKeyDown", () => {
       }),
     ).toBe(false);
     expect(
-      isHeadlessKeyDown({
-        altKey: false,
-        ctrlKey: false,
-        key: "u",
-        metaKey: true,
-      }),
+      isHeadlessKeyDown(
+        {
+          altKey: false,
+          ctrlKey: false,
+          key: "u",
+          metaKey: true,
+        },
+        "mac",
+      ),
     ).toBe(false);
     expect(
       isHeadlessKeyDown({
@@ -131,6 +170,41 @@ describe("isHeadlessKeyDown", () => {
         key: "Tab",
         metaKey: false,
       }),
+    ).toBe(false);
+    expect(
+      isHeadlessKeyDown(
+        {
+          altKey: false,
+          ctrlKey: true,
+          key: "b",
+          metaKey: true,
+        },
+        "other",
+      ),
+    ).toBe(false);
+    expect(
+      isHeadlessKeyDown(
+        {
+          altKey: false,
+          ctrlKey: true,
+          key: "b",
+          metaKey: false,
+          shiftKey: true,
+        },
+        "other",
+      ),
+    ).toBe(false);
+    expect(
+      isHeadlessKeyDown(
+        {
+          altGraphKey: true,
+          altKey: true,
+          ctrlKey: true,
+          key: "b",
+          metaKey: false,
+        },
+        "other",
+      ),
     ).toBe(false);
   });
 });

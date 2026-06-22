@@ -435,7 +435,7 @@ describe("translateEditorInput", () => {
         key: "ArrowLeft",
         metaKey: true,
       },
-      { geometry: lineGeometry },
+      { geometry: lineGeometry, platform: "mac" },
     );
     const ctrlRight = translateEditorInput(
       document,
@@ -445,7 +445,7 @@ describe("translateEditorInput", () => {
         key: "ArrowRight",
         ctrlKey: true,
       },
-      { geometry: lineGeometry },
+      { geometry: lineGeometry, platform: "other" },
     );
     const shiftMetaRight = translateEditorInput(
       document,
@@ -456,7 +456,7 @@ describe("translateEditorInput", () => {
         shiftKey: true,
         metaKey: true,
       },
-      { geometry: lineGeometry },
+      { geometry: lineGeometry, platform: "mac" },
     );
     const shiftCtrlLeft = translateEditorInput(
       document,
@@ -467,7 +467,7 @@ describe("translateEditorInput", () => {
         shiftKey: true,
         ctrlKey: true,
       },
-      { geometry: lineGeometry },
+      { geometry: lineGeometry, platform: "other" },
     );
     const metaUp = translateEditorInput(
       document,
@@ -478,6 +478,7 @@ describe("translateEditorInput", () => {
         metaKey: true,
       },
       {
+        platform: "mac",
         geometry: {
           rectForPoint: () => rect(10, 20, 1, 18),
           pointFromCoordinates: () => ({
@@ -497,6 +498,7 @@ describe("translateEditorInput", () => {
         ctrlKey: true,
       },
       {
+        platform: "other",
         geometry: {
           rectForPoint: () => rect(10, 20, 1, 18),
           pointFromCoordinates: () => ({
@@ -559,7 +561,7 @@ describe("translateEditorInput", () => {
     ).toEqual(["/root/children/1"]);
   });
 
-  it("translates Ctrl+A and Meta+A to headless select-all", () => {
+  it("translates platform primary A to headless select-all", () => {
     const document = documentWithBlocks([
       {
         id: "block-1",
@@ -590,11 +592,16 @@ describe("translateEditorInput", () => {
       key: "a",
       ctrlKey: true,
     });
-    const meta = translateEditorInput(document, selection, {
-      type: "keydown",
-      key: "a",
-      metaKey: true,
-    });
+    const meta = translateEditorInput(
+      document,
+      selection,
+      {
+        type: "keydown",
+        key: "a",
+        metaKey: true,
+      },
+      { platform: "mac" },
+    );
 
     expectHandled(ctrl);
     expectHandled(meta);
@@ -613,7 +620,7 @@ describe("translateEditorInput", () => {
     expect(meta.selectionAfter).toEqual(ctrl.selectionAfter);
   });
 
-  it("translates Ctrl/Meta+B and I to headless mark commands", () => {
+  it("translates platform primary B and I to headless mark commands", () => {
     const document = documentWithText("ABCD");
     const selection = selectionFromCursorRange(
       document,
@@ -626,11 +633,16 @@ describe("translateEditorInput", () => {
       key: "b",
       ctrlKey: true,
     });
-    const italic = translateEditorInput(document, selection, {
-      type: "keydown",
-      key: "i",
-      metaKey: true,
-    });
+    const italic = translateEditorInput(
+      document,
+      selection,
+      {
+        type: "keydown",
+        key: "i",
+        metaKey: true,
+      },
+      { platform: "mac" },
+    );
 
     expectHandled(bold);
     expectHandled(italic);
@@ -658,7 +670,7 @@ describe("translateEditorInput", () => {
     ]);
   });
 
-  it("translates Ctrl/Meta+E and K to headless code and link mark commands", () => {
+  it("translates platform primary E and K to headless code and link mark commands", () => {
     const document = documentWithText("ABCD");
     const selection = selectionFromCursorRange(
       document,
@@ -672,11 +684,16 @@ describe("translateEditorInput", () => {
       key: "e",
       ctrlKey: true,
     });
-    const link = translateEditorInput(document, selection, {
-      type: "keydown",
-      key: "k",
-      metaKey: true,
-    });
+    const link = translateEditorInput(
+      document,
+      selection,
+      {
+        type: "keydown",
+        key: "k",
+        metaKey: true,
+      },
+      { platform: "mac" },
+    );
 
     expectHandled(code);
     expectHandled(link);
@@ -762,6 +779,132 @@ describe("translateEditorInput", () => {
       pendingLinkHref: "https://openai.com",
       activeMarks: [{ type: "link", href: "https://openai.com" }],
     });
+  });
+
+  it("uses macOS Ctrl-B/F/P/N as navigation, not formatting commands", () => {
+    const document = documentWithText("AB");
+    const selection = selectionFromCursorPoint({
+      path: "/root/children/0/children/0/text",
+      offset: 1,
+    });
+    const geometry: CursorGeometryAdapter = {
+      rectForPoint: () => rect(10, 20, 2, 18),
+      pointFromCoordinates: (_x, y) => ({
+        path: "/root/children/0/children/0/text",
+        offset: y < 20 ? 0 : 2,
+      }),
+    };
+
+    const backward = translateEditorInput(
+      document,
+      selection,
+      { type: "keydown", key: "b", ctrlKey: true },
+      { platform: "mac" },
+    );
+    const forward = translateEditorInput(
+      document,
+      selection,
+      { type: "keydown", key: "f", ctrlKey: true },
+      { platform: "mac" },
+    );
+    const up = translateEditorInput(
+      document,
+      selection,
+      { type: "keydown", key: "p", ctrlKey: true },
+      { geometry, platform: "mac" },
+    );
+    const down = translateEditorInput(
+      document,
+      selection,
+      { type: "keydown", key: "n", ctrlKey: true },
+      { geometry, platform: "mac" },
+    );
+
+    expectHandled(backward);
+    expectHandled(forward);
+    expectHandled(up);
+    expectHandled(down);
+    expect(backward.patch).toEqual([]);
+    expect(forward.patch).toEqual([]);
+    expect(up.patch).toEqual([]);
+    expect(down.patch).toEqual([]);
+    expect(backward.selectionAfter.focus).toMatchObject({ offset: 0 });
+    expect(forward.selectionAfter.focus).toMatchObject({ offset: 2 });
+    expect(up.selectionAfter.focus).toMatchObject({ offset: 0 });
+    expect(down.selectionAfter.focus).toMatchObject({ offset: 2 });
+    expect(backward.selectionAfter.context).toBeUndefined();
+  });
+
+  it("does not treat opposite primary, extra modifiers, AltGraph, or physical code as mark commands", () => {
+    const document = documentWithText("AB");
+    const selection = selectionFromCursorPoint({
+      path: "/root/children/0/children/0/text",
+      offset: 1,
+    });
+    const macControlB = translateEditorInput(
+      document,
+      selection,
+      { type: "keydown", key: "b", ctrlKey: true },
+      { platform: "mac" },
+    );
+
+    expectHandled(macControlB);
+    expect(macControlB.selectionAfter.focus).toMatchObject({ offset: 0 });
+    expect(macControlB.selectionAfter.context).toBeUndefined();
+    expect(
+      translateEditorInput(
+        document,
+        selection,
+        { type: "keydown", key: "b", metaKey: true },
+        { platform: "other" },
+      ),
+    ).toEqual({ ok: true, handled: false });
+    expect(
+      translateEditorInput(
+        document,
+        selection,
+        { type: "keydown", key: "b", ctrlKey: true, metaKey: true },
+        { platform: "other" },
+      ),
+    ).toEqual({ ok: true, handled: false });
+    expect(
+      translateEditorInput(
+        document,
+        selection,
+        { type: "keydown", key: "b", ctrlKey: true, shiftKey: true },
+        { platform: "other" },
+      ),
+    ).toEqual({ ok: true, handled: false });
+    expect(
+      translateEditorInput(
+        document,
+        selection,
+        { type: "keydown", key: "b", ctrlKey: true, altKey: true },
+        { platform: "other" },
+      ),
+    ).toEqual({ ok: true, handled: false });
+    expect(
+      translateEditorInput(
+        document,
+        selection,
+        {
+          type: "keydown",
+          key: "b",
+          ctrlKey: true,
+          altKey: true,
+          altGraphKey: true,
+        },
+        { platform: "other" },
+      ),
+    ).toEqual({ ok: true, handled: false });
+    expect(
+      translateEditorInput(
+        document,
+        selection,
+        { type: "keydown", key: ";", code: "KeyB", ctrlKey: true },
+        { platform: "other" },
+      ),
+    ).toEqual({ ok: true, handled: false });
   });
 
   it("does not create link marks without a pending href", () => {
@@ -971,11 +1114,16 @@ describe("translateEditorInput", () => {
       offset: 1,
     });
 
-    const commandBackspace = translateEditorInput(document, selection, {
-      type: "keydown",
-      key: "Backspace",
-      metaKey: true,
-    });
+    const commandBackspace = translateEditorInput(
+      document,
+      selection,
+      {
+        type: "keydown",
+        key: "Backspace",
+        metaKey: true,
+      },
+      { platform: "mac" },
+    );
     const commandDelete = translateEditorInput(document, selection, {
       type: "keydown",
       key: "Delete",
@@ -1045,7 +1193,7 @@ describe("translateEditorInput", () => {
       document,
       selection,
       { type: "keydown", key: "b", metaKey: true },
-      { readOnly: true },
+      { platform: "mac", readOnly: true },
     );
     const tab = translateEditorInput(
       document,

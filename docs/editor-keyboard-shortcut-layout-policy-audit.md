@@ -24,16 +24,16 @@ shortcut 판별은 "물리 키"가 아니라 "사용자가 입력한 semantic ke
   clipboard keymap mutation은 command로 실행하지 않는다. Plain Enter는 composition
   confirmation signal로 저장하고 final commit 뒤 paragraph split으로 지연 실행한다.
 - macOS의 `Ctrl+B/F/P/N`은 formatting shortcut이 아니라 text navigation shortcut으로
-  봐야 한다. 현재 runtime은 `metaKey || ctrlKey`를 command key로 합쳐서 이 기준과 drift가
-  있다.
+  본다.
 
 ## 현재 코드 판정
 
 | 경로 | 현재 동작 | 판정 |
 | --- | --- | --- |
-| `src/editor/internal/view/editorKeymap.ts` | copy/cut/paste/undo/redo는 `event.key.toLowerCase()`로 matching하고 `altKey`를 차단하며 `shiftKey`는 exact matching한다. | Dvorak 기준은 맞다. 단, platform별 primary modifier 분리는 없다. |
-| `src/editor/internal/view/editorKeyboardPolicy.ts` | movement/editing key와 `Cmd/Ctrl+A/B/I/E/K`만 headless-owned로 잡고 unsupported shortcut은 pass-through한다. | browser/system shortcut을 전부 빼앗지 않는 정책은 맞다. |
-| `src/editor/internal/model/inputAdapter.ts` | `metaKey || ctrlKey`를 하나의 command key로 합쳐 select-all, mark, link, line movement를 처리한다. | Windows/Linux Ctrl과 macOS Meta를 한 bucket으로 보는 단순화가 있다. |
+| `src/editor/internal/model/platformModifier.ts` | macOS `Meta`, non-mac `Control`, exact `Shift`, `AltGraph`, macOS Ctrl navigation modifier를 한 helper에서 판정한다. | platform primary와 exact modifier 기준을 runtime 공통 정책으로 닫았다. |
+| `src/editor/internal/view/editorKeymap.ts` | copy/cut/paste/undo/redo는 `event.key.toLowerCase()`와 platform-aware exact primary modifier로 matching한다. `code`는 받되 command authority로 쓰지 않는다. | Dvorak/extra modifier/opposite-primary 기준이 맞다. |
+| `src/editor/internal/view/editorKeyboardPolicy.ts` | movement/editing key, platform primary command, macOS `Ctrl+B/F/P/N`, Alt-only movement/editing만 headless-owned로 잡고 unsupported shortcut은 pass-through한다. | browser/system shortcut을 전부 빼앗지 않으면서 native editing mutation은 차단한다. |
+| `src/editor/internal/model/inputAdapter.ts` | select-all, mark, link, line/document movement가 platform-aware primary modifier를 사용한다. macOS `Ctrl+B/F/P/N`은 navigation으로 분리한다. | Windows/Linux Ctrl과 macOS Meta를 한 bucket으로 보던 drift를 해소했다. |
 | `src/editor/internal/react/useBlockEditorController.tsx` | internal composition phase가 keydown을 소유하면 keymap보다 먼저 prevent하고 return한다. | IME active shortcut suppression은 맞다. |
 | debug trace | `key`, `code`, `keyCode`, modifier, `isComposing`, `inputType`을 남긴다. | `code`와 legacy signal은 evidence로만 남기는 방향이 맞다. |
 
@@ -68,7 +68,7 @@ shortcut 판별은 "물리 키"가 아니라 "사용자가 입력한 semantic ke
 | Dvorak paste/formatting | `key`는 사용자 layout의 문자, `code`는 physical QWERTY 위치 | command는 `key`를 따른다. `code=KeyV`만 보고 paste/formatting을 실행하지 않는다. |
 | Korean IME composition | `compositionstart`, `insertCompositionText`, `isComposing`, optional `keyCode=229` | normal shortcut command는 억제하고 active leaf flush/commit으로만 model update한다. |
 | Korean IME Enter confirmation | `compositionend` 뒤 `keydown Enter keyCode=229`와 final `insertText` | Enter가 즉시 split되지 않고 final commit 뒤 지연 split된다. |
-| macOS Ctrl navigation | `ctrlKey=true`, `key=b/f/p/n`, `metaKey=false` | ArrowLeft/Right/Up/Down에 준하는 navigation으로 처리한다. 현재 구현은 follow-up 필요. |
+| macOS Ctrl navigation | `ctrlKey=true`, `key=b/f/p/n`, `metaKey=false` | ArrowLeft/Right/Up/Down에 준하는 navigation으로 처리한다. |
 | AltGraph printable | `ctrlKey=true`, `altKey=true`, printable `key` 또는 `AltGraph` modifier | editor shortcut이 아니라 text/OS-owned input으로 둔다. |
 | Option word movement | `altKey=true`, `key=ArrowLeft/ArrowRight` | word movement command. `altKey=true` + printable/dead key는 command가 아니다. |
 
@@ -100,9 +100,9 @@ shortcut 판별은 "물리 키"가 아니라 "사용자가 입력한 semantic ke
 
 | drift | 영향 | 처리 |
 | --- | --- | --- |
-| platform primary modifier 미분리 | macOS에서 `Ctrl+B/I/E/K`가 formatting command로 실행될 수 있고, Windows/Linux에서 `Meta` shortcut을 editor command로 오인할 수 있다. | 별도 구현 이슈로 분리한다. |
-| macOS `Ctrl+B/F/P/N` 미구현 | ProseMirror가 arrow-equivalent로 다루는 navigation shortcut이 현재 editor movement로 흡수되지 않는다. | platform primary modifier 이슈와 같이 처리한다. |
-| `getModifierState("AltGraph")` 미노출 | 현재 `altKey`로 대부분 차단되지만 browser/layout별 AltGraph trace를 직접 판정하지 않는다. | debug trace와 keymap helper 확장 시 함께 추가한다. |
+| platform primary modifier 미분리 | macOS에서 `Ctrl+B/I/E/K`가 formatting command로 실행될 수 있고, Windows/Linux에서 `Meta` shortcut을 editor command로 오인할 수 있었다. | #68에서 해소. `platformModifier` helper, keymap, ownership gate, input adapter가 같은 기준을 사용한다. |
+| macOS `Ctrl+B/F/P/N` 미구현 | ProseMirror가 arrow-equivalent로 다루는 navigation shortcut이 editor movement로 흡수되지 않았다. | #68에서 해소. macOS Ctrl navigation은 formatting보다 먼저 navigation으로 처리한다. |
+| `getModifierState("AltGraph")` 미노출 | `altKey`로 대부분 차단되지만 browser/layout별 AltGraph path를 직접 판정하지 못했다. | #68에서 keydown adapter/keymap/policy 입력으로 노출하고 command 오발동 방지 테스트를 추가했다. |
 | non-ASCII shortcut fallback 없음 | 현재 editor에는 heading 숫자/locale punctuation shortcut이 없어 당장 필요하지 않다. | future shortcut helper에서만 추가한다. |
 
 ## 증거 강도
@@ -110,11 +110,11 @@ shortcut 판별은 "물리 키"가 아니라 "사용자가 입력한 semantic ke
 | 항목 | 판정 | 근거 |
 | --- | --- | --- |
 | `event.key` primary policy | 외부 사례와 local source로 확정 | Lexical #8260, UI Events key/code 정의, current `editorKeymap.ts` |
-| exact modifier matching | 외부 사례와 local source로 부분 확정 | Lexical #7443, current `shiftKey`/`altKey` gate. platform primary 분리는 아직 미구현 |
+| exact modifier matching | 외부 사례와 local source로 확정 | Lexical #7443, `platformModifier.ts`, `editorKeymap.test.ts`, `inputAdapter.test.ts` |
 | IME active shortcut suppression | 실행 테스트로 확정 | `useBlockEditorController.handleKeyDown`, `BlockEditor.test.tsx`, `editor-ime-signal-policy-audit.md` |
 | paste keymap pass-through | 실행 테스트로 확정 | `BlockEditor.test.tsx`의 paste keymap test와 clipboard transfer policy |
-| macOS Ctrl navigation | 외부 근거로 확정 / local 구현 미정 | ProseMirror changelog는 근거가 강하지만 current runtime에는 platform branch가 없다 |
-| AltGraph/Option printable policy | 정책 확정 / layout matrix 미정 | `altKey` command 차단은 source로 확인. AltGraph real-browser matrix는 manual/browser trace 필요 |
+| macOS Ctrl navigation | 외부 근거와 local 실행 테스트로 확정 | ProseMirror changelog, `inputAdapter.test.ts`, `editorKeyboardPolicy.test.ts` |
+| AltGraph/Option printable policy | 정책 확정 / real-browser layout matrix 미정 | helper와 local tests로 command 오발동은 차단. AltGraph real-browser matrix는 manual/browser trace 필요 |
 | QWERTY/Dvorak/Korean IME/macOS Ctrl scenario | 조사 fixture spec 확정 | 이 문서의 trace scenarios. Dvorak/macOS Ctrl은 real OS/browser trace가 아직 없다 |
 
 ## /doubt 판정
@@ -131,5 +131,5 @@ shortcut 판별은 "물리 키"가 아니라 "사용자가 입력한 semantic ke
 
 2026년 기준 정석은 `event.key` semantic matching, exact modifier matching, platform-aware
 primary modifier, IME internal phase 우선, `beforeinput` edit intent 분리다. 현재 editor는
-`event.key`, `altKey` 차단, composition guard, paste pass-through는 맞지만, platform-aware
-primary modifier와 macOS Ctrl navigation이 아직 drift다.
+`event.key`, exact modifier, platform-aware primary modifier, macOS Ctrl navigation,
+AltGraph command 차단, composition guard, paste pass-through를 같은 정책 축으로 맞췄다.

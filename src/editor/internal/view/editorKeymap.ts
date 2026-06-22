@@ -1,3 +1,8 @@
+import {
+  type EditorPlatform,
+  hasExactPlatformPrimaryModifier,
+} from "../model/platformModifier";
+
 export type EditorKeymapCommand = "copy" | "cut" | "paste" | "redo" | "undo";
 
 export type EditorKeymapEntry = {
@@ -8,7 +13,9 @@ export type EditorKeymapEntry = {
 };
 
 export type EditorKeymapEvent = {
+  altGraphKey?: boolean;
   altKey: boolean;
+  code?: string;
   ctrlKey: boolean;
   key: string;
   metaKey: boolean;
@@ -26,17 +33,16 @@ export const editorKeymap: readonly EditorKeymapEntry[] = [
 
 export function matchEditorKeymap(
   event: EditorKeymapEvent,
+  platform: EditorPlatform = "other",
 ): EditorKeymapCommand | null {
-  if (event.altKey || (!event.metaKey && !event.ctrlKey)) {
-    return null;
-  }
-
   const key = event.key.toLowerCase();
   const match = editorKeymap.find(
     (entry) =>
       entry.key === key &&
-      (entry.shiftKey === true) === event.shiftKey &&
-      entry.platformModifier,
+      entry.platformModifier &&
+      hasExactPlatformPrimaryModifier(event, platform, {
+        shiftKey: entry.shiftKey,
+      }),
   );
 
   return match?.command ?? null;

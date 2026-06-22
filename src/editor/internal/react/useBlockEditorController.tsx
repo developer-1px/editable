@@ -72,6 +72,7 @@ import {
 import { createDOMCursorGeometry } from "../view/cursorGeometry";
 import { isHeadlessKeyDown } from "../view/editorKeyboardPolicy";
 import { matchEditorKeymap } from "../view/editorKeymap";
+import { detectEditorPlatform } from "../view/editorPlatform";
 import { focusElementPreservingScroll } from "../view/focusScroll";
 import { dispatchEditorCommandToDocument } from "./editorCommandBridge";
 
@@ -116,6 +117,7 @@ export function useBlockEditorController({
   const [nativeCursorPreview, setNativeCursorPreview] =
     useState<ReturnType<typeof readContentEditableCursorPoint>>(null);
   const [layoutVersion, setLayoutVersion] = useState(0);
+  const editorPlatform = detectEditorPlatform();
   if (contentEditableEngineRef.current === null) {
     contentEditableEngineRef.current = createContentEditableViewEngine();
   }
@@ -445,10 +447,18 @@ export function useBlockEditorController({
       applyInputResult(
         translateEditorInput(document.value, selection, input, {
           geometry: geometry ?? undefined,
+          platform: editorPlatform,
           readOnly,
         }),
       ),
-    [applyInputResult, document.value, geometry, readOnly, selectionSnapshot],
+    [
+      applyInputResult,
+      document.value,
+      editorPlatform,
+      geometry,
+      readOnly,
+      selectionSnapshot,
+    ],
   );
 
   const dispatchCommand = useCallback(
@@ -680,7 +690,18 @@ export function useBlockEditorController({
         return;
       }
 
-      const keymapCommand = matchEditorKeymap(event);
+      const altGraphKey = event.getModifierState("AltGraph");
+      const keymapCommand = matchEditorKeymap(
+        {
+          altGraphKey,
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          key: event.key,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey,
+        },
+        editorPlatform,
+      );
       if (keymapCommand !== null) {
         if (keymapCommand === "paste") {
           return;
@@ -704,15 +725,19 @@ export function useBlockEditorController({
 
       if (
         readOnly &&
-        isReadOnlyEditingKeyDown({
-          type: "keydown",
-          key: event.key,
-          shiftKey: event.shiftKey,
-          metaKey: event.metaKey,
-          ctrlKey: event.ctrlKey,
-          altKey: event.altKey,
-          isComposing: event.nativeEvent.isComposing,
-        })
+        isReadOnlyEditingKeyDown(
+          {
+            type: "keydown",
+            key: event.key,
+            shiftKey: event.shiftKey,
+            metaKey: event.metaKey,
+            ctrlKey: event.ctrlKey,
+            altKey: event.altKey,
+            altGraphKey,
+            isComposing: event.nativeEvent.isComposing,
+          },
+          { platform: editorPlatform },
+        )
       ) {
         event.preventDefault();
         runInput(
@@ -723,6 +748,7 @@ export function useBlockEditorController({
             metaKey: event.metaKey,
             ctrlKey: event.ctrlKey,
             altKey: event.altKey,
+            altGraphKey,
             isComposing: event.nativeEvent.isComposing,
           },
           selectionForInput(),
@@ -733,7 +759,19 @@ export function useBlockEditorController({
         return;
       }
 
-      if (!isHeadlessKeyDown(event)) {
+      if (
+        !isHeadlessKeyDown(
+          {
+            altGraphKey,
+            altKey: event.altKey,
+            ctrlKey: event.ctrlKey,
+            key: event.key,
+            metaKey: event.metaKey,
+            shiftKey: event.shiftKey,
+          },
+          editorPlatform,
+        )
+      ) {
         return;
       }
 
@@ -750,6 +788,7 @@ export function useBlockEditorController({
             metaKey: event.metaKey,
             ctrlKey: event.ctrlKey,
             altKey: event.altKey,
+            altGraphKey,
             isComposing: event.nativeEvent.isComposing,
           },
           selectionForCommand,
@@ -763,6 +802,7 @@ export function useBlockEditorController({
       flushContentEditableViewBeforeCommand,
       handleClipboardKeymapCommand,
       contentEditableEngine,
+      editorPlatform,
       readOnly,
       runInput,
       selectionForInput,
