@@ -31,17 +31,20 @@ describe("BlockEditor", () => {
   it("autofocuses the editor and places native selection at the model cursor", async () => {
     render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });
-    const selection = document.getSelection();
-    const firstText = editor.querySelector(".text-run")?.firstChild;
 
-    await waitFor(() => expect(document.activeElement).toBe(editor));
-    expect(editor.getAttribute("data-focused")).toBe("true");
+    await waitFor(() => {
+      const firstText = editor.querySelector(".text-run")?.firstChild;
+      const selection = document.getSelection();
 
-    expect(selection?.focusNode).toBe(firstText);
-    expect(selection?.focusOffset).toBe(0);
-    expect(document.body.querySelector('[data-overlay="caret"]')).not.toBe(
-      null,
-    );
+      expect(document.activeElement).toBe(editor);
+      expect(editor.getAttribute("data-focused")).toBe("true");
+      expect(firstText).not.toBe(null);
+      expect(selection?.focusNode).toBe(firstText);
+      expect(selection?.focusOffset).toBe(0);
+      expect(document.body.querySelector('[data-overlay="caret"]')).not.toBe(
+        null,
+      );
+    });
 
     fireEvent.blur(editor);
 
