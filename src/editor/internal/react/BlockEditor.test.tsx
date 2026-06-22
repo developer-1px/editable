@@ -1248,6 +1248,48 @@ describe("BlockEditor", () => {
     expect(editor.textContent).not.toContain("한Plain");
   });
 
+  it("deletes cross-block ranges before starting native composition", async () => {
+    render(<BlockEditor />);
+    const editor = screen.getByRole("textbox", { name: "Document body" });
+
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+
+    const firstText = editor.querySelector(
+      '[data-path="/root/children/0/children/0/text"]',
+    )?.firstChild;
+    const afterFigureText = editor.querySelector(
+      '[data-path="/root/children/2/children/0/text"]',
+    )?.firstChild;
+    if (!(firstText instanceof Text) || !(afterFigureText instanceof Text)) {
+      throw new Error("Fixture failed to render cross-block text.");
+    }
+
+    setDOMRangeSelection(firstText, 5, afterFigureText, 5);
+    fireEvent(document, new Event("selectionchange"));
+
+    fireEvent.compositionStart(editor);
+
+    await waitFor(() => {
+      expect(
+        editor
+          .querySelector(".document-view")
+          ?.getAttribute("data-selection-path"),
+      ).toBe("/root/children/0/children/0/text");
+      expect(
+        editor
+          .querySelector(".document-view")
+          ?.getAttribute("data-selection-offset"),
+      ).toBe("5");
+    });
+    expect(editor.getAttribute("data-ime-composing")).toBe("true");
+    expect(editor.querySelector(".figure-block")).toBeNull();
+    expect(
+      editor
+        .querySelector(".document-view")
+        ?.getAttribute("data-selection-selected-pointers"),
+    ).toBe("");
+  });
+
   it("recovers active native edits immediately when switching to read-only", async () => {
     const { rerender } = render(<BlockEditor />);
     const editor = screen.getByRole("textbox", { name: "Document body" });

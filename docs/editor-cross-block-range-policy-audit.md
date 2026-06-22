@@ -51,7 +51,7 @@ DOM selection, 그리고 composition/delete/paste가 이 selection을 만났을 
 | paste over range | 확정 | `translateEditorInput(..., { type: "paste" })` range replacement 테스트가 있다. |
 | DOM selection bridge | 부분확정 | `readContentEditableSelection`은 DOM `Selection.anchor/focus`를 text points로 읽어 single range로 만든다. |
 | multi-range DOM selection | 미지원으로 확정 | public model/bridge는 `selectionRanges[primaryIndex]`와 anchor/focus만 쓴다. `rangeCount > 1`을 model feature로 보존하지 않는다. |
-| cross-block composition range delete first | 정책 확정 / 구현 갭 | ProseMirror는 block boundary를 넘는 composition selection을 먼저 삭제하는 쪽으로 수정했다. 현재 code path는 `insertCompositionText`가 DOM focus point로 native defer될 수 있어 이 정책을 완전히 닫았다고 말할 수 없다. |
+| cross-block composition range delete first | 실행 테스트로 확정 | composition start에서 cross-block/atom/code 포함 range를 먼저 command delete로 collapse하고, 같은 text leaf 내부 range만 native composition defer를 허용한다. |
 
 ## Composition/Delete/Paste 정책
 
@@ -117,7 +117,7 @@ affordance다.
 | range delete/replacement | 실행 테스트로 확정 | inline atom, block atom, code block, selected ranges over Enter/paste/delete가 테스트에 있다. |
 | DOM anchor/focus bridge | 실행 테스트로 부분확정 | root containment, text-run mapping, grapheme snap, native range copy/cut/paste가 있다. |
 | Firefox multi-range | policy 확정 / browser QA 미정 | public model 미지원은 확정이다. 실제 Firefox drag selection의 `rangeCount` ordering은 별도 browser fixture가 필요하다. |
-| cross-block composition delete-first | policy 확정 / implementation gap | 외부 editor 회귀와 current composition code inspection상 별도 구현/fixture가 필요하다. |
+| cross-block composition delete-first | 실행 테스트로 확정 | view engine은 visible cross-block DOM range의 `insertCompositionText` native defer를 막고, React integration은 composition start에서 cross-block range를 먼저 삭제한다. |
 
 ## /doubt 판정
 
@@ -129,15 +129,13 @@ affordance다.
 | cross-block composition native defer | 제거 확정 | range 삭제와 composition target이 browser마다 갈라진다. |
 | Firefox multi-range first-range support | 보류 | browser ordering evidence 없이 expected로 박으면 틀린 호환성이 된다. |
 
-## 후속 구현 필요
+## 후속 확인 필요
 
-현재 정책상 반드시 닫아야 하지만 아직 실행 보장이 부족한 항목:
+현재 정책상 추가 browser evidence가 필요한 항목:
 
-1. cross-block 또는 atom/code 포함 non-collapsed selection에서 composition이 시작되면
-   native defer를 금지하고 command range replacement/delete-first path로 보낸다.
-2. Firefox multi-range DOM selection fixture를 browser gate 또는 recorded trace로
+1. Firefox multi-range DOM selection fixture를 browser gate 또는 recorded trace로
    추가해 normalize 실패 시 canonical selection 유지가 되는지 확인한다.
-3. `readContentEditableSelection`이 `Selection.rangeCount > 1`인 경우의 현재
+2. `readContentEditableSelection`이 `Selection.rangeCount > 1`인 경우의 현재
    anchor/focus normalize 동작을 명시적으로 테스트하거나, 안전하게 null로 돌릴지
    결정한다.
 

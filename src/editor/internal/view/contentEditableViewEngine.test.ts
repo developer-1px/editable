@@ -298,6 +298,37 @@ describe("createContentEditableViewEngine", () => {
     ).toEqual({ kind: "deferToContentEditable" });
   });
 
+  it("does not defer composition text over ranges spanning multiple text leaves", () => {
+    const note = documentWithBlocks([
+      {
+        id: "block-1",
+        type: "paragraph",
+        children: [{ type: "text", text: "Alpha" }],
+      },
+      {
+        id: "block-2",
+        type: "paragraph",
+        children: [{ type: "text", text: "Beta" }],
+      },
+    ]);
+    const { root, first, second } = setupTextRoot();
+
+    setDOMRangeSelection(first, 1, second, 1);
+
+    expect(
+      createContentEditableViewEngine().planBeforeInput(
+        root,
+        note,
+        selectionFromCursorRange(
+          note,
+          { path: firstTextPath, offset: 1 },
+          { path: secondTextPath, offset: 1 },
+        ),
+        { inputType: "insertCompositionText", isComposing: true },
+      ),
+    ).toEqual({ kind: "runHeadless" });
+  });
+
   it("keeps open range text insertion on the headless command path", () => {
     const note = documentWithBlocks([
       {

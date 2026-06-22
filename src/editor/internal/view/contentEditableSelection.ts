@@ -160,6 +160,13 @@ export function textPointFromDOMSelection(
   );
 }
 
+export function isContentEditableDOMSelectionCollapsed(
+  root: HTMLElement,
+): boolean {
+  const selection = getSelectionForRoot(root);
+  return selection?.isCollapsed === true;
+}
+
 export function findElementByDataPath(
   root: ParentNode,
   path: string,

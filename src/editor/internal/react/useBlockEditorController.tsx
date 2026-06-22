@@ -935,22 +935,58 @@ export function useBlockEditorController({
         return;
       }
 
+      const root = editorSurfaceRef.current;
+      let documentForComposition = document.value;
+      let selection = selectionForInput();
+      if (shouldDeleteSelectionBeforeNativeComposition(selection)) {
+        event.preventDefault();
+        const deleteResult = translateEditorInput(
+          document.value,
+          selection,
+          { type: "beforeinput", inputType: "deleteContent" },
+          {
+            geometry: geometry ?? undefined,
+            readOnly,
+          },
+        );
+        if (deleteResult.ok && deleteResult.handled) {
+          documentForComposition =
+            deleteResult.patch.length === 0
+              ? document.value
+              : documentAfterPatch(document.value, deleteResult.patch);
+          selection = deleteResult.selectionAfter;
+          setHasNativeRangeSelection(false);
+          setNativeCursorPreview(selectionSnapshotPoint(selection));
+          if (deleteResult.patch.length > 0) {
+            document.commit(deleteResult.patch, { selectionAfter: selection });
+          } else {
+            document.selection?.restore(selection);
+          }
+          contentEditableEngine.reset(root, documentForComposition);
+          const point = selectionSnapshotPoint(selection);
+          if (root !== null && point !== null) {
+            setContentEditableSelection(root, documentForComposition, point);
+          }
+        }
+      }
+
       setComposing(true);
       compositionEnterKeyRef.current = false;
-      const selection = selectionSnapshot();
       compositionSelectionRef.current = selection;
       contentEditableEngine.beginComposition(
-        editorSurfaceRef.current,
-        document.value,
+        root,
+        documentForComposition,
         selection,
       );
     },
     [
+      document,
       document.value,
       contentEditableEngine,
+      geometry,
       readOnly,
       resetContentEditableView,
-      selectionSnapshot,
+      selectionForInput,
     ],
   );
 
@@ -1498,6 +1534,37 @@ function selectionWithoutCollapsedSelectedPointers(
   return collapsedPoint === null
     ? selection
     : selectionFromCursorPoint(collapsedPoint, selection.context);
+}
+
+function shouldDeleteSelectionBeforeNativeComposition(
+  selection: SelectionSnap,
+): boolean {
+  if (selectionIsCollapsed(selection)) {
+    return false;
+  }
+
+  const range = selection.selectionRanges[selection.primaryIndex];
+  if (range === undefined) {
+    return false;
+  }
+
+  const anchor = offsetSelectionPoint(range.anchor);
+  const focus = offsetSelectionPoint(range.focus);
+  return anchor === null || focus === null || anchor.path !== focus.path;
+}
+
+function offsetSelectionPoint(
+  point: SelectionSnap["focus"],
+): { path: string; offset: number } | null {
+  if (
+    typeof point !== "object" ||
+    point === null ||
+    point.offset === undefined
+  ) {
+    return null;
+  }
+
+  return { path: point.path, offset: point.offset };
 }
 
 function selectionWithTransientContext(
