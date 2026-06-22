@@ -15,6 +15,10 @@ import type {
   SerializedStateSummary,
   SerializedTarget,
 } from "./debugInteractionTypes";
+import {
+  formatDocumentSurfaceIssue,
+  inspectDocumentSurfaceIntegrity,
+} from "./documentSurfaceIntegrity";
 
 export function readSnapshot({
   note,
@@ -38,7 +42,7 @@ export function readSnapshot({
       selection: selection ?? null,
     }),
     summary: {
-      document: summarizeDocument(note),
+      document: summarizeDocument(note, rootElement),
       dom: summarizeDom(dom),
       selection: summarizeSelection(selection),
     },
@@ -150,6 +154,7 @@ function syncFormControlValues(sourceRoot: Element, cloneRoot: Element) {
 
 function summarizeDocument(
   note: NoteDocument,
+  rootElement: HTMLElement | null,
 ): SerializedStateSummary["document"] {
   const blockIds = note.root.children.map((block) => block.id);
   const blocks = note.root.children.map(
@@ -163,6 +168,9 @@ function summarizeDocument(
     blockIds,
     blocks,
     duplicateBlockIds: duplicateValues(blockIds),
+    surfaceIssues: inspectDocumentSurfaceIntegrity(rootElement, note).map(
+      formatDocumentSurfaceIssue,
+    ),
     text: truncate(text, 500),
     title: note.title,
   };

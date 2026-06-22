@@ -87,6 +87,7 @@ export type SerializedStateSummary = {
     blockIds: string[];
     blocks: string[];
     duplicateBlockIds: string[];
+    surfaceIssues: string[];
     text: string;
     title: string;
   };

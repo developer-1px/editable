@@ -31,8 +31,13 @@ export function buildReport(
     latestState?.kind === "state"
       ? latestState.summary.document.duplicateBlockIds
       : [];
+  const surfaceIssues =
+    latestState?.kind === "state"
+      ? latestState.summary.document.surfaceIssues
+      : [];
   const diagnostics: DebugDiagnostic[] = [
     ...diagnoseDuplicateBlockIds(duplicateBlockIds),
+    ...diagnoseDocumentSurfaceIssues(surfaceIssues),
     ...consoleEntries.map((entry) => ({
       level: entry.method,
       message: entry.args.join(" "),
@@ -176,5 +181,14 @@ function diagnoseDuplicateBlockIds(
   return duplicateBlockIds.map((id) => ({
     level: "error",
     message: `Duplicate block id detected: ${id}. React keys are block ids, so this can trigger duplicate-key warnings in DocumentRenderer.`,
+  }));
+}
+
+function diagnoseDocumentSurfaceIssues(
+  surfaceIssues: string[],
+): DebugDiagnostic[] {
+  return surfaceIssues.map((issue) => ({
+    level: "error",
+    message: `Document render surface integrity issue: ${issue}`,
   }));
 }

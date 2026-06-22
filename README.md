@@ -167,6 +167,8 @@ The intended ownership rule is:
   bias, and contenteditable=false boundary audit
 - `docs/editor-dom-dirty-range-policy-audit.md`: DOM dirty range, leaf-only
   reparse, and model diff restore policy audit
+- `docs/editor-contentdom-stability-audit.md`: contentDOM stability, render
+  surface integrity, and decoration placement audit
 - `docs/editor-shadow-selection-fallback-audit.md`: ShadowRoot selection and
   Safari fallback policy audit
 - `docs/editor-scroll-focus-policy-audit.md`: scroll reveal and focus
