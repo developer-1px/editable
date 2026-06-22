@@ -411,6 +411,7 @@ function layoutTextBlockWithHardBreaks(
           item.font,
           1,
           orderForPoint,
+          { isLineBreak: true },
         ),
       );
       x += 1;
@@ -596,8 +597,9 @@ function textFragmentForRange(
   font: string,
   targetWidth: number,
   orderForPoint: CursorOrderResolver,
+  options: { isLineBreak?: boolean } = {},
 ): LayoutFragment {
-  return {
+  const fragment: LayoutFragment = {
     kind: "text",
     path,
     rect,
@@ -612,6 +614,11 @@ function textFragmentForRange(
     orderStart: orderForPoint({ path, offset: startOffset }),
     orderEnd: orderForPoint({ path, offset: endOffset }),
   };
+  if (options.isLineBreak === true) {
+    fragment.isLineBreak = true;
+  }
+
+  return fragment;
 }
 
 function layoutFragmentFromPretextFragment(
@@ -718,9 +725,15 @@ function lineFromFragments(
     blockPath,
     rect,
     start: pointForFragmentEdge(first, "before"),
-    end: pointForFragmentEdge(last, "after"),
+    end: pointForLineEnd(last),
     fragments,
   };
+}
+
+function pointForLineEnd(fragment: LayoutFragment): CursorPoint {
+  return isLineBreakFragment(fragment)
+    ? pointForFragmentEdge(fragment, "before")
+    : pointForFragmentEdge(fragment, "after");
 }
 
 export function pointForFragmentEdge(
@@ -740,6 +753,10 @@ export function pointForFragmentEdge(
     offset: edge === "before" ? fragment.startOffset : fragment.endOffset,
     affinity: edge === "before" ? "forward" : "backward",
   };
+}
+
+function isLineBreakFragment(fragment: LayoutFragment): boolean {
+  return fragment.kind === "text" && fragment.isLineBreak === true;
 }
 
 function caretXsForText(

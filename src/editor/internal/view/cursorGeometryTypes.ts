@@ -24,6 +24,7 @@ export type LayoutFragment =
       endOffset: number;
       offsets: number[];
       caretXs: number[];
+      isLineBreak?: boolean;
       orderStart: number;
       orderEnd: number;
     }

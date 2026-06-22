@@ -163,39 +163,7 @@ function pointFromCoordinates(
     return pointForFigureCoordinate(figure.path, figure.rect, x);
   }
 
-  const first = line.fragments[0];
-  const last = line.fragments.at(-1);
-  if (first === undefined || last === undefined) {
-    return null;
-  }
-
-  if (x <= first.rect.left) {
-    return pointForFragmentEdge(first, "before");
-  }
-  if (x >= last.rect.right) {
-    return pointForFragmentEdge(last, "after");
-  }
-
-  const fragment =
-    line.fragments.find(
-      (candidate) => x >= candidate.rect.left && x <= candidate.rect.right,
-    ) ?? nearestFragment(line, x);
-  if (fragment === null) {
-    return null;
-  }
-
-  if (fragment.kind === "atom") {
-    return {
-      path: fragment.path,
-      edge:
-        x < fragment.rect.left + fragment.rect.width / 2 ? "before" : "after",
-    };
-  }
-
-  return {
-    path: fragment.path,
-    offset: offsetForTextFragmentX(fragment, x),
-  };
+  return pointFromLineCoordinate(line, x);
 }
 
 function pointForVerticalMovement(
@@ -306,7 +274,7 @@ function pointFromLineCoordinate(
     return pointForFragmentEdge(first, "before");
   }
   if (x >= last.rect.right) {
-    return pointForFragmentEdge(last, "after");
+    return pointForCoordinateFragmentEdge(last, "after");
   }
 
   const fragment =
@@ -325,10 +293,23 @@ function pointFromLineCoordinate(
     };
   }
 
+  if (isLineBreakFragment(fragment)) {
+    return pointForFragmentEdge(fragment, "before");
+  }
+
   return {
     path: fragment.path,
     offset: offsetForTextFragmentX(fragment, x),
   };
+}
+
+function pointForCoordinateFragmentEdge(
+  fragment: LayoutFragment,
+  edge: "before" | "after",
+): CursorPoint {
+  return edge === "after" && isLineBreakFragment(fragment)
+    ? pointForFragmentEdge(fragment, "before")
+    : pointForFragmentEdge(fragment, edge);
 }
 
 function lineForPoint(map: GeometryMap, point: CursorPoint): LayoutLine | null {
@@ -645,4 +626,8 @@ function pointForFigureCoordinate(
     path,
     edge: x < rect.left + rect.width / 2 ? "before" : "after",
   };
+}
+
+function isLineBreakFragment(fragment: LayoutFragment): boolean {
+  return fragment.kind === "text" && fragment.isLineBreak === true;
 }
