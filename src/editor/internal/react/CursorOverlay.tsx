@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { CursorPoint } from "../model/cursor";
 import type { CursorGeometry } from "../view/cursorGeometry";
+import { FixedViewportOverlay } from "./FixedViewportOverlay";
 
 type CursorOverlayProps = {
   geometry: CursorGeometry;
@@ -18,7 +19,7 @@ export function CursorOverlay({ geometry, point }: CursorOverlayProps) {
   }
 
   return (
-    <div aria-hidden={true} className="cursor-overlay">
+    <FixedViewportOverlay className="cursor-overlay">
       <div
         className="selection-caret"
         data-edge={"edge" in point ? point.edge : undefined}
@@ -27,7 +28,7 @@ export function CursorOverlay({ geometry, point }: CursorOverlayProps) {
         data-path={point.path}
         style={caretStyle(rect)}
       />
-    </div>
+    </FixedViewportOverlay>
   );
 }
 

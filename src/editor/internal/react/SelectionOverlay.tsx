@@ -5,6 +5,7 @@ import type {
 import type { CSSProperties } from "react";
 import type { CursorPoint } from "../model/cursor";
 import type { CursorGeometry } from "../view/cursorGeometry";
+import { FixedViewportOverlay } from "./FixedViewportOverlay";
 
 type SelectionOverlayProps = {
   geometry: CursorGeometry;
@@ -24,7 +25,7 @@ export function SelectionOverlay({
   const selectedAtoms = selectedAtomRects(geometry, selection);
 
   return (
-    <div aria-hidden={true} className="selection-overlay">
+    <FixedViewportOverlay className="selection-overlay">
       {selectedRangeItems.map((item) => (
         <div
           className="selection-range"
@@ -42,7 +43,7 @@ export function SelectionOverlay({
           style={rectStyle(atom.rect)}
         />
       ))}
-    </div>
+    </FixedViewportOverlay>
   );
 }
 

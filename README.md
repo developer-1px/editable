@@ -186,6 +186,8 @@ The intended ownership rule is:
 - `docs/editor-widget-decoration-lifecycle-audit.md`: widget-like DOM identity,
   key, and destroy lifecycle audit
 - `docs/editor-cursor-geometry-audit.md`: cursor geometry adapter audit
+- `docs/editor-css-layout-geometry-policy-audit.md`: CSS layout, transform,
+  zoom, and overlay geometry policy audit
 - `docs/editor-model-command-surface-audit.md`: headless model command surface
   audit
 - `docs/editor-history-grouping-audit.md`: undo unit and history grouping audit

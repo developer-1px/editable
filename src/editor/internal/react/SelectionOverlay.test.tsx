@@ -156,7 +156,7 @@ describe("SelectionOverlay", () => {
       unmount = view.unmount;
 
       expect(
-        view.container.querySelectorAll('[data-overlay="selected-range"]'),
+        view.baseElement.querySelectorAll('[data-overlay="selected-range"]'),
       ).toHaveLength(2);
       expect(
         consoleError.mock.calls.some((call) =>
