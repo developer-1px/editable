@@ -3,6 +3,7 @@ import type { EditorTraceReplay } from "../../testing/editorTraceReplay";
 const firstTextPath = "/root/children/0/children/0/text";
 
 export const koreanHangulActiveMarkTrace = {
+  contractIds: ["IME-04"],
   name: "korean-hangul-active-mark",
   schema: "editable-trace-replay@1",
   steps: [

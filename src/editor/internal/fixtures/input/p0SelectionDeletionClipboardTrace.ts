@@ -4,6 +4,7 @@ const firstTextPath = "/root/children/0/children/0/text";
 const mentionPath = "/root/children/0/children/9";
 
 export const p0HorizontalSelectionTrace: EditorTraceReplay = {
+  contractIds: ["SEL-01", "SEL-02", "SEL-03"],
   name: "p0-horizontal-selection",
   schema: "editable-trace-replay@1",
   steps: [
@@ -93,6 +94,7 @@ export const p0HorizontalSelectionTrace: EditorTraceReplay = {
 };
 
 export const p0RangeReplacementTrace: EditorTraceReplay = {
+  contractIds: ["MUT-01"],
   name: "p0-range-replacement",
   schema: "editable-trace-replay@1",
   steps: [
@@ -122,6 +124,7 @@ export const p0RangeReplacementTrace: EditorTraceReplay = {
 };
 
 export const p0RangeBackspaceTrace: EditorTraceReplay = {
+  contractIds: ["DEL-02"],
   name: "p0-range-backspace",
   schema: "editable-trace-replay@1",
   steps: [
@@ -151,6 +154,7 @@ export const p0RangeBackspaceTrace: EditorTraceReplay = {
 };
 
 export const p0RangeDeleteForwardTrace: EditorTraceReplay = {
+  contractIds: ["DEL-02"],
   name: "p0-range-delete-forward",
   schema: "editable-trace-replay@1",
   steps: [
@@ -180,6 +184,7 @@ export const p0RangeDeleteForwardTrace: EditorTraceReplay = {
 };
 
 export const p0EmptyBlockBackspaceTrace: EditorTraceReplay = {
+  contractIds: ["DEL-03"],
   name: "p0-empty-block-backspace",
   schema: "editable-trace-replay@1",
   steps: [
@@ -244,6 +249,7 @@ export const p0EmptyBlockBackspaceTrace: EditorTraceReplay = {
 };
 
 export const p0AtomReplacementTrace: EditorTraceReplay = {
+  contractIds: ["MUT-02"],
   name: "p0-atom-replacement",
   schema: "editable-trace-replay@1",
   steps: [
@@ -282,6 +288,7 @@ export const p0AtomReplacementTrace: EditorTraceReplay = {
 };
 
 export const p0AtomKeyboardNavigationTrace: EditorTraceReplay = {
+  contractIds: ["SEL-04"],
   name: "p0-atom-keyboard-navigation",
   schema: "editable-trace-replay@1",
   steps: [
@@ -348,6 +355,7 @@ export const p0AtomKeyboardNavigationTrace: EditorTraceReplay = {
 };
 
 export const p0PlainPasteTrace: EditorTraceReplay = {
+  contractIds: ["CLIP-01"],
   name: "p0-plain-paste",
   schema: "editable-trace-replay@1",
   steps: [
@@ -369,6 +377,7 @@ export const p0PlainPasteTrace: EditorTraceReplay = {
 };
 
 export const p0MarkdownDropTrace: EditorTraceReplay = {
+  contractIds: ["CLIP-02"],
   name: "p0-markdown-drop",
   schema: "editable-trace-replay@1",
   steps: [
@@ -386,6 +395,7 @@ export const p0MarkdownDropTrace: EditorTraceReplay = {
 };
 
 export const p0CutTrace: EditorTraceReplay = {
+  contractIds: ["CLIP-03"],
   name: "p0-cut",
   schema: "editable-trace-replay@1",
   steps: [

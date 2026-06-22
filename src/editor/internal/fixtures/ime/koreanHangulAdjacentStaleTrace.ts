@@ -3,6 +3,7 @@ import type { EditorTraceReplay } from "../../testing/editorTraceReplay";
 const firstTextPath = "/root/children/0/children/0/text";
 
 export const koreanHangulAdjacentStaleStartTrace = {
+  contractIds: ["IME-03"],
   name: "korean-hangul-adjacent-stale-start",
   schema: "editable-trace-replay@1",
   steps: [
@@ -96,6 +97,7 @@ export const koreanHangulAdjacentStaleStartTrace = {
 } satisfies EditorTraceReplay;
 
 export const koreanHangulAdjacentStaleFinishTrace = {
+  contractIds: ["IME-03"],
   name: "korean-hangul-adjacent-stale-finish",
   schema: "editable-trace-replay@1",
   steps: [

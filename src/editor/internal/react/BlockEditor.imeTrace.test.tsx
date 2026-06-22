@@ -130,6 +130,7 @@ describe("BlockEditor IME trace replay", () => {
 
     await expect(
       replayEditorTrace(editor, {
+        contractIds: ["SEL-02"],
         name: "bad-expectation",
         schema: "editable-trace-replay@1",
         steps: [
@@ -144,7 +145,9 @@ describe("BlockEditor IME trace replay", () => {
           },
         ],
       }),
-    ).rejects.toThrow(/#0 keydown F1 after\.selectionOffset/);
+    ).rejects.toThrow(
+      /bad-expectation \[SEL-02\] at #0 keydown F1 after\.selectionOffset/,
+    );
   }, 10_000);
 
   it("commits IME text and splits the paragraph when Enter confirms composition", async () => {

@@ -27,6 +27,8 @@ rendered DOM target을 같이 기록해야 한다.
 5. 근거가 충분할 때만 fixture/test를 추가한다.
 6. test가 새 제품 정책을 만든다면 같은 커밋에서 input contract 또는 이 문서를
    갱신한다.
+7. replay fixture를 추가하면 `contractIds`에 P0 ID를 기록하고
+   `editorInputOracleContract.test.ts`의 mapping을 갱신한다.
 
 ## Oracle Sources
 
@@ -74,6 +76,10 @@ selection 기대값은 아래 필드를 가능한 한 모두 기록한다.
 ## Failure Triage
 
 실패한 P0 입력 테스트는 아래 네 가지 중 하나로 분류한다.
+
+`editable-trace-replay@1` expectation failure는 trace name, P0 `contractIds`,
+event index, phase, field를 포함해야 한다. 예를 들어 `SEL-02`가 붙은
+`after.selectionOffset` 실패는 range Arrow collapse 계약부터 확인한다.
 
 | 분류 | 판정 기준 | 처리 |
 | --- | --- | --- |

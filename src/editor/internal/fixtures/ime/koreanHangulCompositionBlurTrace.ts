@@ -3,6 +3,7 @@ import type { EditorTraceReplay } from "../../testing/editorTraceReplay";
 const firstTextPath = "/root/children/0/children/0/text";
 
 export const koreanHangulCompositionBlurTrace = {
+  contractIds: ["IME-01"],
   name: "korean-hangul-composition-blur",
   schema: "editable-trace-replay@1",
   steps: [

@@ -122,14 +122,29 @@ ProseMirror/Lexical 증거는 authority가 아니다. 같은 문제가 반복된
 
 - `preventDefault()`를 호출한 입력은 대응 editor command 또는 이 문서의 explicit
   no-op에 연결되어야 한다.
+- `editable-trace-replay@1` fixture는 이 문서의 P0 행과 같은 stable ID를
+  `contractIds`에 기록한다. 하나의 fixture가 여러 행을 검증하면 모든 ID를
+  적는다.
 - replay fixture는 매 step 뒤 data-path uniqueness, selection target/offset,
   selected pointer, caret/atom overlay target 같은 render invariant를 기본 검사한다.
+- replay expectation failure는 trace name, `contractIds`, event index, phase,
+  field를 포함해야 한다. 실패 triage는 debug recording이 아니라 이 문서의
+  expected table과 fixture expectation을 기준으로 한다.
 - command/model 테스트는 document schema, block id uniqueness, normalized marks,
   selection path/offset invariant를 같은 helper로 검사할 수 있어야 한다.
 - 이 문서의 P0 행을 바꾸는 구현은 같은 커밋에서 fixture 또는 감사 문서를 갱신한다.
 - 새 P0 기대값은 `docs/editor-input-oracle-triage.md`의 oracle source와
   verification level을 먼저 정한다.
 - evidence needed 항목은 임시 구현으로 닫지 않는다.
+
+## Replay Fixture Mapping
+
+`src/editor/internal/testing/editorInputOracleContract.test.ts`는 replay corpus의
+fixture name과 `contractIds`를 고정한다. 이 테스트가 보장하는 것은 아래 세 가지다.
+
+- P0 replay fixture가 contract ID 없이 추가되지 않는다.
+- `SEL-02`, `IME-02`처럼 핵심 계약 ID가 replay corpus에서 사라지지 않는다.
+- 실패 로그가 어떤 P0 상태 전이 규칙을 깼는지 바로 가리킨다.
 
 ## 증거 강도
 

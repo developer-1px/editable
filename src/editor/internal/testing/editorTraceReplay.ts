@@ -1,10 +1,33 @@
 import { act } from "@testing-library/react";
 
 export type EditorTraceReplay = {
+  contractIds?: readonly EditorInputContractId[];
   name: string;
   schema: "editable-trace-replay@1";
   steps: EditorTraceStep[];
 };
+
+export type EditorInputContractId =
+  | "CLIP-01"
+  | "CLIP-02"
+  | "CLIP-03"
+  | "DEL-01"
+  | "DEL-02"
+  | "DEL-03"
+  | "HIST-01"
+  | "HIST-02"
+  | "IME-01"
+  | "IME-02"
+  | "IME-03"
+  | "IME-04"
+  | "MUT-01"
+  | "MUT-02"
+  | "RO-01"
+  | "RO-02"
+  | "SEL-01"
+  | "SEL-02"
+  | "SEL-03"
+  | "SEL-04";
 
 export type EditorTraceStep =
   | {
@@ -153,6 +176,7 @@ export async function replayEditorTrace(
         event: step.event,
         eventIndex: events.length,
         expectation: step.expect,
+        trace,
       });
       assertReplayedEditorInvariants(root, after);
       events.push({
@@ -595,12 +619,14 @@ function assertTraceExpectation({
   event,
   eventIndex,
   expectation,
+  trace,
 }: {
   after: ReplayedEditorState;
   before: ReplayedEditorState;
   event: EditorTraceEvent;
   eventIndex: number;
   expectation?: EditorTraceExpectation;
+  trace: EditorTraceReplay;
 }) {
   if (expectation === undefined) {
     return;
@@ -612,6 +638,7 @@ function assertTraceExpectation({
     eventIndex,
     expectation: expectation.before,
     phase: "before",
+    trace,
   });
   assertStateExpectation({
     actual: after,
@@ -619,6 +646,7 @@ function assertTraceExpectation({
     eventIndex,
     expectation: expectation.after,
     phase: "after",
+    trace,
   });
 }
 
@@ -628,12 +656,14 @@ function assertStateExpectation({
   eventIndex,
   expectation,
   phase,
+  trace,
 }: {
   actual: ReplayedEditorState;
   event: EditorTraceEvent;
   eventIndex: number;
   expectation?: ReplayedEditorStateExpectation;
   phase: "after" | "before";
+  trace: EditorTraceReplay;
 }) {
   if (expectation === undefined) {
     return;
@@ -651,6 +681,7 @@ function assertStateExpectation({
         eventIndex,
         expected,
         field: `${phase}.${key}`,
+        trace,
       });
     }
   }
@@ -664,6 +695,7 @@ function assertStateExpectation({
         eventIndex,
         expected,
         field: `${phase}.pathText[${path}]`,
+        trace,
       });
     }
   }
@@ -675,20 +707,34 @@ function traceExpectationError({
   eventIndex,
   expected,
   field,
+  trace,
 }: {
   actual: unknown;
   event: EditorTraceEvent;
   eventIndex: number;
   expected: unknown;
   field: string;
+  trace: EditorTraceReplay;
 }): Error {
   return new Error(
-    `Trace expectation failed at #${eventIndex} ${describeTraceEvent(
+    `Trace expectation failed in ${trace.name}${formatTraceContracts(
+      trace.contractIds,
+    )} at #${eventIndex} ${describeTraceEvent(
       event,
     )} ${field}: expected ${JSON.stringify(expected)}, received ${JSON.stringify(
       actual,
     )}`,
   );
+}
+
+function formatTraceContracts(
+  contractIds: readonly EditorInputContractId[] | undefined,
+): string {
+  if (contractIds === undefined || contractIds.length === 0) {
+    return "";
+  }
+
+  return ` [${contractIds.join(", ")}]`;
 }
 
 function readPathText(root: HTMLElement): Record<string, string> {
