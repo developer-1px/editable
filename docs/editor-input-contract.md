@@ -80,7 +80,10 @@ ProseMirror/Lexical 증거는 authority가 아니다. 같은 문제가 반복된
 
 - `preventDefault()`를 호출한 입력은 대응 editor command 또는 이 문서의 explicit
   no-op에 연결되어야 한다.
-- replay fixture는 최종 document, selectionAfter, render invariant를 함께 검사한다.
+- replay fixture는 매 step 뒤 data-path uniqueness, selection target/offset,
+  selected pointer, caret/atom overlay target 같은 render invariant를 기본 검사한다.
+- command/model 테스트는 document schema, block id uniqueness, normalized marks,
+  selection path/offset invariant를 같은 helper로 검사할 수 있어야 한다.
 - 이 문서의 P0 행을 바꾸는 구현은 같은 커밋에서 fixture 또는 감사 문서를 갱신한다.
 - evidence needed 항목은 임시 구현으로 닫지 않는다.
 
