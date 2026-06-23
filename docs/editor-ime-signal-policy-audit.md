@@ -105,11 +105,11 @@ Compact debug trace에는 아래 필드를 남긴다.
 
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
-| internal phase primary policy | 실행 테스트로 확정 | `BlockEditor.imeTrace.test.tsx`, `contentEditableViewEngine.test.ts` | 모든 OS/browser IME matrix를 닫지는 않는다. |
+| internal phase primary policy | 실행 테스트로 확정 | `BlockEditor.imeTrace.test.tsx`, contentEditable view split tests | 모든 OS/browser IME matrix를 닫지는 않는다. |
 | `isComposing` 보조 신호 정책 | source/test로 확정 | `translateEditorInput` no-op guard, React composition guard, WebKit bug evidence | Safari/WebKit fixed 여부와 구버전 지원 범위는 별도 browser QA다. |
 | `compositionend.data` non-authority | source/test로 확정 | final commit fallback/duplicate normalization tests, React #10217 evidence | IE11 자체 지원을 선언한다는 뜻은 아니다. |
 | Safari Enter confirmation fixture | 실행 테스트로 확정 | `koreanHangulEnterConfirmTrace.ts`, `BlockEditor.imeTrace.test.tsx` | jsdom replay fixture이며 real Safari matrix는 아니다. |
-| debug trace IME fields | 실행 테스트로 확정 | `debugInteractionSnapshot.test.ts`가 keyCode, composing, composition data timeline을 검증한다. | Compact trace는 raw browser event object 전체를 보존하지 않는다. |
+| debug trace IME fields | 실행 테스트로 확정 | `debug interaction split tests`가 keyCode, composing, composition data timeline을 검증한다. | Compact trace는 raw browser event object 전체를 보존하지 않는다. |
 
 ## 현재 결론
 

@@ -33,8 +33,8 @@ shortcut 판별은 "물리 키"가 아니라 "사용자가 입력한 semantic ke
 | `src/editor/internal/model/platformModifier.ts` | macOS `Meta`, non-mac `Control`, exact `Shift`, `AltGraph`, macOS Ctrl navigation modifier를 한 helper에서 판정한다. | platform primary와 exact modifier 기준을 runtime 공통 정책으로 닫았다. |
 | `src/editor/internal/view/editorKeymap.ts` | copy/cut/paste/undo/redo는 `event.key.toLowerCase()`와 platform-aware exact primary modifier로 matching한다. `code`는 받되 command authority로 쓰지 않는다. | Dvorak/extra modifier/opposite-primary 기준이 맞다. |
 | `src/editor/internal/view/editorKeyboardPolicy.ts` | movement/editing key, platform primary command, macOS `Ctrl+B/F/P/N`, Alt-only movement/editing만 headless-owned로 잡고 unsupported shortcut은 pass-through한다. | browser/system shortcut을 전부 빼앗지 않으면서 native editing mutation은 차단한다. |
-| `src/editor/internal/model/inputAdapter.ts` | select-all, mark, link, line/document movement가 platform-aware primary modifier를 사용한다. macOS `Ctrl+B/F/P/N`은 navigation으로 분리한다. | Windows/Linux Ctrl과 macOS Meta를 한 bucket으로 보던 drift를 해소했다. |
-| `src/editor/internal/react/useBlockEditorController.tsx` | internal composition phase가 keydown을 소유하면 keymap보다 먼저 prevent하고 return한다. | IME active shortcut suppression은 맞다. |
+| `src/editor/internal/model/input-adapter/inputAdapter.ts` | select-all, mark, link, line/document movement가 platform-aware primary modifier를 사용한다. macOS `Ctrl+B/F/P/N`은 navigation으로 분리한다. | Windows/Linux Ctrl과 macOS Meta를 한 bucket으로 보던 drift를 해소했다. |
+| `src/editor/internal/react/block-editor/useBlockEditorController.tsx` | internal composition phase가 keydown을 소유하면 keymap보다 먼저 prevent하고 return한다. | IME active shortcut suppression은 맞다. |
 | debug trace | `key`, `code`, `keyCode`, modifier, `isComposing`, `inputType`을 남긴다. | `code`와 legacy signal은 evidence로만 남기는 방향이 맞다. |
 
 ## Shortcut Matching Rules
@@ -110,10 +110,10 @@ shortcut 판별은 "물리 키"가 아니라 "사용자가 입력한 semantic ke
 | 항목 | 판정 | 근거 |
 | --- | --- | --- |
 | `event.key` primary policy | 외부 사례와 local source로 확정 | Lexical #8260, UI Events key/code 정의, current `editorKeymap.ts` |
-| exact modifier matching | 외부 사례와 local source로 확정 | Lexical #7443, `platformModifier.ts`, `editorKeymap.test.ts`, `inputAdapter.test.ts` |
-| IME active shortcut suppression | 실행 테스트로 확정 | `useBlockEditorController.handleKeyDown`, `BlockEditor.test.tsx`, `editor-ime-signal-policy-audit.md` |
-| paste keymap pass-through | 실행 테스트로 확정 | `BlockEditor.test.tsx`의 paste keymap test와 clipboard transfer policy |
-| macOS Ctrl navigation | 외부 근거와 local 실행 테스트로 확정 | ProseMirror changelog, `inputAdapter.test.ts`, `editorKeyboardPolicy.test.ts` |
+| exact modifier matching | 외부 사례와 local source로 확정 | Lexical #7443, `platformModifier.ts`, `editorKeymap.test.ts`, inputAdapter split tests |
+| IME active shortcut suppression | 실행 테스트로 확정 | `useBlockEditorController.handleKeyDown`, BlockEditor split tests, `editor-ime-signal-policy-audit.md` |
+| paste keymap pass-through | 실행 테스트로 확정 | BlockEditor split tests의 paste keymap test와 clipboard transfer policy |
+| macOS Ctrl navigation | 외부 근거와 local 실행 테스트로 확정 | ProseMirror changelog, inputAdapter split tests, `editorKeyboardPolicy.test.ts` |
 | AltGraph/Option printable policy | 정책 확정 / real-browser layout matrix 미정 | helper와 local tests로 command 오발동은 차단. AltGraph real-browser matrix는 manual/browser trace 필요 |
 | QWERTY/Dvorak/Korean IME/macOS Ctrl scenario | 조사 fixture spec 확정 | 이 문서의 trace scenarios. Dvorak/macOS Ctrl은 real OS/browser trace가 아직 없다 |
 

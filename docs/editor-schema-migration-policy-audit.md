@@ -19,11 +19,11 @@ policy를 나눈다.
 | 근거 | 내용 |
 | --- | --- |
 | `src/editor/internal/model/noteDocument.ts` | `NoteDocumentSchema`는 `schemaVersion: z.literal(1)`만 받는다. |
-| `src/editor/internal/model/noteDocument.test.ts` | unsupported `schemaVersion: 2` document가 schema parse에서 실패하는 것을 검증한다. |
+| `note document split tests` | unsupported `schemaVersion: 2` document가 schema parse에서 실패하는 것을 검증한다. |
 | `src/editor/public/noteDocument.ts` | `parseNoteDocument(value)`는 `NoteDocumentSchema.safeParse(value)`만 호출하고, 실패 시 generic `"Document is invalid."` reason을 반환한다. Migration step은 없다. |
 | `src/editor/public/index.test.ts` | public parse seam이 valid version 1 persisted document를 받고, schemaVersion 2를 generic failure로 거절하는 것을 검증한다. |
 | `src/editor/internal/model/editorCore.ts` | headless `replaceDocument` command도 `NoteDocumentSchema.safeParse(command.document)`로 검증하고 실패 시 generic reason을 반환한다. |
-| `src/editor/internal/model/editorCore.test.ts` | unsupported schema version을 `replaceDocument`로 넣어도 migration하지 않고 current document를 유지하는 것을 검증한다. |
+| `editorCore split tests` | unsupported schema version을 `replaceDocument`로 넣어도 migration하지 않고 current document를 유지하는 것을 검증한다. |
 | `docs/editor-public-schema-audit.md` | public schema object export는 제거하고, validation seam은 `parseNoteDocument`로 좁힌다고 정리한다. |
 | `docs/editor-document-normal-form-audit.md` | current normal form은 schemaVersion 1 structured document라고 정리한다. |
 
@@ -45,11 +45,11 @@ policy를 나눈다.
 
 | 범위 | 판정 | 근거 |
 | --- | --- | --- |
-| current schema version | source/test로 확정 | `NoteDocumentSchema`가 `schemaVersion: z.literal(1)`만 받고, `noteDocument.test.ts`가 `schemaVersion: 2`를 schema failure로 고정한다. |
+| current schema version | source/test로 확정 | `NoteDocumentSchema`가 `schemaVersion: z.literal(1)`만 받고, `note document split tests`가 `schemaVersion: 2`를 schema failure로 고정한다. |
 | public parse behavior | 실행 테스트로 확정 | `src/editor/public/index.test.ts`가 version 1 persisted document parse success와 version 2 generic failure를 확인한다. |
 | no migration in parse | source/test로 확정 | `parseNoteDocument(value)`는 `NoteDocumentSchema.safeParse(value)`만 호출한다. Version 2 input은 transformed result가 아니라 generic failure로 반환된다. |
 | generic parse failure | 실행 테스트로 확정 | Public parse failure result는 `{ ok: false, reason: "Document is invalid." }`이고, Zod issue detail/path/message는 노출하지 않는다. |
-| replace validation and failure safety | 실행 테스트로 확정 | `editorCore.test.ts`가 `replaceDocument` invalid/unsupported document를 generic failure로 거절하고 current document를 mutate하지 않는 것을 확인한다. |
+| replace validation and failure safety | 실행 테스트로 확정 | `editorCore split tests`가 `replaceDocument` invalid/unsupported document를 generic failure로 거절하고 current document를 mutate하지 않는 것을 확인한다. |
 | batch atomicity with invalid replace | 실행 테스트로 확정 | batch dispatch에서 앞 command가 성공해도 뒤 `replaceDocument`가 실패하면 document가 원래 상태로 남는다. |
 | schema object public non-contract | facade/verifier로 확정 | `docs/editor-public-schema-audit.md`, public facade test, boundary verifier가 `NoteDocumentSchema` public export/re-export를 막고 `parseNoteDocument`를 좁은 seam으로 둔다. |
 | migration API absence | source behavior 확정, 제품/API 미정 | 현재 `migrateNoteDocument`, `untrustedInitial`, generated schema docs, field-level diagnostics DTO는 없다. 이 부재는 current behavior이지 future product policy가 아니다. |

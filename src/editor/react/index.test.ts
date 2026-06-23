@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import * as reactEditor from ".";
+import * as reactEditor from "./index";
 
 function reactFacadeTypeExports(): string[] {
   const sourcePath = new URL("./index.ts", import.meta.url);

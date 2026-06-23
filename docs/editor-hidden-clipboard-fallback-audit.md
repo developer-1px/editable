@@ -83,7 +83,7 @@ ProseMirror compatibility technique이지 current editor contract가 아니다.
 
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
-| editor copy/cut/paste event path | 실행 테스트로 확정 | `BlockEditor.test.tsx`, `clipboard.test.ts`, `contentEditableViewEngine.test.ts` | 모든 legacy browser MIME 조합은 아니다. |
+| editor copy/cut/paste event path | 실행 테스트로 확정 | BlockEditor split tests, `clipboard split tests`, contentEditable view split tests | 모든 legacy browser MIME 조합은 아니다. |
 | keymap write failure no-delete | 실행 테스트로 확정 | rejected `writeText` cut test | 실제 browser permission prompt UX는 별도 QA가 필요하다. |
 | hidden textarea fallback absence | 실행 테스트로 확정 | debug copy failure, missing Clipboard API keymap copy tests | 코드 전체의 미래 추가를 막으려면 lint/AST guard가 더 강하다. |
 | debug recorder copy failure | 실행 테스트로 확정 | `copy-failed` inspector와 raw report retention | 사용자 안내 UX는 제품 결정으로 남아 있다. |

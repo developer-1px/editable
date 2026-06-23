@@ -65,12 +65,12 @@ lifecycle도 없다.
 
 | 항목 | 증거 |
 | --- | --- |
-| native DOM range가 보이면 custom overlay를 숨김 | `BlockEditor.test.tsx`의 `hides custom overlays while a native DOM range selection is visible` |
-| hidden selection class를 만들지 않음 | `BlockEditor.test.tsx`의 `does not create hidden selection classes across native range and focus transitions` |
-| blur 시 overlay 제거, canonical selection 보존 | `BlockEditor.test.tsx`의 `preserves canonical range selection when focus is lost` |
-| atom selection이 stale native range보다 우선 | `BlockEditor.test.tsx`의 atom selection/copy regression tests |
-| IME 중 custom caret 숨김 | `BlockEditor.test.tsx`의 `does not draw a stale custom cursor while IME composition owns the native caret` |
-| toolbar command 전 IME UI state 정리 | `BlockEditor.test.tsx`의 `ends composition UI state before toolbar commands` |
+| native DOM range가 보이면 custom overlay를 숨김 | BlockEditor split tests의 `hides custom overlays while a native DOM range selection is visible` |
+| hidden selection class를 만들지 않음 | BlockEditor split tests의 `does not create hidden selection classes across native range and focus transitions` |
+| blur 시 overlay 제거, canonical selection 보존 | BlockEditor split tests의 `preserves canonical range selection when focus is lost` |
+| atom selection이 stale native range보다 우선 | BlockEditor split tests의 atom selection/copy regression tests |
+| IME 중 custom caret 숨김 | BlockEditor split tests의 `does not draw a stale custom cursor while IME composition owns the native caret` |
+| toolbar command 전 IME UI state 정리 | BlockEditor split tests의 `ends composition UI state before toolbar commands` |
 
 ## 증거 강도
 

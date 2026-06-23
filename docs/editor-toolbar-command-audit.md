@@ -20,9 +20,9 @@ contenteditable native edit, IME composition, read-only guard, history, insertio
 | 근거 | 내용 |
 | --- | --- |
 | `src/editor/internal/react/EditorToolbar.tsx` | Undo, Redo, Insert mention, Insert figure 네 개 icon button과 accessible labels를 렌더링하고 mouse down focus steal을 막는다. |
-| `src/editor/internal/react/BlockEditor.tsx` | toolbar handlers가 read-only guard, contenteditable flush, undo/redo, mention/figure insertion, focus restore를 담당한다. |
+| `src/editor/internal/react/block-editor/BlockEditor.tsx` | toolbar handlers가 read-only guard, contenteditable flush, undo/redo, mention/figure insertion, focus restore를 담당한다. |
 | `src/editor/internal/react/EditorToolbar.test.tsx` | fixed button set, accessible labels, hidden icons, callback wiring, mouse down focus-steal prevention을 검증한다. |
-| `src/editor/internal/react/BlockEditor.test.tsx` | read-only toolbar no-op, composition UI state before toolbar command, native text flush before toolbar insertion, undo/redo through toolbar, mention/figure insertion을 검증한다. |
+| BlockEditor split tests | read-only toolbar no-op, composition UI state before toolbar command, native text flush before toolbar insertion, undo/redo through toolbar, mention/figure insertion을 검증한다. |
 | `docs/editor-read-only-policy-audit.md` | read-only toolbar mutation guard는 확정이고 disabled affordance는 제품 UX 결정이라고 정리한다. |
 | `docs/editor-history-grouping-audit.md` | undo/redo는 native edit flush 뒤 history operation으로 들어가며 grouping policy는 별도 확정/미정으로 나뉜다. |
 | `docs/editor-style-surface-audit.md` | toolbar icon buttons, labels, focus-steal prevention은 확정이고 disabled styling은 보류라고 정리한다. |
@@ -52,9 +52,9 @@ contenteditable native edit, IME composition, read-only guard, history, insertio
 | button set and accessible names | 실행 테스트로 확정 | `EditorToolbar.test.tsx`가 `role="toolbar"`, `aria-label="Editor tools"`, Undo/Redo/Insert mention/Insert figure button set, icon `aria-hidden`을 고정한다. |
 | focus steal prevention | 실행 테스트로 확정 | `EditorToolbar.test.tsx`가 toolbar button `mouseDown`에서 `defaultPrevented`가 true임을 확인한다. |
 | callback dispatch | 실행 테스트로 확정 | `EditorToolbar.test.tsx`가 네 button click이 각 callback을 한 번씩 호출함을 확인한다. |
-| before-command native/composition flush | 실행 테스트로 확정 | `BlockEditor.test.tsx`가 toolbar insertion 전에 active DOM text edit을 flush하고, IME composing UI state를 끝낸 뒤 command를 적용함을 확인한다. |
+| before-command native/composition flush | 실행 테스트로 확정 | BlockEditor split tests가 toolbar insertion 전에 active DOM text edit을 flush하고, IME composing UI state를 끝낸 뒤 command를 적용함을 확인한다. |
 | insertion fixtures | 실행 테스트로 확정 | `BlockEditor` handlers는 mention label `Ada`와 `/sample-figure.svg` figure를 삽입하고, tests가 toolbar control로 mention/figure가 document에 들어감을 확인한다. 이것은 fixture insert contract이지 product picker contract가 아니다. |
-| read-only mutation guard | 실행 테스트로 확정 | `BlockEditor.test.tsx`가 read-only 상태에서 Undo/Redo/Insert mention/Insert figure를 눌러도 title/body/figure count가 mutate되지 않음을 확인한다. |
+| read-only mutation guard | 실행 테스트로 확정 | BlockEditor split tests가 read-only 상태에서 Undo/Redo/Insert mention/Insert figure를 눌러도 title/body/figure count가 mutate되지 않음을 확인한다. |
 | undo/redo toolbar bridge | 실행 테스트로 확정 | title history와 blur-flushed native edit undo/redo tests가 toolbar Undo/Redo button path로 document history를 복원한다. |
 | no public toolbar surface | facade/verifier로 확정 | React facade runtime export는 `BlockEditor`만이고, boundary verifier는 `EditorToolbar` 같은 internal React helper re-export를 violation으로 보고한다. Headless `createEditor()`에도 toolbar concept은 없다. |
 | button enabled/disabled state | source behavior 확정, UX policy 미정 | 현재 button은 always clickable이고 handlers가 read-only에서 no-op 처리한다. `disabled`, `aria-disabled`, `canUndo`/`canRedo`, tooltip policy는 구현/테스트되어 있지 않다. |
@@ -90,7 +90,7 @@ contenteditable native edit, IME composition, read-only guard, history, insertio
 뺄 수 없는 확정은 toolbar의 네 callback interface, accessible icon buttons, focus
 steal prevention, before-command native/composition flush, read-only mutation guard,
 undo/redo focus restore다. 이 확정은 `EditorToolbar.test.tsx`의 button/interface
-테스트와 `BlockEditor.test.tsx`의 command integration tests로 나뉘어 닫힌다.
+테스트와 BlockEditor split tests의 command integration tests로 나뉘어 닫힌다.
 
 아직 확정하면 안 되는 것은 link input toolbar, broad formatting toolbar, button
 enabled/disabled state, mention/media picker, toolbar customization/plugin surface,

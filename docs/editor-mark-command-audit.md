@@ -20,9 +20,9 @@ command seam이 뺄 수 없는 확정인지, 또는 public surface를 더 늘려
 | `src/editor/internal/model/markSelectionContext.ts` | selection context의 `activeMarks`와 `pendingLinkHref`를 normalize하고 unsafe active link mark를 버린다. |
 | `src/editor/internal/model/markOrder.ts` | mark ordering과 mark key를 정의한다. |
 | `src/editor/internal/model/linkHref.ts` | command-created/rendered link href trim/allowlist를 정의한다. |
-| `src/editor/internal/model/markCommands.test.ts` | range toggle, remove-if-fully-marked, inline code, link href normalization/rejection, collapsed active marks, unsafe active link drop을 검증한다. |
-| `src/editor/internal/model/inputAdapter.test.ts` | `Cmd/Ctrl+B/I/E/K`, pending href, Escape context clear를 검증한다. |
-| `src/editor/internal/react/DocumentRenderer.test.tsx` | structured mark rendering과 unsafe link render guard를 검증한다. |
+| `mark command split tests` | range toggle, remove-if-fully-marked, inline code, link href normalization/rejection, collapsed active marks, unsafe active link drop을 검증한다. |
+| inputAdapter split tests | `Cmd/Ctrl+B/I/E/K`, pending href, Escape context clear를 검증한다. |
+| `DocumentRenderer split tests` | structured mark rendering과 unsafe link render guard를 검증한다. |
 | `src/editor/public/index.test.ts` | persisted link mark href validation과 generic parse failure를 검증한다. |
 | `docs/editor-link-mark-audit.md` | link href command seam, no-prompt fallback 제거, legacy URL migration 미정을 정리한다. |
 
@@ -50,15 +50,15 @@ command seam이 뺄 수 없는 확정인지, 또는 public surface를 더 늘려
 | --- | --- | --- |
 | mark schema set | source/schema 확정 | `NoteDocumentSchema`의 `MarkSchema` discriminated union이 `bold`/`italic`/`code`/`link`만 받는다. |
 | public mark concept/facade | source/boundary 확정 | public facade에는 `Mark` concept만 남고 individual mark helper/schema object export는 boundary verifier가 막는다. |
-| range split과 selection restore | 실행 테스트로 확정 | `markCommands.test.ts`가 selected range split, marked run patch, `selectionAfter` restore를 검증한다. |
-| remove-if-fully-marked | 실행 테스트로 확정 | `markCommands.test.ts`가 전체 selected text가 이미 해당 mark를 가진 경우 mark 제거와 text merge를 검증한다. |
-| inline atom non-marking | 실행 테스트로 확정 | `markCommands.test.ts`가 mention atom을 포함한 range에서 text child만 mark되고 atom에는 mark가 저장되지 않음을 검증한다. |
-| collapsed active marks | 실행 테스트로 확정 | `markCommands.test.ts`와 `inputAdapter.test.ts`가 collapsed selection active mark 저장과 이후 text insertion 적용을 검증한다. |
-| active mark normalization | 실행 테스트로 확정 | `markCommands.test.ts`가 duplicate/unordered active marks, unsafe/safe link href, mark order 정규화를 검증한다. |
-| link creation/removal seam | 실행 테스트로 확정 | `markCommands.test.ts`가 pending href 기반 link 생성과 pending href 없는 existing link 제거를 검증한다. |
-| pending href trim/allowlist/rejection | 실행 테스트로 확정 | `markCommands.test.ts`와 `inputAdapter.test.ts`가 trim, allowed href, unsafe href rejection, missing href error를 검증한다. |
-| shortcut mapping과 Escape context clear | 실행 테스트로 확정 | `inputAdapter.test.ts`가 `Cmd/Ctrl+B/I/E/K` mapping과 `Escape` transient context clear를 검증한다. |
-| renderer/schema/Markdown alignment | 실행 테스트로 확정 | `DocumentRenderer.test.tsx`, `markdown.test.ts`, `public/index.test.ts`가 structured mark rendering, unsafe link guard, Markdown/persisted parse policy를 검증한다. |
+| range split과 selection restore | 실행 테스트로 확정 | `mark command split tests`가 selected range split, marked run patch, `selectionAfter` restore를 검증한다. |
+| remove-if-fully-marked | 실행 테스트로 확정 | `mark command split tests`가 전체 selected text가 이미 해당 mark를 가진 경우 mark 제거와 text merge를 검증한다. |
+| inline atom non-marking | 실행 테스트로 확정 | `mark command split tests`가 mention atom을 포함한 range에서 text child만 mark되고 atom에는 mark가 저장되지 않음을 검증한다. |
+| collapsed active marks | 실행 테스트로 확정 | `mark command split tests`와 inputAdapter split tests가 collapsed selection active mark 저장과 이후 text insertion 적용을 검증한다. |
+| active mark normalization | 실행 테스트로 확정 | `mark command split tests`가 duplicate/unordered active marks, unsafe/safe link href, mark order 정규화를 검증한다. |
+| link creation/removal seam | 실행 테스트로 확정 | `mark command split tests`가 pending href 기반 link 생성과 pending href 없는 existing link 제거를 검증한다. |
+| pending href trim/allowlist/rejection | 실행 테스트로 확정 | `mark command split tests`와 inputAdapter split tests가 trim, allowed href, unsafe href rejection, missing href error를 검증한다. |
+| shortcut mapping과 Escape context clear | 실행 테스트로 확정 | inputAdapter split tests가 `Cmd/Ctrl+B/I/E/K` mapping과 `Escape` transient context clear를 검증한다. |
+| renderer/schema/Markdown alignment | 실행 테스트로 확정 | `DocumentRenderer split tests`, markdown split tests, `public/index.test.ts`가 structured mark rendering, unsafe link guard, Markdown/persisted parse policy를 검증한다. |
 | link input UX와 legacy migration | 미정 | command seam은 닫혔지만 사용자 입력 UI와 기존 unsafe URL 문서 처리 정책은 제품 결정이 없다. |
 | additional mark/exclusivity/plugin/matrix | 미정 | underline/strike/color, mark conflict rule, external plugin seam, generated compatibility matrix는 현재 schema/command contract 밖이다. |
 

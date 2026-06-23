@@ -20,10 +20,10 @@ canonical document-to-DOM adapter로 유지해야 하는 범위만 확정한다.
 | 근거 | 내용 |
 | --- | --- |
 | `src/editor/internal/react/DocumentRenderer.tsx` | `NoteDocument` block/inline/mark를 DOM element, class, `data-path`, selection data attributes로 렌더링한다. |
-| `src/editor/internal/react/DocumentRenderer.test.tsx` | rich marks, safe/unsafe links, duplicate block id key stability, empty text run, mention/figure atoms, block variants, selection reflection을 검증한다. |
-| `src/editor/internal/react/BlockEditor.tsx` | renderer output을 contenteditable surface, geometry, selection overlay, debug recorder, event handlers와 조합한다. |
-| `src/editor/internal/view/contentEditableViewEngine.test.ts` | rendered text/mark/code/empty text DOM과 canonical cursor point 사이의 selection mapping을 검증한다. |
-| `src/editor/internal/view/cursorGeometry.test.ts` | rendered DOM class/path surface가 caret, range, atom rect와 hit testing에 쓰이는 것을 검증한다. |
+| `DocumentRenderer split tests` | rich marks, safe/unsafe links, duplicate block id key stability, empty text run, mention/figure atoms, block variants, selection reflection을 검증한다. |
+| `src/editor/internal/react/block-editor/BlockEditor.tsx` | renderer output을 contenteditable surface, geometry, selection overlay, debug recorder, event handlers와 조합한다. |
+| `contentEditable view split tests` | rendered text/mark/code/empty text DOM과 canonical cursor point 사이의 selection mapping을 검증한다. |
+| `cursorGeometry split tests` | rendered DOM class/path surface가 caret, range, atom rect와 hit testing에 쓰이는 것을 검증한다. |
 | `src/editor/internal/react/SelectionOverlay.test.tsx`, `src/editor/internal/react/CursorOverlay.test.tsx` | geometry overlay는 renderer DOM을 mutation 없이 읽어 caret/range/atom affordance를 만든다. |
 | `docs/editor-style-surface-audit.md` | class/data surface와 visual style decision을 나눈다. |
 | `docs/editor-visual-selection-audit.md` | overlay mechanism은 확정이고 final visual style은 별도 제품 결정이라고 정리한다. |
@@ -50,10 +50,10 @@ canonical document-to-DOM adapter로 유지해야 하는 범위만 확정한다.
 
 | 항목 | 강도 | 이유 |
 | --- | --- | --- |
-| root inspection surface | 실행 테스트로 확정 | `DocumentRenderer.test.tsx`가 `.document-view`, `role="document"`, `aria-label`, selection anchor/focus/range-count/selected-pointer data attributes를 server-rendered markup에서 고정한다. |
+| root inspection surface | 실행 테스트로 확정 | `DocumentRenderer split tests`가 `.document-view`, `role="document"`, `aria-label`, selection anchor/focus/range-count/selected-pointer data attributes를 server-rendered markup에서 고정한다. |
 | stable `data-path` cursor surface | 실행 테스트로 확정 | text run, mention atom, figure atom, code text, block variant paths는 renderer tests와 contenteditable/cursor geometry tests가 canonical JSON pointer와 DOM을 연결하는 surface로 검증한다. |
 | block variant DOM mapping | 실행 테스트로 확정 | paragraph, heading `data-heading-level`, quote, list item `data-list-depth`/`data-list-ordered`, codeBlock `pre > code` mapping은 renderer tests가 고정한다. |
-| empty text measurable target | 실행 테스트로 확정 | empty text leaf와 raw empty inline block이 `data-empty-text="true"`와 stable text path를 렌더링하는 것을 `DocumentRenderer.test.tsx`, contenteditable, cursor geometry tests가 덮는다. |
+| empty text measurable target | 실행 테스트로 확정 | empty text leaf와 raw empty inline block이 `data-empty-text="true"`와 stable text path를 렌더링하는 것을 `DocumentRenderer split tests`, contenteditable, cursor geometry tests가 덮는다. |
 | structured mark rendering | 실행 테스트로 확정 | bold/italic/code/link marks는 delimiter text가 아니라 `strong`/`em`/`code`/`a` affordance로 렌더링되고, Markdown delimiters가 DOM text로 새지 않는 것을 renderer tests가 검증한다. |
 | renderer link href safety | 실행 테스트로 확정 | unsafe legacy link href는 clickable DOM `href`로 나가지 않고, safe http/mail/tel/relative href만 `href`로 렌더링된다. |
 | atom DOM mapping | 실행 테스트로 확정 | mention and figure atoms are non-editable, keep stable paths, and expose the minimal data needed by pointer selection and overlays. |

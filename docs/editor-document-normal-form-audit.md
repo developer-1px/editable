@@ -12,7 +12,7 @@
 | --- | --- |
 | `src/editor/internal/model/noteDocument.ts` | `NoteDocumentSchema`, block/inline/mark schema, helper factory, `schemaVersion: 1`, safe link href validation을 정의한다. |
 | `src/editor/internal/model/normalizer.ts` | empty document fallback, inline child normalization, empty text pruning, adjacent text merge, mark ordering/deduplication을 수행한다. |
-| `src/editor/internal/model/noteDocument.test.ts` | initial document, rich block variants, structured marks, unsafe persisted link rejection을 검증한다. |
+| `note document split tests` | initial document, rich block variants, structured marks, unsafe persisted link rejection을 검증한다. |
 | `src/editor/internal/model/normalizer.test.ts` | empty document fallback, placeholder text child, empty run removal, adjacent text merge, mark canonicalization, link href-sensitive merge를 검증한다. |
 | `docs/editor-public-schema-audit.md` | exact Zod schema object는 public export가 아니고, public validation seam은 `parseNoteDocument`로 좁힌다고 정리한다. |
 | `docs/editor-schema-migration-policy-audit.md` | current `schemaVersion: 1` validation과 아직 보류해야 하는 migration/import policy를 분리한다. |
@@ -54,16 +54,16 @@
 
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
-| canonical structured document | 확정 | `NoteDocumentSchema`가 `schemaVersion: 1`, metadata, root, block/inline/mark shape를 닫고, `noteDocument.test.ts`가 initial document와 persisted parse examples를 schema-valid로 검증한다. | Public Zod schema object export를 뜻하지 않는다. Public validation seam은 `parseNoteDocument`다. |
-| block set and block defaults | 확정 | `noteDocument.ts`의 block schemas와 `noteDocument.test.ts`가 paragraph/heading/quote/listItem/codeBlock/figure를 current block set으로 검증하고, heading/list/code defaults를 확인한다. | Table/task/embed/caption 같은 richer container block은 현재 schema 밖이다. |
+| canonical structured document | 확정 | `NoteDocumentSchema`가 `schemaVersion: 1`, metadata, root, block/inline/mark shape를 닫고, `note document split tests`가 initial document와 persisted parse examples를 schema-valid로 검증한다. | Public Zod schema object export를 뜻하지 않는다. Public validation seam은 `parseNoteDocument`다. |
+| block set and block defaults | 확정 | `noteDocument.ts`의 block schemas와 `note document split tests`가 paragraph/heading/quote/listItem/codeBlock/figure를 current block set으로 검증하고, heading/list/code defaults를 확인한다. | Table/task/embed/caption 같은 richer container block은 현재 schema 밖이다. |
 | inline and mark set | 확정 | `InlineNodeSchema`, `MarkSchema`, `normalizer.test.ts`가 text/mention inline, bold/italic/code/link marks, mark ordering/deduplication, link href/title preservation을 고정한다. | Additional marks, mark exclusivity, plugin-defined inline nodes는 아직 없다. |
-| persisted safe link validation | 확정 | `noteDocument.test.ts`와 public facade tests가 unsafe persisted link href를 schema/parse failure로 거절한다고 검증한다. | Legacy unsafe URL을 sanitize/drop/migrate할지는 migration policy로 닫지 않았다. |
+| persisted safe link validation | 확정 | `note document split tests`와 public facade tests가 unsafe persisted link href를 schema/parse failure로 거절한다고 검증한다. | Legacy unsafe URL을 sanitize/drop/migrate할지는 migration policy로 닫지 않았다. |
 | document and inline fallback | 확정 | `normalizer.test.ts`가 empty document를 empty paragraph로 만들고, empty inline text block을 single empty text child로 유지한다고 검증한다. | Empty-title UX나 persisted import diagnostics는 이 normalizer contract가 아니다. |
 | empty text pruning and adjacent merge | 확정 | `normalizer.test.ts`가 placeholder가 아닌 empty text run 제거, adjacent same-mark text merge, mention atom merge boundary, atom sentinel 미삽입을 직접 검증한다. | Cursor/DOM 측정용 transient empty leaf policy는 view/geometry 영역에서 별도로 다룬다. |
 | attrs preservation/removal split | 확정 | `normalizer.test.ts`가 document/root/block/atom attrs 보존과 mark attrs 제거를 검증하고, attrs audit이 renderer/Markdown non-projection을 분리한다. | Preserved attrs를 누가 해석하는지, reserved namespace가 있는지는 미정이다. |
-| codeBlock compatibility shape | 확정 | `noteDocument.test.ts`와 code block audit이 `text` canonical field, missing `text`/`children` defaults, legacy `children` preservation, `readBlockText`의 `text` read path를 검증한다. | Compatibility support window, text/children mismatch diagnostics, future code child/token model은 미정이다. |
-| schemaVersion 1 no-migration behavior | 확정 | `noteDocument.test.ts`, `editorCore.test.ts`, schema migration audit이 unsupported version parse/replace failure, generic reason, no-mutation behavior를 고정한다. | Version 2 migration location, support period, destructive migration semantics는 아직 제품/API 결정이 없다. |
-| id and duplicate-id current behavior | 확정 | `noteDocument.test.ts`와 identity audit이 non-empty ids, local generated block id, duplicate block id schema acceptance, renderer/debug tolerance를 분리해 고정한다. | Global uniqueness, route/storage binding, collaboration identity ownership은 미정이다. |
+| codeBlock compatibility shape | 확정 | `note document split tests`와 code block audit이 `text` canonical field, missing `text`/`children` defaults, legacy `children` preservation, `readBlockText`의 `text` read path를 검증한다. | Compatibility support window, text/children mismatch diagnostics, future code child/token model은 미정이다. |
+| schemaVersion 1 no-migration behavior | 확정 | `note document split tests`, `editorCore split tests`, schema migration audit이 unsupported version parse/replace failure, generic reason, no-mutation behavior를 고정한다. | Version 2 migration location, support period, destructive migration semantics는 아직 제품/API 결정이 없다. |
+| id and duplicate-id current behavior | 확정 | `note document split tests`와 identity audit이 non-empty ids, local generated block id, duplicate block id schema acceptance, renderer/debug tolerance를 분리해 고정한다. | Global uniqueness, route/storage binding, collaboration identity ownership은 미정이다. |
 | field-level diagnostics | 미정 | Current public parse/replace failure는 generic `"Document is invalid."`로 닫혀 있다. | Import UX가 필요하면 raw Zod issue 대신 좁은 error DTO를 별도 설계해야 한다. |
 | normal form evolution policy | 미정 | Current schemaVersion 1과 normalizer behavior는 닫혔지만 v2 schema, legacy payload corpus, compatibility matrix가 없다. | Migration, diagnostics, attrs/media/id/codeBlock compatibility를 한 번에 설계해야 한다. |
 

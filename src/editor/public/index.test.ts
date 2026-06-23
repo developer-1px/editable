@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import * as publicEditor from ".";
+import * as publicEditor from "./index";
 
 function publicFacadeTypeExports(): string[] {
   const sourcePath = new URL("./index.ts", import.meta.url);

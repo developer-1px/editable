@@ -24,8 +24,8 @@ context와 현재 보류해야 하는 범위를 분리한다.
 | ProseMirror external HTML normalization | 외부 HTML은 schema에 맞도록 sibling wrapping을 normalize한다. |
 | ProseMirror table/CSP handling | table 계열 태그는 detached document에서 wrapper를 강제로 씌우고 Trusted Types CSP도 고려한다. |
 | `src/editor/internal/model/clipboard.ts` | current custom MIME은 `{ schema, plainText, markdown }`만 읽는다. `text/html`은 읽지 않는다. |
-| `src/editor/internal/model/clipboard.test.ts` | extra node/topology metadata와 `data-pm-slice` HTML이 current paste contract로 승격되지 않는 것을 검증한다. |
-| `src/editor/internal/model/inputAdapter.test.ts` | markdown paste/drop은 supported marks/link/mention/figure/multi-block fragment만 복원한다. |
+| `clipboard split tests` | extra node/topology metadata와 `data-pm-slice` HTML이 current paste contract로 승격되지 않는 것을 검증한다. |
+| inputAdapter split tests | markdown paste/drop은 supported marks/link/mention/figure/multi-block fragment만 복원한다. |
 | `docs/editor-clipboard-transfer-audit.md` | clipboard seam은 문자열 중심이고 node graph/topology restore는 보류라고 정리한다. |
 | `docs/editor-markdown-adapter-audit.md` | current rich-ish restore는 Markdown adapter가 표현할 수 있는 shape에 묶인다. |
 

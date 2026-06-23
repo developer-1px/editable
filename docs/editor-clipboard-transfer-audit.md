@@ -55,9 +55,9 @@ restore가 제품 범위로 결정되면 그때 node payload, migration, trust p
 | `serializeSelectionForClipboard` | collapsed selection은 null이고, range/atom selection은 plain text와 markdown fallback을 만든다. |
 | `readClipboardTextFromTransfer` | custom `markdown`은 markdown format, custom `plainText`와 `text/plain`은 plain format, `text/markdown`은 markdown format, `text/uri-list`는 plain format으로 읽는다. Current external fallback order is custom MIME, external `text/plain`, external `text/markdown`, then external `text/uri-list`. |
 | `BlockEditor` paste/drop handlers | 읽은 text/format을 paste input으로 넘긴다. custom MIME node graph importer를 호출하지 않는다. |
-| `inputAdapter.test.ts` | plain paste는 문자열 삽입이고, markdown-format paste는 supported marks/link/mention/figure/multi-block fragment를 복원한다. |
-| `clipboard.test.ts` | custom envelope가 `{ schema, plainText, markdown }`만 담고, extra `selectedPointers`/`nodes` metadata를 읽어도 paste result는 text/markdown contract에 머무는 것을 고정한다. |
-| `BlockEditor.test.tsx`, `contentEditableViewEngine.test.ts` | custom MIME markdown/plain fallback과 paste command path를 검증한다. |
+| inputAdapter split tests | plain paste는 문자열 삽입이고, markdown-format paste는 supported marks/link/mention/figure/multi-block fragment를 복원한다. |
+| `clipboard split tests` | custom envelope가 `{ schema, plainText, markdown }`만 담고, extra `selectedPointers`/`nodes` metadata를 읽어도 paste result는 text/markdown contract에 머무는 것을 고정한다. |
+| BlockEditor split tests, contentEditable view split tests | custom MIME markdown/plain fallback과 paste command path를 검증한다. |
 
 ## 증거 강도
 

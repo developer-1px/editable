@@ -43,7 +43,7 @@ mention/figure 같은 atom selection과 text insertion position이 섞인다.
 
 ## DOM position equivalence table
 
-`contentEditableViewEngine.test.ts`는 아래 table을 실행한다.
+contentEditable view split tests는 아래 table을 실행한다.
 
 | DOM 입력 | 기대 |
 | --- | --- |
@@ -81,7 +81,7 @@ mention/figure 같은 atom selection과 text insertion position이 섞인다.
 
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
-| text-run 내부 offset mapping | 확정 | 기존 `contentEditableViewEngine.test.ts`가 grapheme snapping, mark element boundary, native range를 검증한다. | browser별 Range boundary 차이는 별도 QA다. |
+| text-run 내부 offset mapping | 확정 | 기존 contentEditable view split tests가 grapheme snapping, mark element boundary, native range를 검증한다. | browser별 Range boundary 차이는 별도 QA다. |
 | parent boundary equivalence | 실행 테스트로 확정 | DOM position equivalence table test가 text node, text-run boundary, block child boundary를 비교한다. | jsdom DOM Range 기반이며 real browser selection UI matrix는 아니다. |
 | `contenteditable=false` atom barrier | 실행 테스트로 확정 | mention chip 내부 DOM position을 text point로 매핑하지 않는 test가 있다. | atom-only block/inline edge UX는 pointer/model selection path가 담당한다. |
 | bias hiding | source 정책으로 확정 | `readContentEditableSelection`/`setContentEditableSelection` public signature에 bias parameter가 없다. | future generic Range adapter에는 명시 bias가 필요할 수 있다. |

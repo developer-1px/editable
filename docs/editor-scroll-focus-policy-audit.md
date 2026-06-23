@@ -78,7 +78,7 @@ scroll reveal이 발생한다.
 | --- | --- | --- | --- |
 | focus scroll preservation | 실행 테스트로 확정 | `focusScroll.test.ts`가 nested scroll restore와 focus options fallback을 고정한다. | jsdom fixture라 실제 browser scroll anchoring/viewport behavior 전체는 아니다. |
 | autofocus/focus restore helper 사용 | source와 React tests로 확인 | `useBlockEditorController`가 autofocus, toolbar command focus, atom pointer focus에서 helper를 쓴다. | 모든 future focus caller를 막으려면 lint/AST guard가 더 강하다. |
-| selection scroll reveal | 실행 테스트로 확정 | `contentEditableViewEngine.test.ts`와 `BlockEditor.test.tsx`가 `scrollIntoView(nearest)` 호출을 고정한다. | nested/fixed/sticky scrollRect 계산은 아니다. |
+| selection scroll reveal | 실행 테스트로 확정 | contentEditable view split tests와 BlockEditor split tests가 `scrollIntoView(nearest)` 호출을 고정한다. | nested/fixed/sticky scrollRect 계산은 아니다. |
 | desktop nested scroll container | 부분 확정 | focus restore fixture는 nested scroll container를 닫는다. | caret reveal의 nested parent stack은 browser native `scrollIntoView`에 맡긴다. |
 | mobile viewport/keyboard | 부분 확정 | visualViewport stub fixture가 focused selection rect bottom 보정을 고정한다. | 실제 iOS/Android virtual keyboard resize와 scroll anchoring은 별도 device trace가 필요하다. |
 | transform/zoom/fixed/sticky | 미정 | current geometry docs/tests가 일부 layout rect를 다루지만 scroll parent stack policy는 아니다. | #24와 함께 browser layout fixture가 필요하다. |

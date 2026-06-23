@@ -23,9 +23,9 @@ root route에서 링크되지 않고, 내용도 `Create TanStack App Sample`/`Ta
 | Surface | 확정 범위 | 근거 |
 | --- | --- | --- |
 | public directory inventory | 현재 `public/`의 top-level file은 `sample-figure.svg` 하나다. Starter manifest/icon/robots files는 현재 트리에 없다. | `find public -maxdepth 2 -type f`, `rg manifest/favicon/logo/robots` |
-| sample figure asset | `public/sample-figure.svg`는 default document figure와 toolbar figure insert가 쓰는 fixture image다. | `src/editor/internal/model/noteDocument.ts`, `src/editor/internal/react/BlockEditor.tsx` |
+| sample figure asset | `public/sample-figure.svg`는 default document figure와 toolbar figure insert가 쓰는 fixture image다. | `src/editor/internal/model/noteDocument.ts`, `src/editor/internal/react/block-editor/BlockEditor.tsx` |
 | build copy behavior | Vite build output에는 `dist/client/sample-figure.svg`가 생기고, 현재 파일 내용은 `public/sample-figure.svg`와 동일하다. | `find dist/client`, `cmp public/sample-figure.svg dist/client/sample-figure.svg` |
-| figure serialization | figure src가 markdown/copy/static rendering tests에서 `/sample-figure.svg`로 고정된다. | `markdown.test.ts`, `clipboard.test.ts`, `DocumentRenderer.test.tsx`, `noteDocument.test.ts` |
+| figure serialization | figure src가 markdown/copy/static rendering tests에서 `/sample-figure.svg`로 고정된다. | markdown split tests, `clipboard split tests`, `DocumentRenderer split tests`, `note document split tests` |
 | no linked web manifest | root head는 stylesheet만 링크한다. web app manifest를 product surface로 노출하지 않는다. | `src/routes/__root.tsx` |
 
 ## 제거 확정 근거
@@ -61,8 +61,8 @@ root route에서 링크되지 않고, 내용도 `Create TanStack App Sample`/`Ta
 | --- | --- | --- | --- |
 | public directory inventory | 확정 | `find public -maxdepth 1 -type f` 기준 current public top-level file은 `public/sample-figure.svg` 하나다. | Future product favicon/PWA/crawl asset을 금지한다는 뜻은 아니다. |
 | removed starter asset absence | 확정 | Current tree에서 `public/manifest.json`, `favicon.ico`, `logo192.png`, `logo512.png`, `robots.txt`는 삭제 상태이고, `rg`는 runtime source에서 해당 starter asset 참조를 찾지 않는다. | 과거 starter 파일 내용의 모든 배포 이력을 증명하는 것은 아니다. |
-| sample figure fixture role | 확정 | `initialNoteDocument`와 `BlockEditor` toolbar insertion이 `/sample-figure.svg`와 `alt: "Figure"`를 사용하고, `BlockEditor.test.tsx`가 toolbar figure insertion src를 고정한다. | Product media picker/upload/default onboarding visual contract가 아니다. |
-| figure render/serialization path | 확정 | `DocumentRenderer.test.tsx`, `markdown.test.ts`, `clipboard.test.ts`, `noteDocument.test.ts`가 `/sample-figure.svg` figure render, markdown fallback/export, clipboard markdown fallback, initial rich document seed를 검증한다. | User-provided remote image trust, SVG sanitization, broken-media UX는 별도 media policy다. |
+| sample figure fixture role | 확정 | `initialNoteDocument`와 `BlockEditor` toolbar insertion이 `/sample-figure.svg`와 `alt: "Figure"`를 사용하고, BlockEditor split tests가 toolbar figure insertion src를 고정한다. | Product media picker/upload/default onboarding visual contract가 아니다. |
+| figure render/serialization path | 확정 | `DocumentRenderer split tests`, markdown split tests, `clipboard split tests`, `note document split tests`가 `/sample-figure.svg` figure render, markdown fallback/export, clipboard markdown fallback, initial rich document seed를 검증한다. | User-provided remote image trust, SVG sanitization, broken-media UX는 별도 media policy다. |
 | build copy behavior | 확정 | `pnpm build` 뒤 Vite static copy가 `dist/client/sample-figure.svg`를 생성하고, `cmp public/sample-figure.svg dist/client/sample-figure.svg`로 source와 build output 동일성을 확인할 수 있다. | `verify:internal`은 build success와 route tree stability를 보장하지만 asset byte equality는 이 audit의 별도 확인이다. |
 | no linked web manifest | 확정 | `src/routes/__root.tsx` root head links는 stylesheet뿐이며 web app manifest link가 없다. | Installable PWA를 제품 범위에서 배제한다는 결정은 아니다. |
 | starter favicon/logo restoration | 제거 확정 | Current app identity와 맞지 않는 starter brand surface이고, remaining source/tests는 `/sample-figure.svg` fixture로 닫혀 있다. | Editable product favicon/logo 요구가 생기면 새 asset으로 설계해야 한다. |

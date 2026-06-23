@@ -20,17 +20,17 @@ policy를 나눈다.
 | --- | --- |
 | `src/editor/internal/model/mediaSrc.ts` | figure media source allowlist의 단일 helper다. relative URL과 `http:`/`https:`를 허용하고, protocol-relative, `javascript:`, `data:`, `blob:`, external SVG를 거절한다. |
 | `src/editor/internal/model/noteDocument.ts` | `FigureBlockSchema`는 block atom이고 `src`는 non-empty이면서 `normalizeFigureSrc`를 통과해야 한다. `figureBlock()` helper는 canonical `src`를 attrs에도 복제한다. |
-| `src/editor/internal/model/textCommands.ts` | `insertFigure`는 `src`를 normalize한 뒤 selected text/range/atom/edge 위치에 block atom으로 삽입한다. unsafe `src`는 mutation 전에 거절한다. |
+| `src/editor/internal/model/text-command/textCommands.ts` | `insertFigure`는 `src`를 normalize한 뒤 selected text/range/atom/edge 위치에 block atom으로 삽입한다. unsafe `src`는 mutation 전에 거절한다. |
 | `src/editor/internal/model/editorCommandStrategies.ts` | public headless `insertNode` command의 insertable node 중 하나가 `figure`다. Public type name은 `InsertableEditorNode` 하나로 숨긴다. |
 | `src/editor/internal/react/DocumentRenderer.tsx` | renderer는 figure를 non-editable `<figure>`로 렌더하고, legacy unsafe `src`는 DOM `<img src>`로 내보내지 않는다. |
 | `src/editor/internal/model/markdown.ts` | Markdown image line `![alt](src)`는 safe `src`일 때만 figure block으로 import된다. unsafe image line은 `alt` text만 paragraph로 보존하거나, alt가 없으면 drop한다. |
-| `src/editor/internal/react/BlockEditor.tsx` | toolbar "Insert figure"는 deterministic `/sample-figure.svg` fixture와 `alt: "Figure"`를 삽입한다. Picker/upload flow가 아니다. |
+| `src/editor/internal/react/block-editor/BlockEditor.tsx` | toolbar "Insert figure"는 deterministic `/sample-figure.svg` fixture와 `alt: "Figure"`를 삽입한다. Picker/upload flow가 아니다. |
 | `public/sample-figure.svg` | current sample figure fixture다. Product media asset policy와 분리된다. |
 | `src/editor/internal/model/mediaSrc.test.ts` | safe relative/http source와 unsafe source fixture를 검증한다. |
-| `src/editor/internal/model/noteDocument.test.ts` | empty/unsafe figure `src`는 schema 밖이고 safe source는 schema-valid임을 검증한다. |
-| `src/editor/internal/model/markdown.test.ts` | figure alt text와 escaped image source의 deterministic Markdown round-trip, unsafe image import drop policy를 검증한다. |
-| `src/editor/internal/model/textCommands.test.ts` | command-created figure가 unsafe `src`를 거절하고 safe `src`를 normalize한다고 검증한다. |
-| `src/editor/internal/react/DocumentRenderer.test.tsx` | figure block atom rendering, stable path, non-editable behavior, missing alt fallback, legacy unsafe `src` 방어를 검증한다. |
+| `note document split tests` | empty/unsafe figure `src`는 schema 밖이고 safe source는 schema-valid임을 검증한다. |
+| `markdown split tests` | figure alt text와 escaped image source의 deterministic Markdown round-trip, unsafe image import drop policy를 검증한다. |
+| text command split tests | command-created figure가 unsafe `src`를 거절하고 safe `src`를 normalize한다고 검증한다. |
+| `DocumentRenderer split tests` | figure block atom rendering, stable path, non-editable behavior, missing alt fallback, legacy unsafe `src` 방어를 검증한다. |
 
 ## 확정 figure/media behavior
 
@@ -52,13 +52,13 @@ policy를 나눈다.
 | 판정 대상 | 강도 | 근거 |
 | --- | --- | --- |
 | figure block schema shape | source/schema 확정 | `FigureBlockSchema`는 block atom이고 `src`는 media source allowlist를 통과해야 하며, `alt`는 optional field다. |
-| required safe source | 실행 테스트로 확정 | `noteDocument.test.ts`와 `mediaSrc.test.ts`가 empty/unsafe `src`를 schema-invalid로 검증한다. |
-| optional alt renderer fallback | 실행 테스트로 확정 | `DocumentRenderer.test.tsx`가 missing `alt` figure를 `<img alt="">`로 렌더한다고 검증한다. |
-| figure text extraction | 실행 테스트로 확정 | `noteDocument.test.ts`가 `readBlockText(figure)`가 empty string을 반환한다고 검증한다. |
-| non-editable block atom rendering | 실행 테스트로 확정 | `DocumentRenderer.test.tsx`가 stable block `data-path`, `contentEditable="false"`, safe image `src`/`alt` projection과 unsafe legacy `src` drop을 검증한다. |
-| insertFigure block atom insertion | 실행 테스트로 확정 | `textCommands.test.ts`가 selected text replacement, figure-edge insertion, unsafe `src` rejection을 검증한다. |
-| toolbar fixture insertion | 실행 테스트로 확정 | `BlockEditor.test.tsx`가 toolbar figure command가 `alt: "Figure"` accessible image와 `/sample-figure.svg` source를 추가한다고 검증한다. |
-| Markdown image syntax round-trip | 실행 테스트로 확정 | `markdown.test.ts`가 Markdown image import/export, unsafe image import drop, escaped source/alt round-trip을 검증한다. |
+| required safe source | 실행 테스트로 확정 | `note document split tests`와 `mediaSrc.test.ts`가 empty/unsafe `src`를 schema-invalid로 검증한다. |
+| optional alt renderer fallback | 실행 테스트로 확정 | `DocumentRenderer split tests`가 missing `alt` figure를 `<img alt="">`로 렌더한다고 검증한다. |
+| figure text extraction | 실행 테스트로 확정 | `note document split tests`가 `readBlockText(figure)`가 empty string을 반환한다고 검증한다. |
+| non-editable block atom rendering | 실행 테스트로 확정 | `DocumentRenderer split tests`가 stable block `data-path`, `contentEditable="false"`, safe image `src`/`alt` projection과 unsafe legacy `src` drop을 검증한다. |
+| insertFigure block atom insertion | 실행 테스트로 확정 | text command split tests가 selected text replacement, figure-edge insertion, unsafe `src` rejection을 검증한다. |
+| toolbar fixture insertion | 실행 테스트로 확정 | BlockEditor split tests가 toolbar figure command가 `alt: "Figure"` accessible image와 `/sample-figure.svg` source를 추가한다고 검증한다. |
+| Markdown image syntax round-trip | 실행 테스트로 확정 | markdown split tests가 Markdown image import/export, unsafe image import drop, escaped source/alt round-trip을 검증한다. |
 | minimal media URL allowlist | 실행 테스트로 확정 | `mediaSrc.test.ts`가 relative/http safe source와 `javascript:`/`data:`/`blob:`/protocol-relative/external SVG rejection을 검증한다. |
 | upload/picker/caption/media metadata model | 미정 | current schema는 `src`/`alt`/attrs 최소 surface다. upload id, dimensions, captions, credit, lifecycle은 별도 product scope다. |
 

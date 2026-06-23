@@ -32,10 +32,10 @@
 | --- | --- | --- |
 | caret overlay | geometry `rectForPoint`에서 caret DOM을 만든다. zero-width caret도 2px로 보이게 한다. | `CursorOverlay.test.tsx` |
 | text range overlay | canonical selection range를 `geometry.rectsForRange`로 렌더링한다. | `SelectionOverlay.test.tsx` |
-| atom overlay | `selectedPointers`의 before/after rect union으로 mention/figure selection DOM을 만든다. | `SelectionOverlay.test.tsx`, `BlockEditor.test.tsx` |
+| atom overlay | `selectedPointers`의 before/after rect union으로 mention/figure selection DOM을 만든다. | `SelectionOverlay.test.tsx`, BlockEditor split tests |
 | overlay non-interference | overlay root는 `aria-hidden`이고 `pointer-events: none`이다. | `SelectionOverlay.test.tsx`, `src/styles.css` |
-| native selection coherence | native range가 보이는 동안 stale custom overlay를 남기지 않는 경로가 있다. | `BlockEditor.test.tsx` |
-| focus-only affordance | editor focus state가 `data-focused`로 DOM에 드러나고, 기존 link color 계열 inset shadow로 보인다. | `BlockEditor.test.tsx`, `src/styles.css`, Chrome headless computed style |
+| native selection coherence | native range가 보이는 동안 stale custom overlay를 남기지 않는 경로가 있다. | BlockEditor split tests |
+| focus-only affordance | editor focus state가 `data-focused`로 DOM에 드러나고, 기존 link color 계열 inset shadow로 보인다. | BlockEditor split tests, `src/styles.css`, Chrome headless computed style |
 
 이 기능들은 selection state를 사용자가 볼 수 있게 만드는 affordance다. 제거하면
 caret/range/atom selection의 검증 기준선이 깨진다.
@@ -46,10 +46,10 @@ caret/range/atom selection의 검증 기준선이 깨진다.
 | --- | --- | --- |
 | custom caret overlay mechanism | 확정 | `CursorOverlay`가 `geometry.rectForPoint()` 결과로 `data-overlay="caret"` DOM을 만들고, text point `data-offset`, atom edge `data-edge`, `data-path`, inline rect style을 낸다. `CursorOverlay.test.tsx`가 text caret, atom edge caret, zero-width caret 2px fallback을 고정한다. |
 | text range overlay mechanism | 확정 | `SelectionOverlay`가 canonical selection range를 `geometry.rectsForRange()`로 투영하고 `data-overlay="selected-range"` DOM을 만든다. `SelectionOverlay.test.tsx`가 non-collapsed range rect와 collapsed edge에서 range/atom overlay를 그리지 않는 동작을 고정한다. |
-| selected atom overlay mechanism | 확정 | `selectedPointers`의 before/after rect union으로 mention/figure atom overlay를 만들고 `selection-atom-mention`/`selection-atom-figure` class와 `data-path`를 남긴다. `SelectionOverlay.test.tsx`와 `BlockEditor.test.tsx`가 atom pointer selection, shift extension, block selection, stale native range보다 atom selection 우선 경로를 고정한다. |
+| selected atom overlay mechanism | 확정 | `selectedPointers`의 before/after rect union으로 mention/figure atom overlay를 만들고 `selection-atom-mention`/`selection-atom-figure` class와 `data-path`를 남긴다. `SelectionOverlay.test.tsx`와 BlockEditor split tests가 atom pointer selection, shift extension, block selection, stale native range보다 atom selection 우선 경로를 고정한다. |
 | overlay non-interference surface | 확정 | overlay roots는 `aria-hidden="true"`이고 CSS에서 `pointer-events: none`이다. `SelectionOverlay.test.tsx`는 `aria-hidden`, `src/styles.css`는 pointer event pass-through intent를 고정한다. 실제 pointer event pass-through browser behavior는 browser QA snapshot으로만 본다. |
-| native range and IME overlay coherence | 확정 | `BlockEditor.test.tsx`가 native DOM range가 보일 때 custom caret/selection overlay를 숨기고, IME composition 중에도 stale custom caret을 숨긴 뒤 composition 종료/toolbar command 후 caret을 복구하는 경로를 고정한다. |
-| focus-only editor affordance | 확정 | `BlockEditor.test.tsx`가 focus 시 `data-focused="true"`와 caret overlay, blur 시 focus attr/overlay removal을 고정한다. CSS는 native outline suppression과 focused inset shadow를 제공한다. |
+| native range and IME overlay coherence | 확정 | BlockEditor split tests가 native DOM range가 보일 때 custom caret/selection overlay를 숨기고, IME composition 중에도 stale custom caret을 숨긴 뒤 composition 종료/toolbar command 후 caret을 복구하는 경로를 고정한다. |
+| focus-only editor affordance | 확정 | BlockEditor split tests가 focus 시 `data-focused="true"`와 caret overlay, blur 시 focus attr/overlay removal을 고정한다. CSS는 native outline suppression과 focused inset shadow를 제공한다. |
 | visual styling cleanup | 확정 | current CSS에는 `tomato` caret이나 figure 전용 dashed outline이 없다. 기능은 caret/range/atom visibility이고, 색/선은 기존 body/link color 계열을 재사용한다. 다시 별도 경고색/figure-only 선을 추가할 근거는 없다. |
 | Chrome visual QA | 확정 snapshot | 2026-06-21 Chrome headless에서 range fill, mention/figure atom border, native drag stale-overlay absence, focus box-shadow, pointer caret rect/background를 확인했다. 이 증거는 단일 Chrome snapshot이지 cross-browser/accessibility matrix가 아니다. |
 | final visual style | 미정 | current colors, border radius, focus shadow, caret thickness는 기능을 보이게 하는 현재 표현이다. 제품 palette, exact pixel parity, accessibility contrast/announcement policy까지 닫은 것은 아니다. |

@@ -35,12 +35,12 @@
 
 | 경로 | 현재 동작 |
 | --- | --- |
-| `src/editor/internal/react/useBlockEditorController.tsx` `handleBeforeInput` | native leaf/history/composition이 아니면 `event.preventDefault()` 후 `runInput`으로 보낸다. |
-| `src/editor/internal/model/inputAdapter.ts` `translateBeforeInput` | text insertion, delete, cut, Enter 계열만 command로 번역한다. `format*`/`insertLink`는 처리하지 않는다. |
-| `src/editor/internal/model/inputAdapter.ts` `translateKeyDown` | `Cmd/Ctrl+B`, `Cmd/Ctrl+I`, `Cmd/Ctrl+E`, `Cmd/Ctrl+K`를 `toggleMark`/`toggleLink` command로 번역한다. |
+| `src/editor/internal/react/block-editor/useBlockEditorController.tsx` `handleBeforeInput` | native leaf/history/composition이 아니면 `event.preventDefault()` 후 `runInput`으로 보낸다. |
+| `src/editor/internal/model/input-adapter/inputAdapter.ts` `translateBeforeInput` | text insertion, delete, cut, Enter 계열만 command로 번역한다. `format*`/`insertLink`는 처리하지 않는다. |
+| `src/editor/internal/model/input-adapter/inputAdapter.ts` `translateKeyDown` | `Cmd/Ctrl+B`, `Cmd/Ctrl+I`, `Cmd/Ctrl+E`, `Cmd/Ctrl+K`를 `toggleMark`/`toggleLink` command로 번역한다. |
 | `src/editor/internal/model/markCommands.ts` | range mark split/merge, collapsed active marks, safe link href를 command 결과로만 만든다. |
-| `src/editor/internal/view/contentEditableViewEngine.ts` `flush` | active text path의 `textContent`만 읽어 text patch를 만든다. `<b>`/`<i>` 같은 DOM 구조를 mark로 reparse하지 않는다. |
-| `src/editor/internal/view/contentEditableViewEngine.ts` `reset` | canonical document text를 DOM text node로 복구한다. |
+| `src/editor/internal/view/contenteditable/contentEditableViewEngine.ts` `flush` | active text path의 `textContent`만 읽어 text patch를 만든다. `<b>`/`<i>` 같은 DOM 구조를 mark로 reparse하지 않는다. |
+| `src/editor/internal/view/contenteditable/contentEditableViewEngine.ts` `reset` | canonical document text를 DOM text node로 복구한다. |
 
 결론: 현재 cancellable `beforeinput format*`는 prevent되고 no-op이다. Keyboard shortcut은
 별도 command path로 동작한다. 남은 위험은 browser/OS가 cancelable beforeinput 없이
@@ -84,12 +84,12 @@ same-text wrapper DOM mutation을 만들 때이고, 이는 mark import가 아니
 
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
-| native formatting DOM authority 금지 | 실행 테스트로 확정 | beforeinput audit, DOM dirty range audit, mark command audit와 `contentEditableViewEngine.test.ts` same-text wrapper drift fixture가 canonical command/render authority를 지지한다. | 실제 OS menu event order는 실기기 trace가 필요하다. |
+| native formatting DOM authority 금지 | 실행 테스트로 확정 | beforeinput audit, DOM dirty range audit, mark command audit와 contentEditable view split tests same-text wrapper drift fixture가 canonical command/render authority를 지지한다. | 실제 OS menu event order는 실기기 trace가 필요하다. |
 | `format*`/`insertLink` inputType 존재와 cancelability | 스펙 근거 확정 | W3C Input Events Level 2 table | browser별 event support/order는 실기기 trace가 필요하다. |
 | iOS context menu mark mutation class | 외부 구현 근거 확정 | ProseMirror-view changelog 0.15.0 | current editor에서 직접 재현한 trace는 아직 없다. |
-| keyboard mark command ownership | 실행 테스트로 확정 | `inputAdapter.test.ts`, `markCommands.test.ts` | context menu native action test와는 별개다. |
-| link href safety seam | 실행 테스트로 확정 | `markCommands.test.ts`, `docs/editor-link-mark-audit.md` | native `insertLink.data`를 safe UI로 받을 제품 결정은 없다. |
-| active text leaf only DOM flush | 실행 테스트로 확정 | `contentEditableViewEngine.test.ts`, DOM dirty range audit | rich HTML/mark wrapper를 model patch로 import하지 않는다. |
+| keyboard mark command ownership | 실행 테스트로 확정 | inputAdapter split tests, `mark command split tests` | context menu native action test와는 별개다. |
+| link href safety seam | 실행 테스트로 확정 | `mark command split tests`, `docs/editor-link-mark-audit.md` | native `insertLink.data`를 safe UI로 받을 제품 결정은 없다. |
+| active text leaf only DOM flush | 실행 테스트로 확정 | contentEditable view split tests, DOM dirty range audit | rich HTML/mark wrapper를 model patch로 import하지 않는다. |
 | IME format/style stale inheritance 위험 | 외부 최신 근거 | Lexical PR #8148 | current editor의 IME + native format menu real trace는 없다. |
 
 ## 후속 이슈화 대상

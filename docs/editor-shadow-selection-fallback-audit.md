@@ -47,7 +47,7 @@ view adapter가 root-local selection을 우선 읽을 수는 있어야 한다.
 
 | 완료 기준 | 처리 |
 | --- | --- |
-| ShadowRoot 안 editor selection read/write 테스트 | `contentEditableViewEngine.test.ts`가 ShadowRoot-local selection API를 fake로 제공하고 read/write를 검증한다. |
+| ShadowRoot 안 editor selection read/write 테스트 | contentEditable view split tests가 ShadowRoot-local selection API를 fake로 제공하고 read/write를 검증한다. |
 | Safari fallback 최소 브라우저 범위 확인 | 2026-06-22 기준 최신 `getComposedRanges`는 Baseline 2025지만 older Safari/WebKit 이슈가 존재한다. current editor는 Safari ShadowRoot fallback을 product support로 선언하지 않는다. |
 | `execCommand` fallback 결정 | 도입하지 않는다. deprecated command probe는 focus/selection authority를 흔들고 current hidden clipboard fallback 정책과 충돌한다. |
 
@@ -56,7 +56,7 @@ view adapter가 root-local selection을 우선 읽을 수는 있어야 한다.
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
 | non-shadow app embedding | 확정 | `rg`로 `attachShadow`, `createPortal`, `iframe` 사용이 production code에 없음을 확인했다. | future embedder가 ShadowRoot 안에 mount할 수는 있다. |
-| ShadowRoot-local selection 우선 | 실행 테스트로 확정 | `contentEditableViewEngine.test.ts`가 ShadowRoot `getSelection()`이 있을 때 read/write가 같은 root selection을 쓰는 것을 고정한다. | jsdom은 native ShadowRoot selection API가 없어 fake selection으로 검증한다. |
+| ShadowRoot-local selection 우선 | 실행 테스트로 확정 | contentEditable view split tests가 ShadowRoot `getSelection()`이 있을 때 read/write가 같은 root selection을 쓰는 것을 고정한다. | jsdom은 native ShadowRoot selection API가 없어 fake selection으로 검증한다. |
 | `getComposedRanges` 미사용 | source 확정 | current code search상 호출이 없다. | 최신 browser support를 제품 범위로 삼으면 StaticRange mapping이 필요하다. |
 | `getTargetRanges` 미사용 | source 확정 | current code search상 호출이 없다. | beforeinput target range 기반 selection probe가 필요한 실패 trace가 생기면 재검토한다. |
 | `execCommand` fallback 미사용 | source/test 확정 | hidden clipboard fallback audit와 BlockEditor tests가 `execCommand` 미호출을 고정한다. | browser extension/offscreen document 같은 특수 clipboard context는 제품 범위 밖이다. |

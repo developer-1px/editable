@@ -19,12 +19,12 @@ Document metadata는 본문 command model과 다르다. `title`은 현재 화면
 | 근거 | 내용 |
 | --- | --- |
 | `src/editor/internal/model/noteDocument.ts` | `NoteDocumentSchema`는 `schemaVersion: 1`, non-empty `id`, string `title`, string array `tags`, optional document `attrs`, `root`를 정의한다. |
-| `src/editor/internal/model/noteDocument.test.ts` | initial document, helper-created documents, rich block variants, persisted unsafe link rejection을 검증한다. |
+| `note document split tests` | initial document, helper-created documents, rich block variants, persisted unsafe link rejection을 검증한다. |
 | `src/editor/internal/model/editorCore.ts` | `createEditor()` snapshot/query는 full `NoteDocument`를 반환하고, `replaceDocument`는 schema-valid document만 받는다. |
 | `src/editor/public/index.test.ts` | persisted JSON의 `id`, `title`, `tags`를 `parseNoteDocument`로 좁힌 뒤 `createEditor({ initial })`에 넘기는 path를 검증한다. |
 | `src/editor/internal/model/markdown.ts` | `importMarkdown(markdown, { id, title, tags })` options로 document metadata를 주입한다. Markdown heading은 content block이지 document title로 자동 승격되지 않는다. |
-| `src/editor/internal/react/BlockEditor.tsx` | title input은 `document.value.title`에 controlled되고 change 시 `document.replace("/title", value)`를 호출한다. `readOnly`에서는 no-op이다. |
-| `src/editor/internal/react/BlockEditor.test.tsx` | editable title change가 document history에 들어가 undo/redo로 복원되고, read-only title change가 document를 mutate하지 않는 것을 검증한다. |
+| `src/editor/internal/react/block-editor/BlockEditor.tsx` | title input은 `document.value.title`에 controlled되고 change 시 `document.replace("/title", value)`를 호출한다. `readOnly`에서는 no-op이다. |
+| BlockEditor split tests | editable title change가 document history에 들어가 undo/redo로 복원되고, read-only title change가 document를 mutate하지 않는 것을 검증한다. |
 | `docs/editor-public-export-audit.md` | `initialNoteDocument`와 `createNoteDocument`는 internal demo/helper로 유지하되 public export에서 제거했다고 정리한다. |
 | `docs/editor-public-schema-audit.md` | public validation seam은 Zod schema export가 아니라 `parseNoteDocument(value)`라고 정리한다. |
 | `docs/editor-identity-policy-audit.md` | local generated block ids, duplicate-id tolerance, and future persistence/collaboration identity policy를 분리한다. |
@@ -53,14 +53,14 @@ Document metadata는 본문 command model과 다르다. `title`은 현재 화면
 | 판정 대상 | 강도 | 근거 |
 | --- | --- | --- |
 | metadata schema fields | source/schema 확정 | `NoteDocumentSchema`는 non-empty `id`, string `title`, string-array `tags`, optional document `attrs`, `root`를 가진다. |
-| document id validation | 실행 테스트로 확정 | `noteDocument.test.ts`가 empty document `id`를 schema-invalid로 검증한다. |
-| empty title current behavior | 실행 테스트로 확정 | `noteDocument.test.ts`가 empty `title`을 schema-valid로 받는다고 검증한다. 이는 product empty-title UX가 닫혔다는 뜻은 아니다. |
-| tags current behavior | 실행 테스트로 확정 | `noteDocument.test.ts`가 duplicate string tags를 그대로 보존한다고 검증한다. Tag uniqueness/slug/color/order policy는 없다. |
+| document id validation | 실행 테스트로 확정 | `note document split tests`가 empty document `id`를 schema-invalid로 검증한다. |
+| empty title current behavior | 실행 테스트로 확정 | `note document split tests`가 empty `title`을 schema-valid로 받는다고 검증한다. 이는 product empty-title UX가 닫혔다는 뜻은 아니다. |
+| tags current behavior | 실행 테스트로 확정 | `note document split tests`가 duplicate string tags를 그대로 보존한다고 검증한다. Tag uniqueness/slug/color/order policy는 없다. |
 | public persisted parse seam | 실행 테스트로 확정 | `src/editor/public/index.test.ts`가 persisted JSON을 `parseNoteDocument(value)`로 좁혀 headless editor initial document로 넘기는 path를 검증한다. |
-| React title input and mutation | 실행 테스트로 확정 | `BlockEditor.test.tsx`가 editable title input, `/title` mutation, Undo/Redo 복원을 검증한다. |
-| read-only title guard | 실행 테스트로 확정 | `BlockEditor.test.tsx`가 `readOnly` title input과 non-mutating change behavior를 검증한다. |
-| Markdown metadata options | 실행 테스트로 확정 | `markdown.test.ts`가 `importMarkdown(markdown, { id, title, tags })`가 document metadata를 주입한다고 검증한다. |
-| first heading non-title behavior | 실행 테스트로 확정 | `markdown.test.ts`가 first heading을 document title로 승격하지 않고 heading block으로 유지한다고 검증한다. |
+| React title input and mutation | 실행 테스트로 확정 | BlockEditor split tests가 editable title input, `/title` mutation, Undo/Redo 복원을 검증한다. |
+| read-only title guard | 실행 테스트로 확정 | BlockEditor split tests가 `readOnly` title input과 non-mutating change behavior를 검증한다. |
+| Markdown metadata options | 실행 테스트로 확정 | markdown split tests가 `importMarkdown(markdown, { id, title, tags })`가 document metadata를 주입한다고 검증한다. |
+| first heading non-title behavior | 실행 테스트로 확정 | markdown split tests가 first heading을 document title로 승격하지 않고 heading block으로 유지한다고 검증한다. |
 | demo/helper metadata non-public | boundary/docs 확정 | `initialNoteDocument`와 `createNoteDocument`는 internal demo/helper이고 public export surface가 아니라고 public export/schema audits와 boundary tests가 막는다. |
 | route/storage identity absence | source/docs 확정 | current app route는 `/` host뿐이고 route/storage/document list가 `NoteDocument.id`를 소유하지 않는다. |
 | tags UI/API, frontmatter, metadata commands | 미정 | schema/import fields는 있지만 React tags UI, Markdown frontmatter, `setTitle`/`setTags` public command, autosave/storage semantics는 없다. |

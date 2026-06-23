@@ -19,16 +19,16 @@ browser input을 command/selection result로 번역할 때 쓰는 hidden impleme
 | --- | --- | --- |
 | React facade | `src/editor/react`가 `BlockEditor`와 `BlockEditorProps`를 public React surface로 노출한다. | `src/editor/react/index.ts` |
 | public headless option surface | `CreateEditorOptions`는 `initial`, `history`, `selection`, `view`만 받는다. `readOnly`는 public headless option이 아니다. | `editorCore.ts`, `src/editor/public/index.ts` |
-| internal input adapter guard | `translateEditorInput(..., { readOnly: true })`는 beforeinput/paste/delete/printable/mark/Tab mutation을 patch 없이 막고, Arrow movement와 Shift range extension은 selection result로 유지한다. | `inputAdapter.ts`, `inputAdapter.test.ts` |
-| title input | `readOnly`일 때 title input은 `readOnly` 속성을 갖고 change handler도 document title을 바꾸지 않는다. | `BlockEditor.test.tsx` read-only title/toolbar test |
-| document surface | body는 `aria-readonly="true"`를 노출하되 focusable textbox surface는 유지한다. | `BlockEditor.tsx`, `BlockEditor.test.tsx` |
-| React-to-adapter wiring | `BlockEditor`는 `readOnly` prop을 `translateEditorInput` option으로 넘긴다. React title/body/DOM/paste/cut/toolbar guard와 내부 input adapter guard가 같은 policy를 구현한다. | `BlockEditor.tsx`, `inputAdapter.ts`, `BlockEditor.test.tsx` |
-| DOM/native edit recovery | read-only mode의 DOM input은 canonical document로 즉시 reset되고, editable 상태에서 read-only로 전환할 때 active native edit도 버린다. | `BlockEditor.test.tsx` |
-| copy/cut | copy는 선택 내용을 직렬화하고, cut은 clipboard data를 쓰되 document를 delete하지 않는다. | `BlockEditor.test.tsx` |
-| native range transition | read-only 전환 시 보이는 native range를 canonical copy selection으로 보존한다. | `BlockEditor.test.tsx` |
-| toolbar handlers | read-only 상태에서 Undo, Redo, Insert mention, Insert figure는 document를 mutate하지 않는다. | `BlockEditor.test.tsx` read-only title/toolbar test |
-| drop/history shortcuts | read-only 상태에서 drop payload와 keyboard/beforeinput history Undo/Redo는 document를 mutate하지 않는다. | `BlockEditor.test.tsx` |
-| composition reset | read-only 상태에서 composition start/end/input은 document를 mutate하지 않고 canonical view로 복구하거나 beforeinput을 막는다. | `BlockEditor.test.tsx` |
+| internal input adapter guard | `translateEditorInput(..., { readOnly: true })`는 beforeinput/paste/delete/printable/mark/Tab mutation을 patch 없이 막고, Arrow movement와 Shift range extension은 selection result로 유지한다. | `inputAdapter.ts`, inputAdapter split tests |
+| title input | `readOnly`일 때 title input은 `readOnly` 속성을 갖고 change handler도 document title을 바꾸지 않는다. | BlockEditor split tests read-only title/toolbar test |
+| document surface | body는 `aria-readonly="true"`를 노출하되 focusable textbox surface는 유지한다. | `BlockEditor.tsx`, BlockEditor split tests |
+| React-to-adapter wiring | `BlockEditor`는 `readOnly` prop을 `translateEditorInput` option으로 넘긴다. React title/body/DOM/paste/cut/toolbar guard와 내부 input adapter guard가 같은 policy를 구현한다. | `BlockEditor.tsx`, `inputAdapter.ts`, BlockEditor split tests |
+| DOM/native edit recovery | read-only mode의 DOM input은 canonical document로 즉시 reset되고, editable 상태에서 read-only로 전환할 때 active native edit도 버린다. | BlockEditor split tests |
+| copy/cut | copy는 선택 내용을 직렬화하고, cut은 clipboard data를 쓰되 document를 delete하지 않는다. | BlockEditor split tests |
+| native range transition | read-only 전환 시 보이는 native range를 canonical copy selection으로 보존한다. | BlockEditor split tests |
+| toolbar handlers | read-only 상태에서 Undo, Redo, Insert mention, Insert figure는 document를 mutate하지 않는다. | BlockEditor split tests read-only title/toolbar test |
+| drop/history shortcuts | read-only 상태에서 drop payload와 keyboard/beforeinput history Undo/Redo는 document를 mutate하지 않는다. | BlockEditor split tests |
+| composition reset | read-only 상태에서 composition start/end/input은 document를 mutate하지 않고 canonical view로 복구하거나 beforeinput을 막는다. | BlockEditor split tests |
 
 이 범위는 삭제하면 현재 React integration 기준선이 깨진다.
 

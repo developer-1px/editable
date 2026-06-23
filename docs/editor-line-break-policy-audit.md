@@ -38,23 +38,23 @@ feature 후보로 남긴다.
 | --- | --- |
 | `inputAdapter.ts` | `insertParagraph`와 `insertLineBreak`가 같은 `splitParagraph` command로 간다. |
 | `textCommands.ts` | non-empty inline text block은 block split, empty typed block은 paragraph exit, codeBlock은 text newline, atom edge는 인접 paragraph 생성으로 분기한다. |
-| `inputAdapter.test.ts` | `insertLineBreak`가 paragraph에서는 block add/replace, codeBlock에서는 `A\nB` replace patch를 만든다. |
-| `textCommands.test.ts` | paragraph split, empty paragraph split, selected code text newline, atom/figure edge split을 고정한다. |
-| `BlockEditor.test.tsx` | browser `beforeinput insertParagraph` 경로가 React integration에서 canonical state로 수렴함을 확인한다. |
+| inputAdapter split tests | `insertLineBreak`가 paragraph에서는 block add/replace, codeBlock에서는 `A\nB` replace patch를 만든다. |
+| text command split tests | paragraph split, empty paragraph split, selected code text newline, atom/figure edge split을 고정한다. |
+| BlockEditor split tests | browser `beforeinput insertParagraph` 경로가 React integration에서 canonical state로 수렴함을 확인한다. |
 
 ## 증거 강도
 
 | 항목 | 판정 | 근거 |
 | --- | --- | --- |
-| `Enter` keydown split | 실행 테스트로 확정 | `inputAdapter.test.ts`가 structural keydown `Enter`를 handled headless split command 결과로 검증한다. |
-| `insertParagraph` adapter mapping | 실행 테스트로 확정 | `inputAdapter.test.ts`가 collapsed paragraph에서는 block split, codeBlock에서는 `\n` 삽입으로 수렴한다고 검증한다. |
-| `insertLineBreak` adapter mapping | 실행 테스트로 확정 | `inputAdapter.test.ts`가 collapsed paragraph/codeBlock 양쪽에서 같은 block-specific split policy를 검증한다. |
-| paragraph/inline text block split | 실행 테스트로 확정 | `textCommands.test.ts`가 paragraph split, empty paragraph split, selected range split 후 selection 위치를 검증한다. |
-| empty typed block exit | 실행 테스트로 확정 | `textCommands.test.ts`와 `inputAdapter.test.ts`가 empty heading/quote/listItem과 whitespace-only listItem Enter를 paragraph replacement로 검증한다. |
-| codeBlock newline policy | 실행 테스트로 확정 | `textCommands.test.ts`가 code block caret split과 selected code range replacement를 `\n` 삽입으로 검증한다. |
-| inline atom/figure edge handling | 실행 테스트로 확정 | `textCommands.test.ts`와 `inputAdapter.test.ts`가 atom edge와 figure edge에서 유효한 adjacent paragraph가 생기는 behavior를 검증한다. |
-| React beforeinput convergence | 실행 테스트로 확정 | `BlockEditor.test.tsx`가 browser `beforeinput insertParagraph` 경로가 canonical document state로 수렴함을 검증한다. |
-| `Alt+Enter`/command Enter no-op | 실행 테스트로 확정 | `inputAdapter.test.ts`가 unsupported structural editing shortcuts를 handled selection-only no-op으로 검증한다. |
+| `Enter` keydown split | 실행 테스트로 확정 | inputAdapter split tests가 structural keydown `Enter`를 handled headless split command 결과로 검증한다. |
+| `insertParagraph` adapter mapping | 실행 테스트로 확정 | inputAdapter split tests가 collapsed paragraph에서는 block split, codeBlock에서는 `\n` 삽입으로 수렴한다고 검증한다. |
+| `insertLineBreak` adapter mapping | 실행 테스트로 확정 | inputAdapter split tests가 collapsed paragraph/codeBlock 양쪽에서 같은 block-specific split policy를 검증한다. |
+| paragraph/inline text block split | 실행 테스트로 확정 | text command split tests가 paragraph split, empty paragraph split, selected range split 후 selection 위치를 검증한다. |
+| empty typed block exit | 실행 테스트로 확정 | text command split tests와 inputAdapter split tests가 empty heading/quote/listItem과 whitespace-only listItem Enter를 paragraph replacement로 검증한다. |
+| codeBlock newline policy | 실행 테스트로 확정 | text command split tests가 code block caret split과 selected code range replacement를 `\n` 삽입으로 검증한다. |
+| inline atom/figure edge handling | 실행 테스트로 확정 | text command split tests와 inputAdapter split tests가 atom edge와 figure edge에서 유효한 adjacent paragraph가 생기는 behavior를 검증한다. |
+| React beforeinput convergence | 실행 테스트로 확정 | BlockEditor split tests가 browser `beforeinput insertParagraph` 경로가 canonical document state로 수렴함을 검증한다. |
+| `Alt+Enter`/command Enter no-op | 실행 테스트로 확정 | inputAdapter split tests가 unsupported structural editing shortcuts를 handled selection-only no-op으로 검증한다. |
 | paragraph soft-break inline node | 미정/future feature | 현재 schema/renderer/markdown/cursor contract에는 별도 soft-break inline node가 없다. 추가하려면 새 model concept와 serializer policy가 필요하다. |
 | platform-specific Enter/IME/browser matrix | 미정 | IME Enter confirmation 회귀는 별도 trace로 닫았지만, 모든 browser/OS beforeinput ordering matrix는 이 문서 범위로 닫지 않았다. |
 

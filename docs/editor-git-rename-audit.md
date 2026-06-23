@@ -26,8 +26,8 @@ basename 기준으로 대응되지 않는 legacy 파일은 둘이다.
 - `src/editor/components/editingHostInputSession.ts`
 - `src/editor/components/editingHostInputSession.test.ts`
 
-현재 대응 implementation은 `src/editor/internal/view/contentEditableViewEngine.ts`와
-`src/editor/internal/view/contentEditableViewEngine.test.ts`다. 단순 rename이 아니라
+현재 대응 implementation은 `src/editor/internal/view/contenteditable/contentEditableViewEngine.ts`와
+`contentEditable view split tests`다. 단순 rename이 아니라
 contenteditable transfer, reset/restore, composition start offset, DOM selection
 helper export까지 들어간 view module 확장이다.
 

@@ -77,8 +77,8 @@ primary authority로 쓰지 않는다.
 
 | Fixture class | 현재 위치 | 의미 |
 | --- | --- | --- |
-| jsdom geometry fixtures | `cursorGeometry.test.ts` | data-path/rect 기반 app-owned geometry contract |
-| React pointer/drop fixtures | `BlockEditor.test.tsx` | call site가 같은 geometry adapter를 쓰는지 검증 |
+| jsdom geometry fixtures | cursorGeometry split tests | data-path/rect 기반 app-owned geometry contract |
+| React pointer/drop fixtures | BlockEditor split tests | call site가 같은 geometry adapter를 쓰는지 검증 |
 | Playwright browser fixtures | future | actual `caretPositionFromPoint`/`caretRangeFromPoint`/`elementFromPoint` matrix |
 | manual device fixtures | future | touch/pen, mobile viewport, virtual keyboard, OS text selection handles |
 
@@ -103,7 +103,7 @@ renderer `data-path`, model cursor validity를 통과해야 한다.
 | --- | --- | --- | --- |
 | shared coordinate adapter | 확정 | pointer down, drag, drop call sites가 `geometry.pointFromCoordinates`를 쓴다. | context menu/touch native handles는 current path가 없다. |
 | app-owned rect scan | 확정 | `createDOMCursorGeometry`는 native caret API를 호출하지 않고 `GeometryMap` rect와 `data-path`를 읽는다. | 실제 browser pixel parity는 아니다. |
-| nearest/null behavior | 확정 | `cursorGeometry.test.ts`가 nearest valid point, scroll 후 current rect, invalid DOM null을 검증한다. | Safari/Firefox coordinate API matrix는 별도 검증이 필요하다. |
+| nearest/null behavior | 확정 | cursorGeometry split tests가 nearest valid point, scroll 후 current rect, invalid DOM null을 검증한다. | Safari/Firefox coordinate API matrix는 별도 검증이 필요하다. |
 | atom/text/block coordinate mapping | 확정 | mention/figure/text/code/empty block geometry tests와 React pointer tests가 있다. | Table, nested custom node, shadow DOM은 current schema 밖이다. |
 | native API fallback chain | 미정 | ProseMirror source는 근거지만 current editor가 쓰는 path가 아니다. | 도입 시 Playwright/device matrix가 필요하다. |
 

@@ -29,8 +29,8 @@ status. Keyboard implementation status now lives in this file:
 - ED-029 covers explicit non-mutating key policy.
 
 Product expectations remain in `docs/editor-required-feature-list.md`.
-Executable coverage remains in `inputAdapter.test.ts`, `editorKeyboardPolicy.test.ts`,
-`BlockEditor.test.tsx`, and the cursor/text command tests.
+Executable coverage remains in inputAdapter split tests, `editorKeyboardPolicy.test.ts`,
+BlockEditor split tests, and the cursor/text command tests.
 
 ## 증거 강도
 

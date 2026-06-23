@@ -49,7 +49,7 @@ caller가 Zod schema 객체, `.safeParse()`, Zod issue shape까지 알아야 할
 | `createEditor(options).initial?: NoteDocument` | headless caller가 document를 주입할 수 있다. |
 | `createEditor` 내부 `createJSONDocument(..., { trustedInitial: true })` | 초기 문서는 이미 schema output이라고 믿는 경로다. unknown persisted JSON은 public parse seam을 거쳐야 한다. |
 | `replaceDocument` command가 internal `NoteDocumentSchema.safeParse`를 사용한다. | command path에서는 invalid document를 막되 Zod issue text는 public `EditorResult.reason`으로 노출하지 않는다. |
-| `src/editor/public/index.test.ts`, `editorCore.test.ts` | public runtime export가 `createEditor`, `parseNoteDocument` 두 개이고, `NoteDocumentSchema`, demo constructors가 노출되지 않음을 확인한다. persisted JSON은 parse success document로 headless editor를 boot할 수 있고, schemaVersion 2, invalid shape, empty/unsafe link href, `replaceDocument` invalid document는 generic failure로 고정한다. |
+| `src/editor/public/index.test.ts`, `editorCore split tests` | public runtime export가 `createEditor`, `parseNoteDocument` 두 개이고, `NoteDocumentSchema`, demo constructors가 노출되지 않음을 확인한다. persisted JSON은 parse success document로 headless editor를 boot할 수 있고, schemaVersion 2, invalid shape, empty/unsafe link href, `replaceDocument` invalid document는 generic failure로 고정한다. |
 | `scripts/verify-editor-boundaries.mjs` | `NoteDocumentSchema`가 public facade로 다시 export되지 않게 막는다. |
 | `docs/editor-schema-migration-policy-audit.md` | schemaVersion 1 validation, no automatic migration, parse/replace generic failure, migration 보류 범위를 분리한다. |
 

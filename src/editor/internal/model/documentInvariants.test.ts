@@ -1,11 +1,8 @@
 import type { SelectionSnap } from "@interactive-os/json-document";
 import { describe, expect, it } from "vitest";
 import { assertNoteDocumentInvariants } from "./documentInvariants";
-import {
-  createNoteDocument,
-  initialNoteDocument,
-  type NoteDocument,
-} from "./noteDocument";
+import { initialNoteDocument } from "./initialNoteDocument";
+import { createNoteDocument, type NoteDocument } from "./noteDocument";
 import { selectionFromCursorPoint } from "./richSelection";
 
 const firstTextPath = "/root/children/0/children/0/text";

@@ -28,29 +28,29 @@ extension, table/task-list/frontmatter 같은 product import scope다.
 | 주제 | 확정 동작 | 근거 |
 | --- | --- | --- |
 | canonical model separation | Markdown source text가 rich editor model이 아니고 structured JSON이 canonical model이다. | `rich-model-design.md`, `editor-issues.md` Rich Model Replan |
-| import block coverage | heading, paragraph, quote, list item, fenced code block, figure image syntax를 model block으로 만든다. | `markdown.test.ts` |
-| import inline coverage | bold, italic, inline code, safe link, mention fallback syntax를 inline model node/mark로 만든다. | `markdown.test.ts`, `inputAdapter.test.ts` |
-| safe link import | unsafe markdown link href는 link mark로 쓰지 않고 label text만 보존한다. safe relative/http/https/mail/tel link는 mark로 보존한다. | `markdown.test.ts`, `inputAdapter.test.ts`, `editor-link-mark-audit.md` |
-| export supported shapes | supported rich model shapes는 stable markdown string으로 export되고 다시 import/export round-trip 된다. | `markdown.test.ts` |
-| deterministic atom fallback | mention은 `@[label](mention:id)`, figure는 image syntax로 fallback serialization 된다. | `markdown.test.ts`, `clipboard.test.ts` |
-| source delimiter independence | import 후 editor command cursor offsets는 visible model text 기준이고 markdown delimiter offsets에 의존하지 않는다. | `markdown.test.ts`, `rich-model-design.md` |
-| clipboard fallback | selection copy uses `text/markdown` and custom MIME `markdown` as deterministic rich-ish fallback, while paste/drop treats markdown only when transfer format says markdown. | `clipboard.ts`, `clipboard.test.ts`, `inputAdapter.test.ts`, `BlockEditor.test.tsx` |
-| plain paste guard | markdown-looking plain text paste stays plain text unless the transfer format is markdown. | `inputAdapter.test.ts` |
-| escaping and round-trip guards | inline code punctuation, paragraph newlines, leading/trailing spaces, paragraph text that looks like block syntax, internal code fences, malformed percent escapes, escaped link titles are covered. | `markdown.test.ts` |
-| public facade non-exposure | `importMarkdown`, `exportMarkdown`, `exportInlineMarkdown`는 public runtime facade에 없고, verifier가 direct export, aliased export-from, import-then-export alias, namespace 재노출, internal implementation `export *`/`export * as` 누수를 막는다. | `src/editor/public/index.test.ts`, `scripts/verify-editor-boundaries.mjs`, `scripts/verify-editor-boundaries.test.mjs` |
+| import block coverage | heading, paragraph, quote, list item, fenced code block, figure image syntax를 model block으로 만든다. | markdown split tests |
+| import inline coverage | bold, italic, inline code, safe link, mention fallback syntax를 inline model node/mark로 만든다. | markdown split tests, inputAdapter split tests |
+| safe link import | unsafe markdown link href는 link mark로 쓰지 않고 label text만 보존한다. safe relative/http/https/mail/tel link는 mark로 보존한다. | markdown split tests, inputAdapter split tests, `editor-link-mark-audit.md` |
+| export supported shapes | supported rich model shapes는 stable markdown string으로 export되고 다시 import/export round-trip 된다. | markdown split tests |
+| deterministic atom fallback | mention은 `@[label](mention:id)`, figure는 image syntax로 fallback serialization 된다. | markdown split tests, `clipboard split tests` |
+| source delimiter independence | import 후 editor command cursor offsets는 visible model text 기준이고 markdown delimiter offsets에 의존하지 않는다. | markdown split tests, `rich-model-design.md` |
+| clipboard fallback | selection copy uses `text/markdown` and custom MIME `markdown` as deterministic rich-ish fallback, while paste/drop treats markdown only when transfer format says markdown. | `clipboard.ts`, `clipboard split tests`, inputAdapter split tests, BlockEditor split tests |
+| plain paste guard | markdown-looking plain text paste stays plain text unless the transfer format is markdown. | inputAdapter split tests |
+| escaping and round-trip guards | inline code punctuation, paragraph newlines, leading/trailing spaces, paragraph text that looks like block syntax, internal code fences, malformed percent escapes, escaped link titles are covered. | markdown split tests |
+| public facade non-exposure | `importMarkdown`, `exportMarkdown`, `exportInlineMarkdown`는 public runtime facade에 없고, verifier가 direct export, aliased export-from, import-then-export alias, namespace 재노출, internal implementation `export *`/`export * as` 누수를 막는다. | `src/editor/public/index.test.ts`, `scripts/verify-editor-boundaries.mjs`, boundary verifier split tests |
 
 ## 증거 강도
 
 | 항목 | 강도 | 이유 |
 | --- | --- | --- |
-| canonical model separation | 설계 문서와 실행 테스트로 확정 | `rich-model-design.md`가 structured `NoteDocument`를 canonical model로 두고, `markdown.test.ts`는 import 뒤 editor command cursor offsets가 Markdown delimiter가 아니라 visible model text 기준임을 검증한다. |
-| import block coverage | 실행 테스트로 확정 | heading, paragraph, quote, list item, fenced code block, figure image syntax가 model block으로 들어오는 것을 `markdown.test.ts`가 고정한다. |
-| import inline coverage | 실행 테스트로 확정 | bold, italic, inline code, safe link, mention fallback syntax가 inline text mark 또는 atom으로 들어오는 것을 `markdown.test.ts`와 markdown paste tests가 검증한다. |
-| safe link import | 실행 테스트로 확정 | unsafe markdown link href는 label text만 보존하고 safe relative/http/https/mail/tel link는 mark로 보존하는 정책이 `markdown.test.ts`와 `inputAdapter.test.ts`에 있다. |
+| canonical model separation | 설계 문서와 실행 테스트로 확정 | `rich-model-design.md`가 structured `NoteDocument`를 canonical model로 두고, markdown split tests는 import 뒤 editor command cursor offsets가 Markdown delimiter가 아니라 visible model text 기준임을 검증한다. |
+| import block coverage | 실행 테스트로 확정 | heading, paragraph, quote, list item, fenced code block, figure image syntax가 model block으로 들어오는 것을 markdown split tests가 고정한다. |
+| import inline coverage | 실행 테스트로 확정 | bold, italic, inline code, safe link, mention fallback syntax가 inline text mark 또는 atom으로 들어오는 것을 markdown split tests와 markdown paste tests가 검증한다. |
+| safe link import | 실행 테스트로 확정 | unsafe markdown link href는 label text만 보존하고 safe relative/http/https/mail/tel link는 mark로 보존하는 정책이 markdown split tests와 inputAdapter split tests에 있다. |
 | supported export and round-trip | 실행 테스트로 확정 | supported rich model shapes, inline code punctuation, paragraph newlines/spaces, block-syntax-looking paragraph text, code fence edge cases, escaped link/image syntax가 stable export/import round-trip으로 고정돼 있다. |
-| deterministic atom fallback | 실행 테스트로 확정 | mention은 `@[label](mention:id)`, figure는 image syntax로 export되고 다시 import되는 경로가 `markdown.test.ts`와 clipboard tests에 있다. |
+| deterministic atom fallback | 실행 테스트로 확정 | mention은 `@[label](mention:id)`, figure는 image syntax로 export되고 다시 import되는 경로가 markdown split tests와 clipboard tests에 있다. |
 | clipboard markdown fallback | 실행 테스트로 확정 | copy는 `text/markdown`과 custom MIME markdown fallback을 만들고, paste/drop은 transfer format이 markdown일 때만 rich paste path로 들어가는 것을 clipboard/input/React tests가 검증한다. |
-| markdown-looking plain paste guard | 실행 테스트로 확정 | plain text paste가 markdown처럼 보여도 transfer format이 plain이면 text insertion으로 처리되는 것을 `inputAdapter.test.ts`가 고정한다. |
+| markdown-looking plain paste guard | 실행 테스트로 확정 | plain text paste가 markdown처럼 보여도 transfer format이 plain이면 text insertion으로 처리되는 것을 inputAdapter split tests가 고정한다. |
 | public facade non-exposure | public facade/boundary 테스트로 확정 | `src/editor/public/index.test.ts`는 runtime 비노출을 확인하고, boundary verifier tests는 direct/aliased/import-then-export/namespace/star leak을 막는다. |
 | CommonMark/GFM full compatibility | 미정 | 현재 parser는 local deterministic adapter이며 tables, task lists, footnotes, HTML blocks, nested emphasis edge cases는 compatibility matrix로 닫지 않았다. |
 | public Markdown import/export API | 미정 | 현재는 internal paste/clipboard/test adapter다. 외부 API로 승격하려면 error shape, migration, sanitization, compatibility table을 같이 설계해야 한다. |

@@ -28,7 +28,7 @@ native text buffer를 per-input model sync로 바꾸지 않는다.
 | 항목 | 현재 상태 | 근거 |
 | --- | --- | --- |
 | active native buffer | `contentEditableViewEngine`이 active text leaf 안 native mutation을 보류하고 release 시 one-patch flush한다. | `docs/editor-contenteditable-buffer-audit.md`, `contentEditableViewEngine.ts` |
-| composition state | React surface는 `data-ime-composing`을 내보내고 IME 중 custom caret overlay를 숨긴다. | `BlockEditor.tsx`, `BlockEditor.test.tsx` |
+| composition state | React surface는 `data-ime-composing`을 내보내고 IME 중 custom caret overlay를 숨긴다. | `BlockEditor.tsx`, BlockEditor split tests |
 | command boundary | toolbar/undo/redo/keymap/paste/drop/copy/cut 전 active buffer를 flush한다. | `useBlockEditorController.tsx` |
 | render selection sync guard | active edit 중에는 layout effect가 DOM selection sync를 건너뛴다. | `contentEditableEngine.hasActiveEdit()` guard |
 | remote/collab patch | 구현 없음. 외부 patch queue, rebase, conflict resolver가 없다. | source audit |

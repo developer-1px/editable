@@ -20,13 +20,13 @@ identity policy를 나눈다.
 | 근거 | 내용 |
 | --- | --- |
 | `src/editor/internal/model/noteDocument.ts` | `NoteDocument.id`, document root id, block/atom ids는 non-empty string이다. `createGeneratedBlockId()`는 module-local `block-N` counter를 증가시킨다. |
-| `src/editor/internal/model/noteDocument.test.ts` | generated block id가 initial demo block ids와 충돌하지 않고, sequential local `block-N` 형태로 증가하는 것을 검증한다. |
-| `src/editor/internal/model/textCommands.ts` | 새 paragraph block을 만들 때 `createParagraphBlock()`을 쓰고, imported block fragment는 `withFreshBlockIds`/`ensureUniqueBlockIds`로 current command result 안에서 fresh ids를 부여한다. |
+| `note document split tests` | generated block id가 initial demo block ids와 충돌하지 않고, sequential local `block-N` 형태로 증가하는 것을 검증한다. |
+| `src/editor/internal/model/text-command/textCommands.ts` | 새 paragraph block을 만들 때 `createParagraphBlock()`을 쓰고, imported block fragment는 `withFreshBlockIds`/`ensureUniqueBlockIds`로 current command result 안에서 fresh ids를 부여한다. |
 | `src/editor/internal/react/DocumentRenderer.tsx` | block render key는 block id를 기본으로 쓰되 duplicate id가 있으면 occurrence suffix를 붙여 React duplicate-key warning을 피한다. |
-| `src/editor/internal/react/DocumentRenderer.test.tsx` | duplicate block id가 있어도 renderer가 duplicate-key warning을 내지 않는 것을 검증한다. |
-| `src/editor/internal/debug/debugInteractionSnapshot.ts` | debug snapshot은 block ids와 duplicate block ids를 요약한다. |
-| `src/editor/internal/debug/debugInteractionSnapshot.test.ts` | duplicate block id가 있는 document를 reject하지 않고 snapshot inventory에 중복 id를 기록하는 것을 검증한다. |
-| `src/editor/internal/debug/debugInteractionReport.ts` | duplicate block ids는 debug report diagnostic으로 올라간다. |
+| `DocumentRenderer split tests` | duplicate block id가 있어도 renderer가 duplicate-key warning을 내지 않는 것을 검증한다. |
+| `src/editor/internal/debug/interaction-recorder/debugInteractionSnapshot.ts` | debug snapshot은 block ids와 duplicate block ids를 요약한다. |
+| `debug interaction split tests` | duplicate block id가 있는 document를 reject하지 않고 snapshot inventory에 중복 id를 기록하는 것을 검증한다. |
+| `src/editor/internal/debug/interaction-recorder/debugInteractionReport.ts` | duplicate block ids는 debug report diagnostic으로 올라간다. |
 | `docs/editor-document-metadata-surface-audit.md` | `NoteDocument.id`는 schema metadata field지만 current route/storage identity로 연결되지 않는다고 정리한다. |
 | `docs/editor-app-route-embedding-audit.md` | current app route는 `/` 하나이며 `/documents/:id` route identity contract가 없다. |
 
@@ -50,13 +50,13 @@ identity policy를 나눈다.
 | 판정 대상 | 강도 | 근거 |
 | --- | --- | --- |
 | document/root/block id shape | source/schema 확정 | `NoteDocumentSchema`, `DocumentRootSchema`, block schemas가 `id`를 non-empty string으로 받는다. |
-| local generated block ids | 실행 테스트로 확정 | `noteDocument.test.ts`가 `createGeneratedBlockId()`의 `block-N` 형태, monotonic 증가, initial demo id non-collision을 검증한다. |
-| paragraph helper ids | 실행 테스트로 확정 | `noteDocument.test.ts`가 `createParagraphBlock()` id가 initial demo block ids와 충돌하지 않는다고 검증한다. |
-| imported fragment fresh ids | 실행 테스트로 확정 | `inputAdapter.test.ts`가 Markdown block paste 결과의 block ids가 unique이고 imported markdown ids를 그대로 쓰지 않는다고 검증한다. |
-| duplicate ids schema acceptance | 실행 테스트로 확정 | `noteDocument.test.ts`가 duplicate block id document를 schema-valid data로 받는다고 검증한다. |
-| duplicate render tolerance | 실행 테스트로 확정 | `DocumentRenderer.test.tsx`가 duplicate block ids를 렌더해도 React duplicate-key warning을 내지 않는다고 검증한다. |
-| duplicate debug inventory | 실행 테스트로 확정 | `debugInteractionSnapshot.test.ts`가 duplicate block ids를 reject하지 않고 snapshot inventory에 기록한다고 검증한다. |
-| duplicate debug report diagnostic | 실행 테스트로 확정 | `debugInteractionSnapshot.test.ts`가 duplicate block ids를 debug report `error` diagnostic과 formatted final document duplicate line으로 올린다고 검증한다. |
+| local generated block ids | 실행 테스트로 확정 | `note document split tests`가 `createGeneratedBlockId()`의 `block-N` 형태, monotonic 증가, initial demo id non-collision을 검증한다. |
+| paragraph helper ids | 실행 테스트로 확정 | `note document split tests`가 `createParagraphBlock()` id가 initial demo block ids와 충돌하지 않는다고 검증한다. |
+| imported fragment fresh ids | 실행 테스트로 확정 | inputAdapter split tests가 Markdown block paste 결과의 block ids가 unique이고 imported markdown ids를 그대로 쓰지 않는다고 검증한다. |
+| duplicate ids schema acceptance | 실행 테스트로 확정 | `note document split tests`가 duplicate block id document를 schema-valid data로 받는다고 검증한다. |
+| duplicate render tolerance | 실행 테스트로 확정 | `DocumentRenderer split tests`가 duplicate block ids를 렌더해도 React duplicate-key warning을 내지 않는다고 검증한다. |
+| duplicate debug inventory | 실행 테스트로 확정 | `debug interaction split tests`가 duplicate block ids를 reject하지 않고 snapshot inventory에 기록한다고 검증한다. |
+| duplicate debug report diagnostic | 실행 테스트로 확정 | `debug interaction split tests`가 duplicate block ids를 debug report `error` diagnostic과 formatted final document duplicate line으로 올린다고 검증한다. |
 | route/storage binding absence | source/docs 확정 | current route source는 `/` host뿐이고 route/storage/document list가 `NoteDocument.id`를 소유하지 않는다. |
 | schema-fatal unique id validation | 미정 | duplicate ids are schema-valid today. Reject/rewrite/warn policy needs import/persistence migration design. |
 | global/collaboration id ownership | 미정 | current generator is module-local and has no client/session/document ownership source. |

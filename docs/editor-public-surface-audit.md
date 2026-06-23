@@ -28,11 +28,11 @@ state owner라고 부르면 과장이다. 반대로 `BlockEditor`가 지금 `cre
 | --- | --- | --- |
 | 외부 import seam | 확정 | README가 public import를 `src/editor/public`, `src/editor/react`로 제한한다. `scripts/verify-editor-boundaries.mjs`가 외부 코드의 `src/editor/internal/*` 및 legacy `components/model/fixtures/testing` import를 막는다. |
 | headless editor interface | 확정 | `src/editor/public/index.ts`가 `createEditor`, `parseNoteDocument`, `Editor`, command/query/result types, document types를 re-export한다. 개별 export 범위는 `docs/editor-public-export-audit.md`에서 분리해 판정한다. |
-| `createEditor()` surface depth | 확정 | `editorCore.test.ts`가 public surface를 `can`, `dispatch`, `dispose`, `query`, `snapshot`, `subscribe` 여섯 메서드로 고정한다. 내부는 JSONDocument history, command descriptors, view adapter, batch atomicity를 숨긴다. |
+| `createEditor()` surface depth | 확정 | `editorCore split tests`가 public surface를 `can`, `dispatch`, `dispose`, `query`, `snapshot`, `subscribe` 여섯 메서드로 고정한다. 내부는 JSONDocument history, command descriptors, view adapter, batch atomicity를 숨긴다. |
 | React app interface | 확정 | `src/routes/index.tsx`는 `../editor/react`에서 `BlockEditor`를 import한다. `src/editor/react/index.ts`는 `BlockEditor`와 props만 re-export한다. |
 | React runtime ownership | 확정 | `BlockEditor`는 `useJSONDocument`, input adapter, text commands, contenteditable engine, geometry, renderer, toolbar를 직접 조합한다. 현재 코드에서 `createEditor()`를 호출하지 않는다. |
-| React read-only prop | 확정 | `BlockEditorProps.readOnly`는 React surface prop이다. title/body/input adapter/DOM recovery/paste/cut/toolbar mutation guard는 `docs/editor-read-only-policy-audit.md`와 `BlockEditor.test.tsx`가 고정한다. |
-| facade 분리 | 확정 | `scripts/verify-editor-boundaries.mjs`가 `src/editor/public`에서 `BlockEditor`/`BlockEditorProps` 노출, React facade import, allowlist 밖 internal helper 재노출, 확정 public binding alias export, internal implementation `export *`/`export * as` 누수를 막고, `src/editor/react`에서 `createEditor`/`parseNoteDocument` 등 headless API 노출, public facade import, non-react internal alias 재노출, `BlockEditor`/`BlockEditorProps` 밖 React helper 재노출, React public binding alias export, internal React implementation `export *`/`export * as` 누수를 막는다. 대표 위반 reporting은 `scripts/verify-editor-boundaries.test.mjs`가 고정한다. |
+| React read-only prop | 확정 | `BlockEditorProps.readOnly`는 React surface prop이다. title/body/input adapter/DOM recovery/paste/cut/toolbar mutation guard는 `docs/editor-read-only-policy-audit.md`와 BlockEditor split tests가 고정한다. |
+| facade 분리 | 확정 | `scripts/verify-editor-boundaries.mjs`가 `src/editor/public`에서 `BlockEditor`/`BlockEditorProps` 노출, React facade import, allowlist 밖 internal helper 재노출, 확정 public binding alias export, internal implementation `export *`/`export * as` 누수를 막고, `src/editor/react`에서 `createEditor`/`parseNoteDocument` 등 headless API 노출, public facade import, non-react internal alias 재노출, `BlockEditor`/`BlockEditorProps` 밖 React helper 재노출, React public binding alias export, internal React implementation `export *`/`export * as` 누수를 막는다. 대표 위반 reporting은 boundary verifier split tests가 고정한다. |
 
 ## 현재 React facade source-level inventory
 
@@ -74,13 +74,13 @@ non-react internal, alias name, star/star-as 재노출을 막는다.
 | --- | --- | --- |
 | headless runtime facade | 실행 테스트로 확정 | `src/editor/public/index.test.ts`가 runtime export를 `createEditor`, `parseNoteDocument` 두 개로 고정하고 demo constructor, schema, markdown adapter, React component 노출을 막는다. |
 | headless type surface | 소스 AST 테스트로 확정 | `src/editor/public/index.test.ts`가 source-level type export 19개를 exact list로 고정한다. |
-| `createEditor()` six-method interface | 실행 테스트로 확정 | `src/editor/internal/model/editorCore.test.ts`가 editor object key를 `can`, `dispatch`, `dispose`, `query`, `snapshot`, `subscribe`로 고정한다. |
+| `createEditor()` six-method interface | 실행 테스트로 확정 | `editorCore split tests`가 editor object key를 `can`, `dispatch`, `dispose`, `query`, `snapshot`, `subscribe`로 고정한다. |
 | React runtime facade | 실행 테스트로 확정 | `src/editor/react/index.test.ts`가 runtime export를 `BlockEditor` 하나로 고정하고 `createEditor`/`parseNoteDocument`가 없음을 확인한다. |
 | React type surface | 소스 AST 테스트로 확정 | `src/editor/react/index.test.ts`가 source-level type export를 `BlockEditorProps` 하나로 고정한다. |
 | route import seam | 정적 소스와 verifier로 확정 | `src/routes/index.tsx`가 `src/editor/react` facade만 import하고, boundary verifier가 app code의 hidden implementation import를 막는다. |
-| facade 분리 | 정적 verifier 테스트로 확정 | `scripts/verify-editor-boundaries.test.mjs`가 public facade의 React 누수와 React facade의 headless/non-react/internal helper 누수를 대표 위반으로 고정한다. |
+| facade 분리 | 정적 verifier 테스트로 확정 | boundary verifier split tests가 public facade의 React 누수와 React facade의 headless/non-react/internal helper 누수를 대표 위반으로 고정한다. |
 | 현재 React runtime ownership | 소스와 integration test로 확정 | `BlockEditor`는 `useJSONDocument`, contenteditable/input adapter, geometry, toolbar를 직접 조합하고 현재 `createEditor()` 호출이 없다. React integration tests는 이 route path의 input/selection/read-only 동작을 검증한다. |
-| React read-only prop | 실행 테스트로 확정 | `BlockEditor.test.tsx`가 `BlockEditor readOnly`의 title/body/input adapter/DOM recovery/paste/cut/toolbar/history shortcut mutation guard를 고정한다. |
+| React read-only prop | 실행 테스트로 확정 | BlockEditor split tests가 `BlockEditor readOnly`의 title/body/input adapter/DOM recovery/paste/cut/toolbar/history shortcut mutation guard를 고정한다. |
 | future state owner 통합 | 미정 | verifier는 facade 분리만 막고 `BlockEditor`가 `createEditor()`를 써야 한다는 정책은 강제하지 않는다. native DOM selection, composition, layout lifecycle을 어느 interface가 소유할지는 제품/API 결정이다. |
 | command adapter unification | 미정 | `createEditor()` command descriptors와 React input adapter의 low-level command 조합이 둘 다 존재하지만, 하나의 dispatch owner로 통합할 요구는 아직 테스트나 제품 범위로 닫히지 않았다. |
 | headless read-only option | 미정 | React `readOnly`는 확정 prop이지만 `createEditor({ readOnly })` public option은 없다. headless embedding에도 필요한지는 별도 결정이다. |
@@ -90,7 +90,7 @@ non-react internal, alias name, star/star-as 재노출을 막는다.
 
 | 삭제 대상 | 깨지는 것 | 깨지지 않는 것 | 결론 |
 | --- | --- | --- | --- |
-| `createEditor()` / `src/editor/public` | headless embedding interface, `editorCore.test.ts`, public API 문서 의미 | 현재 route-level React app path | public headless seam으로는 빼면 안 되지만, React 앱 runtime path라고 단정하면 안 된다. |
+| `createEditor()` / `src/editor/public` | headless embedding interface, `editorCore split tests`, public API 문서 의미 | 현재 route-level React app path | public headless seam으로는 빼면 안 되지만, React 앱 runtime path라고 단정하면 안 된다. |
 | `BlockEditor` / `src/editor/react` | 현재 앱 화면, React integration tests, contenteditable/native selection wiring | headless `createEditor()` tests | 제품 앱 seam으로는 빼면 안 되지만, headless embedding interface를 대체하지 않는다. |
 | `scripts/verify-editor-boundaries.mjs` | internal/legacy import 차단 근거 | 개별 unit tests 일부 | public/internal 구조를 증명하는 gate라서 빼면 안 된다. |
 
@@ -108,7 +108,7 @@ non-react internal, alias name, star/star-as 재노출을 막는다.
 
 | 항목 | 판정 | 이유 |
 | --- | --- | --- |
-| `src/editor/public` 유지 | 유지 확정 | headless embedding interface와 `editorCore.test.ts`가 있다. 삭제하면 React app은 떠도 public API와 boundary 문서가 깨진다. |
+| `src/editor/public` 유지 | 유지 확정 | headless embedding interface와 `editorCore split tests`가 있다. 삭제하면 React app은 떠도 public API와 boundary 문서가 깨진다. |
 | `src/editor/react` 유지 | 유지 확정 | 현재 route와 React integration tests가 직접 의존한다. 삭제하면 제품 화면이 깨진다. |
 | `BlockEditorProps.readOnly` 유지 | 유지 확정 | React surface의 cursor-only/mutation-blocking mode로 테스트가 있다. 삭제하면 read-only integration 기준선이 깨진다. |
 | 지금 바로 `BlockEditor`를 `createEditor()`로 dogfood | 보류 | 기존 메커니즘으로 해결되지 않은 결함이 보이지 않는다. native DOM selection, composition, layout lifecycle을 `createEditor()` interface가 아직 표현하지 않는다. |

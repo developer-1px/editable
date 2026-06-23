@@ -72,16 +72,16 @@ active leaf 주변 DOM topology를 바꾸는 decoration은 늦춘다.
 
 | 항목 | 테스트 근거 |
 | --- | --- |
-| mark 뒤, link 뒤, mention 뒤, block start에서 native insert 시작 | `contentEditableViewEngine.test.ts`의 native dirty range 시작 case |
-| active mark text insertion은 native DOM이 아니라 command path | `contentEditableViewEngine.test.ts`, `BlockEditor.test.tsx` |
-| open range 일반 text insertion은 headless replacement | `contentEditableViewEngine.test.ts`, `BlockEditor.test.tsx` |
-| same text leaf composition range는 native caret 허용 | `contentEditableViewEngine.test.ts` |
-| multi text leaf/block range composition은 native defer 금지 | `contentEditableViewEngine.test.ts`, `BlockEditor.test.tsx` |
-| mark element DOM boundary mapping | `contentEditableViewEngine.test.ts` |
-| atom 내부 DOM position은 text point 아님 | `contentEditableViewEngine.test.ts` |
-| atom pointer selection이 stale native range보다 우선 | `BlockEditor.test.tsx` |
-| composition 중 custom cursor overlay 숨김 | `BlockEditor.test.tsx` |
-| toolbar command 전 composition/native buffer release | `BlockEditor.test.tsx` |
+| mark 뒤, link 뒤, mention 뒤, block start에서 native insert 시작 | contentEditable view split tests의 native dirty range 시작 case |
+| active mark text insertion은 native DOM이 아니라 command path | contentEditable view split tests, BlockEditor split tests |
+| open range 일반 text insertion은 headless replacement | contentEditable view split tests, BlockEditor split tests |
+| same text leaf composition range는 native caret 허용 | contentEditable view split tests |
+| multi text leaf/block range composition은 native defer 금지 | contentEditable view split tests, BlockEditor split tests |
+| mark element DOM boundary mapping | contentEditable view split tests |
+| atom 내부 DOM position은 text point 아님 | contentEditable view split tests |
+| atom pointer selection이 stale native range보다 우선 | BlockEditor split tests |
+| composition 중 custom cursor overlay 숨김 | BlockEditor split tests |
+| toolbar command 전 composition/native buffer release | BlockEditor split tests |
 
 ## 아직 닫히지 않은 것
 

@@ -44,7 +44,7 @@ DOM selection, 그리고 composition/delete/paste가 이 selection을 만났을 
 | public selection single range | 확정 | `RichSelection`은 caret/range/node만 정의하고 multi-range variant가 없다. |
 | source range selectedPointers empty | 확정 | `selectionFromCursorRange`는 `selectedPointers: []`로 직렬화한다. |
 | render atom derivation | 확정 | `selectionForRender`가 non-collapsed range에서 covered atom pointers를 파생한다. |
-| inline atom range replacement | 확정 | `inputAdapter.test.ts`, `textCommands.test.ts`가 multi-node selection insert/delete를 검증한다. |
+| inline atom range replacement | 확정 | inputAdapter split tests, text command split tests가 multi-node selection insert/delete를 검증한다. |
 | block atom range delete | 확정 | selected block range delete가 figure를 제거하되 following paragraph를 보존하는 테스트가 있다. |
 | code block cross range | 확정 | code block interior에서 시작하거나 끝나는 range delete/insert tests가 focus-only fallback을 막는다. |
 | Enter over range | 확정 | `insertParagraph` over selected ranges는 delete 후 split으로 검증되어 있다. |

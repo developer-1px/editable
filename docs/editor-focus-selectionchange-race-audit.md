@@ -28,11 +28,11 @@ canonical selection은 model layer가 소유한다.
 
 | 항목 | 현재 상태 | 근거 |
 | --- | --- | --- |
-| initial autofocus | focus preserve 후 canonical point를 native range로 복구 | `useBlockEditorController.tsx`, `BlockEditor.test.tsx` |
+| initial autofocus | focus preserve 후 canonical point를 native range로 복구 | `useBlockEditorController.tsx`, BlockEditor split tests |
 | focus handler | focused state를 켜고 canonical selection point를 native collapsed range로 복구 | `handleFocus` |
 | blur handler | `flushContentEditableView()`, overlay/composition/native range state 정리 | `handleBlur` |
 | selectionchange guard | active editor 또는 native selection이 editor를 touch할 때만 update | guarded `handleSelectionChange` |
-| duplicate listener | 제거 | `BlockEditor.test.tsx`가 document `selectionchange` listener 1개와 cleanup 1개를 고정 |
+| duplicate listener | 제거 | BlockEditor split tests가 document `selectionchange` listener 1개와 cleanup 1개를 고정 |
 | native range visibility | non-collapsed native range면 custom overlay 숨김 | `updateNativeSelectionState`, overlay tests |
 | collapsed native selection | canonical selection이 collapsed이고 active edit이 아닐 때만 canonical restore | `updateNativeSelectionState` |
 | toolbar pointer | mousedown `preventDefault`, command 전 flush | `EditorToolbar`, toolbar tests |
@@ -92,17 +92,17 @@ focus만 복구해야 하는 경로에서 reveal까지 섞으면 scroll jump가 
 
 | 항목 | 테스트 근거 |
 | --- | --- |
-| autofocus가 editor focus와 native selection을 복구 | `BlockEditor.test.tsx` |
-| toolbar mousedown이 focus/selection을 훔치지 않음 | `BlockEditor.test.tsx` |
-| owner-document selectionchange listener 중복 없음 | `BlockEditor.test.tsx` |
-| native DOM range가 보이면 custom overlay 숨김 | `BlockEditor.test.tsx` |
-| hidden selection class를 만들지 않음 | `BlockEditor.test.tsx` |
-| blur 시 canonical range 보존, overlay 숨김 | `BlockEditor.test.tsx` |
-| copy 후 observed native range 유지 | `BlockEditor.test.tsx` |
-| blur-flushed native edit은 하나의 undo unit | `BlockEditor.test.tsx` |
-| separate blur sessions는 separate undo units | `BlockEditor.test.tsx` |
-| history undo 뒤 native caret 복구 | `BlockEditor.test.tsx` |
-| read-only 전환에서 active edit reset/native range copy 보존 | `BlockEditor.test.tsx` |
+| autofocus가 editor focus와 native selection을 복구 | BlockEditor split tests |
+| toolbar mousedown이 focus/selection을 훔치지 않음 | BlockEditor split tests |
+| owner-document selectionchange listener 중복 없음 | BlockEditor split tests |
+| native DOM range가 보이면 custom overlay 숨김 | BlockEditor split tests |
+| hidden selection class를 만들지 않음 | BlockEditor split tests |
+| blur 시 canonical range 보존, overlay 숨김 | BlockEditor split tests |
+| copy 후 observed native range 유지 | BlockEditor split tests |
+| blur-flushed native edit은 하나의 undo unit | BlockEditor split tests |
+| separate blur sessions는 separate undo units | BlockEditor split tests |
+| history undo 뒤 native caret 복구 | BlockEditor split tests |
+| read-only 전환에서 active edit reset/native range copy 보존 | BlockEditor split tests |
 | nested scroll focus preserve와 focus options fallback | `focusScroll.test.ts` |
 
 ## 아직 닫히지 않은 것

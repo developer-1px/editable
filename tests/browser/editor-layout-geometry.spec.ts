@@ -133,7 +133,6 @@ async function setNativeTextSelection(
 
 async function pressEditorKey(page: Page, key: string) {
   const editor = page.getByRole("textbox", { name: "Document body" });
-  await editor.focus();
   await expect(editor).toBeFocused();
   await expect(editor).toHaveAttribute("data-focused", "true");
   await editor.press(key);

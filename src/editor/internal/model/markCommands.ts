@@ -2,11 +2,13 @@ import type {
   JSONPatchOperation,
   SelectionSnap,
 } from "@interactive-os/json-document";
+import { normalizeCursorPoint } from "./cursor";
 import {
-  type CursorPoint,
-  normalizeCursorPoint,
-  resolveCursorIndex,
-} from "./cursor";
+  cursorPointFromInlineUnitOffset,
+  selectedInlineUnitRange,
+  textChildrenInInlineUnitRange,
+} from "./inlineUnitSelection";
+import { inlineUnitLength } from "./inlineUnits";
 import { normalizeLinkHref } from "./linkHref";
 import { MARK_ORDER, markKey } from "./markOrder";
 import {
@@ -27,6 +29,7 @@ import {
   selectionFromCursorRange,
   selectionIsCollapsed,
 } from "./richSelection";
+import { textInline } from "./text-command/textCommandAddressing";
 
 export {
   activeMarksFromSelection,
@@ -48,11 +51,6 @@ export type ToggleableMarkType = Extract<
   Mark["type"],
   "bold" | "italic" | "code"
 >;
-
-type InlinePosition = {
-  blockIndex: number;
-  unitOffset: number;
-};
 
 export function toggleMark(
   document: NoteDocument,
@@ -115,7 +113,7 @@ function toggleInlineMark(
     };
   }
 
-  const range = selectedInlineRange(document, selection);
+  const range = selectedInlineUnitRange(document, selection);
   if (range === null) {
     return {
       ok: false,
@@ -131,7 +129,7 @@ function toggleInlineMark(
     };
   }
 
-  const selectedText = selectedTextChildren(
+  const selectedText = textChildrenInInlineUnitRange(
     block.children,
     range.startUnit,
     range.endUnit,
@@ -142,13 +140,13 @@ function toggleInlineMark(
       patch: [],
       selectionAfter: selectionFromCursorRange(
         document,
-        pointFromInlineUnitOffset(
+        cursorPointFromInlineUnitOffset(
           range.blockIndex,
           block.children,
           range.startUnit,
           "forward",
         ),
-        pointFromInlineUnitOffset(
+        cursorPointFromInlineUnitOffset(
           range.blockIndex,
           block.children,
           range.endUnit,
@@ -198,13 +196,13 @@ function toggleInlineMark(
     ],
     selectionAfter: selectionFromCursorRange(
       nextDocument,
-      pointFromInlineUnitOffset(
+      cursorPointFromInlineUnitOffset(
         range.blockIndex,
         nextChildren,
         range.startUnit,
         "forward",
       ),
-      pointFromInlineUnitOffset(
+      cursorPointFromInlineUnitOffset(
         range.blockIndex,
         nextChildren,
         range.endUnit,
@@ -212,126 +210,6 @@ function toggleInlineMark(
       ),
     ),
   };
-}
-
-function selectedInlineRange(
-  document: NoteDocument,
-  selection: SelectionSnap,
-): { blockIndex: number; startUnit: number; endUnit: number } | null {
-  const range = selection.selectionRanges[selection.primaryIndex];
-  if (range === undefined) {
-    return null;
-  }
-
-  const anchor = normalizeCursorPoint(
-    document,
-    cursorPointInputFromSelectionPoint(range.anchor),
-  );
-  const focus = normalizeCursorPoint(
-    document,
-    cursorPointInputFromSelectionPoint(range.focus),
-  );
-  const start =
-    resolveCursorIndex(document, anchor) <= resolveCursorIndex(document, focus)
-      ? anchor
-      : focus;
-  const end = start === anchor ? focus : anchor;
-  const startPosition = inlinePositionFromCursorPoint(document, start);
-  const endPosition = inlinePositionFromCursorPoint(document, end);
-
-  if (
-    startPosition === null ||
-    endPosition === null ||
-    startPosition.blockIndex !== endPosition.blockIndex ||
-    startPosition.unitOffset === endPosition.unitOffset
-  ) {
-    return null;
-  }
-
-  return {
-    blockIndex: startPosition.blockIndex,
-    startUnit: Math.min(startPosition.unitOffset, endPosition.unitOffset),
-    endUnit: Math.max(startPosition.unitOffset, endPosition.unitOffset),
-  };
-}
-
-function inlinePositionFromCursorPoint(
-  document: NoteDocument,
-  point: CursorPoint,
-): InlinePosition | null {
-  const text = /^\/root\/children\/(\d+)\/children\/(\d+)\/text$/.exec(
-    point.path,
-  );
-  if (text !== null && point.offset !== undefined) {
-    const blockIndex = Number(text[1]);
-    const childIndex = Number(text[2]);
-    const block = document.root.children[blockIndex];
-    if (!isInlineTextBlock(block)) {
-      return null;
-    }
-
-    return {
-      blockIndex,
-      unitOffset:
-        inlineUnitLength(block.children.slice(0, childIndex)) + point.offset,
-    };
-  }
-
-  const inline = /^\/root\/children\/(\d+)\/children\/(\d+)$/.exec(point.path);
-  if (inline !== null && point.edge !== undefined) {
-    const blockIndex = Number(inline[1]);
-    const childIndex = Number(inline[2]);
-    const block = document.root.children[blockIndex];
-    if (!isInlineTextBlock(block)) {
-      return null;
-    }
-
-    return {
-      blockIndex,
-      unitOffset:
-        inlineUnitLength(block.children.slice(0, childIndex)) +
-        (point.edge === "after" ? 1 : 0),
-    };
-  }
-
-  const blockPath = /^\/root\/children\/(\d+)$/.exec(point.path);
-  if (blockPath !== null && point.edge !== undefined) {
-    const blockIndex = Number(blockPath[1]);
-    const block = document.root.children[blockIndex];
-    if (!isInlineTextBlock(block)) {
-      return null;
-    }
-
-    return {
-      blockIndex,
-      unitOffset: point.edge === "after" ? inlineUnitLength(block.children) : 0,
-    };
-  }
-
-  return null;
-}
-
-function selectedTextChildren(
-  children: InlineNode[],
-  startUnit: number,
-  endUnit: number,
-): Array<Extract<InlineNode, { type: "text" }>> {
-  const selected: Array<Extract<InlineNode, { type: "text" }>> = [];
-  let childStart = 0;
-
-  for (const child of children) {
-    const childLength = inlineUnitLength([child]);
-    const childEnd = childStart + childLength;
-    if (
-      child.type === "text" &&
-      Math.max(startUnit, childStart) < Math.min(endUnit, childEnd)
-    ) {
-      selected.push(child);
-    }
-    childStart = childEnd;
-  }
-
-  return selected;
 }
 
 function toggleMarkInInlineRange(
@@ -387,44 +265,6 @@ function toggleMarkInInlineRange(
   return nextChildren;
 }
 
-function pointFromInlineUnitOffset(
-  blockIndex: number,
-  children: InlineNode[],
-  unitOffset: number,
-  bias: "forward" | "backward",
-): CursorPoint {
-  let offset = Math.max(0, unitOffset);
-
-  for (const [childIndex, child] of children.entries()) {
-    if (child.type === "text") {
-      if (
-        offset < child.text.length ||
-        (offset === child.text.length && bias === "backward") ||
-        (offset === 0 && bias === "forward")
-      ) {
-        return {
-          path: textPath(blockIndex, childIndex),
-          offset,
-        };
-      }
-
-      offset -= child.text.length;
-      continue;
-    }
-
-    if (offset <= 0) {
-      return { path: inlinePath(blockIndex, childIndex), edge: "before" };
-    }
-    if (offset <= 1) {
-      return { path: inlinePath(blockIndex, childIndex), edge: "after" };
-    }
-
-    offset -= 1;
-  }
-
-  return { path: `/root/children/${blockIndex}`, edge: "after" };
-}
-
 function activeMark(markType: ToggleableMarkType): Mark {
   return { type: markType };
 }
@@ -472,28 +312,4 @@ function normalizeMarks(marks: Mark[]): Mark[] {
     const order = MARK_ORDER[left.type] - MARK_ORDER[right.type];
     return order === 0 ? markKey(left).localeCompare(markKey(right)) : order;
   });
-}
-
-function inlineUnitLength(children: InlineNode[]): number {
-  return children.reduce(
-    (total, child) => total + (child.type === "text" ? child.text.length : 1),
-    0,
-  );
-}
-
-function textInline(
-  text: string,
-  marks?: Extract<InlineNode, { type: "text" }>["marks"],
-): InlineNode {
-  return marks === undefined || marks.length === 0
-    ? { kind: "text", type: "text", text }
-    : { kind: "text", type: "text", text, marks };
-}
-
-function textPath(blockIndex: number, childIndex: number): string {
-  return `/root/children/${blockIndex}/children/${childIndex}/text`;
-}
-
-function inlinePath(blockIndex: number, childIndex: number): string {
-  return `/root/children/${blockIndex}/children/${childIndex}`;
 }

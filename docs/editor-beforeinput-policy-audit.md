@@ -133,8 +133,8 @@ Fixture spec:
 | 자동화 레벨 | `verify:browser`가 아니라 manual device trace 또는 별도 mobile-device gate |
 
 현재 실행 가능한 대체 근거는 `docs/editor-input-contract.md`의 `DEL-01`, `SEL-04`,
-`MUT-02`와 `src/editor/internal/model/textCommands.test.ts`,
-`src/editor/internal/model/inputAdapter.test.ts`,
+`MUT-02`와 text command split tests,
+inputAdapter split tests,
 `src/editor/internal/fixtures/input/p0SelectionDeletionClipboardTrace.ts`다. 이들은 atom을
 cursor unit으로 삭제/선택/대체하는 model policy를 닫지만, Chrome Android native bug를
 재현하지는 않는다.
@@ -170,7 +170,7 @@ cursor unit으로 삭제/선택/대체하는 model policy를 닫지만, Chrome A
 
 | 경로 | 판정 |
 | --- | --- |
-| `contentEditableBeforeInputFromEvent` | `inputType`, `data`, transfer text, `isComposing`만 좁게 추출한다. |
+| `contentEditableBeforeInput.ts` | `InputEvent`에서 `inputType`, `data`, transfer text, `isComposing`만 좁게 추출한다. |
 | `contentEditableViewEngine.planBeforeInput` | history, composition commit, native text leaf defer, ignore, headless command를 분류한다. |
 | `useBlockEditorController.handleBeforeInput` | read-only는 preventDefault, history는 flush 뒤 command, native leaf는 defer, 나머지는 preventDefault 후 `runInput`으로 보낸다. |
 | `translateEditorInput` | `beforeinput`은 model command input 중 하나일 뿐이고 document mutation은 command result가 만든다. |
@@ -183,8 +183,8 @@ cursor unit으로 삭제/선택/대체하는 model policy를 닫지만, Chrome A
 | `beforeinput` primary truth 금지 | 확정 | ProseMirror-view 최소 의존 전략, MDN non-cancelable/missing 경고, current adapter tests |
 | `inputType` intent classifier | 확정 | W3C Input Events table, current `translateEditorInput` mapping |
 | InputType 처리 정책표 | 확정 정책 | Input Events Level 2 cancelability/target range table과 current adapter command mapping을 연결한다 |
-| transfer/history beforeinput 처리 | 확정 | `contentEditableBeforeInputFromEvent`, `BlockEditor.test.tsx`, clipboard/history tests |
-| active text leaf native buffer | 확정 | `docs/editor-contenteditable-buffer-audit.md`, `contentEditableViewEngine.test.ts` |
+| transfer/history beforeinput 처리 | 확정 | `contentEditableBeforeInput.ts`, BlockEditor split tests, clipboard/history tests |
+| active text leaf native buffer | 확정 | `docs/editor-contenteditable-buffer-audit.md`, contentEditable view split tests |
 | Android/IME conflict links | 조사 근거 | CKEditor, ProseMirror, Lexical, W3C issue가 keydown/beforeinput/composition 충돌을 각각 보여준다 |
 | browser support matrix | 부분근거 | MDN BCD availability는 feature 존재만 말하고 event order/cancelability correctness를 닫지 않는다 |
 | Chrome Android uneditable Backspace | fixture spec 확정 / 실행 미정 | ProseMirror-view source로 bug class는 확인했지만 real device trace는 아직 없다 |

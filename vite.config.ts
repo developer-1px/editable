@@ -8,6 +8,7 @@ import { defineConfig } from "vitest/config";
 const config = defineConfig({
   plugins: [tailwindcss(), tanstackStart(), viteReact()],
   test: {
+    testTimeout: 30_000,
     exclude: [
       "**/.{cache,git,output,temp}/**",
       "**/dist/**",

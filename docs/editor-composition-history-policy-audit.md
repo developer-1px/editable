@@ -42,26 +42,26 @@ Composition preedit은 history entry가 아니다. History entry는 canonical do
 
 | 경로 | 현재 동작 |
 | --- | --- |
-| `src/editor/internal/view/contentEditableViewEngine.ts` | phase가 `composing` 또는 `awaitingCommit`일 때 `historyUndo`/`historyRedo` beforeinput을 `{ kind: "ignore" }`로 분류한다. |
-| `src/editor/internal/react/useBlockEditorController.tsx` | composition phase의 keydown은 command path로 보내지 않고 prevent한다. Plain Enter는 final commit 뒤 실행할 deferred command로 저장한다. |
-| `src/editor/internal/react/useBlockEditorController.tsx` | `history` decision은 active native edit을 먼저 flush한 뒤 editor undo/redo command를 dispatch한다. |
-| `src/editor/internal/react/useBlockEditorController.tsx` | toolbar/copy/cut/paste/drop/history command 전에 active native text edit을 flush한다. |
-| `src/editor/internal/model/inputAdapter.ts` | `insertReplacementText`, paste/drop beforeinput, delete/cut, Enter, history keydown이 command layer로 수렴한다. |
-| `src/editor/internal/model/editorCore.ts` | batch dispatch는 하나의 undo unit, 연속 single dispatch는 별도 undo unit, history command batch는 거절한다. |
+| `src/editor/internal/view/contenteditable/contentEditableViewEngine.ts` | phase가 `composing` 또는 `awaitingCommit`일 때 `historyUndo`/`historyRedo` beforeinput을 `{ kind: "ignore" }`로 분류한다. |
+| `src/editor/internal/react/block-editor/useBlockEditorController.tsx` | composition phase의 keydown은 command path로 보내지 않고 prevent한다. Plain Enter는 final commit 뒤 실행할 deferred command로 저장한다. |
+| `src/editor/internal/react/block-editor/useBlockEditorController.tsx` | `history` decision은 active native edit을 먼저 flush한 뒤 editor undo/redo command를 dispatch한다. |
+| `src/editor/internal/react/block-editor/useBlockEditorController.tsx` | toolbar/copy/cut/paste/drop/history command 전에 active native text edit을 flush한다. |
+| `src/editor/internal/model/input-adapter/inputAdapter.ts` | `insertReplacementText`, paste/drop beforeinput, delete/cut, Enter, history keydown이 command layer로 수렴한다. |
+| `src/editor/internal/model/editorCoreDispatch.ts` | batch dispatch는 하나의 undo unit, 연속 single dispatch는 별도 undo unit, history command batch는 거절한다. |
 
 ## 실행 증거
 
 | 증거 | 의미 |
 | --- | --- |
-| `contentEditableViewEngine.test.ts`: `ignores browser history input while composition owns the native edit` | composition phase에서는 browser history input을 실행하지 않는다. |
+| contentEditable view split tests: `ignores browser history input while composition owns the native edit` | composition phase에서는 browser history input을 실행하지 않는다. |
 | `BlockEditor.imeTrace.test.tsx`: `keeps history undo explicit no-op while composition is active` | `historyUndo` beforeinput은 prevent되고 explicit no-op으로 감사된다. |
-| `BlockEditor.test.tsx`: `ignores history shortcuts while composition is active` | `Cmd/Ctrl+Z`와 `beforeinput historyUndo` 모두 composition 중 document를 되돌리지 않는다. |
-| `BlockEditor.test.tsx`: `flushes active native text edits before keyboard undo and redo` | active native leaf edit은 keyboard undo 전에 history entry로 flush되고 undo/redo로 복원된다. |
-| `BlockEditor.test.tsx`: `flushes active native text edits before beforeinput history undo and redo` | browser `historyUndo`/`historyRedo` inputType도 같은 editor history command로 수렴한다. |
-| `BlockEditor.test.tsx`: `records blur-flushed native text edits as one undo unit` | blur release는 하나의 undo unit이다. |
-| `BlockEditor.test.tsx`: `keeps separate blur-flushed native text edit sessions as separate undo units` | blur로 끊긴 session은 자동 merge되지 않는다. |
+| BlockEditor split tests: `ignores history shortcuts while composition is active` | `Cmd/Ctrl+Z`와 `beforeinput historyUndo` 모두 composition 중 document를 되돌리지 않는다. |
+| BlockEditor split tests: `flushes active native text edits before keyboard undo and redo` | active native leaf edit은 keyboard undo 전에 history entry로 flush되고 undo/redo로 복원된다. |
+| BlockEditor split tests: `flushes active native text edits before beforeinput history undo and redo` | browser `historyUndo`/`historyRedo` inputType도 같은 editor history command로 수렴한다. |
+| BlockEditor split tests: `records blur-flushed native text edits as one undo unit` | blur release는 하나의 undo unit이다. |
+| BlockEditor split tests: `keeps separate blur-flushed native text edit sessions as separate undo units` | blur로 끊긴 session은 자동 merge되지 않는다. |
 | `BlockEditor.imeTrace.test.tsx`: Enter confirmation trace | composition commit 뒤 deferred Enter split이 실행된다. |
-| `editorCore.test.ts` history grouping tests | batch, single dispatch, selection-only, undo/redo command routing의 headless contract가 고정되어 있다. |
+| `editorCore split tests` history grouping tests | batch, single dispatch, selection-only, undo/redo command routing의 headless contract가 고정되어 있다. |
 
 ## History grouping policy
 
@@ -95,7 +95,7 @@ Composition preedit은 history entry가 아니다. History entry는 canonical do
 
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
-| composition 중 undo/redo no-op | 실행 테스트로 확정 | `contentEditableViewEngine.test.ts`, `BlockEditor.imeTrace.test.tsx`, `BlockEditor.test.tsx` | 모든 OS/browser IME shortcut event ordering은 닫지 않는다. |
+| composition 중 undo/redo no-op | 실행 테스트로 확정 | contentEditable view split tests, `BlockEditor.imeTrace.test.tsx`, BlockEditor split tests | 모든 OS/browser IME shortcut event ordering은 닫지 않는다. |
 | composition preedit no-history | source/test 정책 확정 | composition phase는 native buffer이고 model patch가 없으며 Lexical #8142가 preedit history pollution을 버그로 다룬다. | 실제 browser history stack과 editor history stack 동시 동작은 manual trace가 필요하다. |
 | final commit/blur/native flush as one undo unit | 실행 테스트로 확정 | blur/history/copy/paste/toolbar boundary tests와 view engine flush tests | focus 유지 중 timer/punctuation 기준 automatic merge는 미정이다. |
 | paste/drop command history | 실행 테스트로 확정 | clipboard/input adapter tests와 history-before-command flush tests | external rich HTML import는 별도 paste policy다. |

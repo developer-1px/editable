@@ -48,7 +48,7 @@ ProseMirror-view는 browser native cursor/delete가 ignored DOM이나 non-text n
 
 - `p0-atom-keyboard-navigation`
 - 파일: `src/editor/internal/fixtures/input/p0SelectionDeletionClipboardTrace.ts`
-- 실행: `src/editor/internal/react/BlockEditor.inputTrace.test.tsx`
+- 실행: `src/editor/internal/react/block-editor/BlockEditor.inputTrace.test.tsx`
 
 이 fixture는 mention atom을 pointer로 선택한 뒤:
 
@@ -111,8 +111,8 @@ pause/resume 범위를 명확히 둘 수 있어야 한다.
 | 항목 | 강도 | 근거 |
 | --- | --- | --- |
 | atom 주변 Arrow native suppression | 실행 테스트로 확정 | `p0-atom-keyboard-navigation`, cursor command tests, input adapter tests |
-| atom 주변 Shift+Arrow selection extension | 실행 테스트로 확정 | `p0-atom-keyboard-navigation`, `cursorCommands.test.ts` |
-| Backspace/Delete native suppression | 실행 테스트로 확정 | `editorKeyboardPolicy.test.ts`, `inputAdapter.test.ts`, `textCommands.test.ts` |
+| atom 주변 Shift+Arrow selection extension | 실행 테스트로 확정 | `p0-atom-keyboard-navigation`, cursor command split tests |
+| Backspace/Delete native suppression | 실행 테스트로 확정 | `editorKeyboardPolicy.test.ts`, inputAdapter split tests, text command split tests |
 | ignored zero-size widget policy | 현재 불필요 | editor renderer가 ProseMirror widget decoration DOM을 쓰지 않는다 |
 | timed rollback fallback | 보류 | ProseMirror source는 근거지만 우리 browser trace가 없다 |
 | cross-browser native movement parity | 미정 | Playwright smoke와 jsdom replay는 있지만 Safari/Android device-specific arrow/delete bugs를 닫지 않는다 |

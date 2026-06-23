@@ -2,9 +2,11 @@
 
 작성일: 2026-06-22
 
-범위: 현재 dirty workspace 기준. `src/editor/internal/testing/editorTraceReplay.ts`와
-IME fixture가 빼면 안 되는 테스트 surface인지, 아니면 제품/브라우저 호환성을
-증명하는 넓은 contract인지 구분한다.
+범위: 현재 dirty workspace 기준. `src/editor/internal/testing/editorTraceReplay.ts`,
+`editorTraceReplayTypes.ts`, `editorTraceReplayState.ts`,
+`editorTraceReplayDom.ts`, `editorTraceReplayEvents.ts`와 IME fixture가 빼면 안
+되는 테스트 surface인지, 아니면 제품/브라우저 호환성을 증명하는 넓은 contract인지
+구분한다.
 
 ## 판정
 
@@ -21,24 +23,24 @@ recorder report replay compatibility를 증명하지 않는다.
 
 | 경로 | 확정 동작 | 근거 |
 | --- | --- | --- |
-| internal 위치 | replay helper와 fixture는 `src/editor/internal/testing`, `src/editor/internal/fixtures/ime`, `src/editor/internal/fixtures/input` 아래에 있고 public/react facade export가 아니다. | `editorTraceReplay.ts`, fixture files, `scripts/verify-editor-boundaries.mjs` |
-| trace schema | fixture shape는 `schema: "editable-trace-replay@1"` literal type으로 고정되어 있다. | `editorTraceReplay.ts`, IME fixture files |
+| internal 위치 | replay helper와 fixture는 `src/editor/internal/testing`, `src/editor/internal/fixtures/ime`, `src/editor/internal/fixtures/input` 아래에 있고 public/react facade export가 아니다. | `editorTraceReplay.ts`, `editorTraceReplayTypes.ts`, `editorTraceReplayState.ts`, `editorTraceReplayDom.ts`, `editorTraceReplayEvents.ts`, `editorTraceReplayExpectations.ts`, `editorTraceReplayInvariants.ts`, fixture files, `scripts/verify-editor-boundaries.mjs` |
+| trace schema | fixture shape는 `schema: "editable-trace-replay@1"` literal type으로 고정되어 있다. | `editorTraceReplayTypes.ts`, IME fixture files |
 | source inventory | current trace surface는 replay helper, prevented-event audit helper, IME fixture file 6개, P0 input fixture file 1개다. Adjacent stale composition도 fixture corpus로 승격했다. | `rg --files src/editor/internal/fixtures src/editor/internal/testing`, `BlockEditor.imeTrace.test.tsx`, `BlockEditor.inputTrace.test.tsx` |
-| replay interface | `replayEditorTrace(root, trace)`는 replayed events의 `defaultPrevented`, event 전후 document-view text/selection snapshot, DOM selection snapshot, stateChanged 결과 배열을 반환하고, `findReplayedEvent`는 type/inputType으로 그 결과를 찾는다. | `editorTraceReplay.ts`, `BlockEditor.imeTrace.test.tsx` |
-| replay expectation | event step은 `expect.before`/`expect.after`로 canonical renderer text, path text, selection, DOM selection 기대값을 표현할 수 있다. mismatch는 event index, event name, phase, field를 포함해 실패한다. | `editorTraceReplay.ts`, `BlockEditor.imeTrace.test.tsx` |
-| replay invariant | replay는 시작 시점과 각 step 이후 rendered `data-path`, selection path/offset, DOM selection, selected pointer, caret/atom overlay target이 존재하고 일관되는지 기본 검사한다. | `editorTraceReplay.ts`, `editorTraceReplay.test.ts` |
+| replay interface | `replayEditorTrace(root, trace)`는 replayed events의 `defaultPrevented`, event 전후 document-view text/selection snapshot, DOM selection snapshot, stateChanged 결과 배열을 반환하고, `findReplayedEvent`는 type/inputType으로 그 결과를 찾는다. DOM state reader/equality는 `editorTraceReplayState.ts`, text/selection DOM mutation은 `editorTraceReplayDom.ts`, synthetic event construction/targeting은 `editorTraceReplayEvents.ts`에 격리되어 있다. | `editorTraceReplay.ts`, `editorTraceReplayState.ts`, `editorTraceReplayDom.ts`, `editorTraceReplayEvents.ts`, `BlockEditor.imeTrace.test.tsx` |
+| replay expectation | event step은 `expect.before`/`expect.after`로 canonical renderer text, path text, selection, DOM selection 기대값을 표현할 수 있다. mismatch는 event index, event name, phase, field를 포함해 실패한다. | `editorTraceReplayExpectations.ts`, `BlockEditor.imeTrace.test.tsx` |
+| replay invariant | replay는 시작 시점과 각 step 이후 rendered `data-path`, selection path/offset, DOM selection, selected pointer, caret/atom overlay target이 존재하고 일관되는지 기본 검사한다. | `editorTraceReplayInvariants.ts`, `editorTraceReplay.test.ts` |
 | replay steps | 지원 step은 `event`, `selection`, `text`, `timers`다. selection step은 collapsed text caret과 text range를 만들고 `selectionchange`를 dispatch한다. text step은 `data-path` text run을 직접 조작한다. event step은 keyboard/composition/input/paste/drop/cut/focus/blur/pointerdown event를 dispatch한다. Keyboard replay는 Safari Enter confirmation 같은 IME 조사 신호를 남기기 위해 optional `keyCode`를 지원한다. | `editorTraceReplay.ts` |
 | P0 input corpus | IME 외 selection movement/collapse/extension, range replacement, range Backspace/Delete, empty block Backspace, atom replacement, plain paste, markdown drop, cut을 fixture corpus로 검증한다. | `p0SelectionDeletionClipboardTrace.ts`, `BlockEditor.inputTrace.test.tsx` |
 | prevented-event audit | prevented editing event는 즉시 state change, deferred command, explicit no-op 중 하나로 설명되어야 한다. Pass-through로 선언된 event가 prevent되면 실패한다. | `preventedEventAudit.ts`, `preventedEventAudit.test.ts`, `BlockEditor.imeTrace.test.tsx` |
 | Korean basic trace | Hangul starter key가 두 번 commit되지 않고 final text와 selection offset이 canonical state로 남는 것을 검증한다. | `koreanHangulBasicTrace.ts`, `BlockEditor.imeTrace.test.tsx` |
-| stale composition end | 첫 Hangul composition이 끝나자마자 다음 composition이 시작될 때 stale timer가 새 preedit을 release하지 않는 것을 fixture corpus로 검증한다. | `koreanHangulAdjacentStaleTrace.ts`, `BlockEditor.imeTrace.test.tsx`, `contentEditableViewEngine.test.ts` |
+| stale composition end | 첫 Hangul composition이 끝나자마자 다음 composition이 시작될 때 stale timer가 새 preedit을 release하지 않는 것을 fixture corpus로 검증한다. | `koreanHangulAdjacentStaleTrace.ts`, `BlockEditor.imeTrace.test.tsx`, contentEditable view split tests |
 | Enter confirmation | IME confirmation Enter가 final composition commit 뒤 paragraph split으로 이어지는 것을 검증한다. Fixture는 `isComposing=false` final commit과 `keydown Enter keyCode=229`를 포함하고, prevented Enter keydown은 deferred command로 감사된다. | `koreanHangulEnterConfirmTrace.ts`, `BlockEditor.imeTrace.test.tsx`, `preventedEventAudit.ts` |
 | active mark composition | active bold mark 상태에서 composition commit이 marked text path로 들어가는 것을 검증한다. | `koreanHangulActiveMarkTrace.ts`, `BlockEditor.imeTrace.test.tsx` |
 | history during composition | composition 중 `historyUndo` beforeinput은 explicit no-op으로 막히고 document text를 오염시키지 않는다. | `koreanHangulCompositionHistoryTrace.ts`, `BlockEditor.imeTrace.test.tsx` |
 | blur during composition | composition 중 blur는 active native composition text를 canonical document로 flush한다. | `koreanHangulCompositionBlurTrace.ts`, `BlockEditor.imeTrace.test.tsx` |
-| toolbar during composition | toolbar command 전 composition UI state를 끝내는 정책은 trace corpus가 아니라 React toolbar interaction test로 고정한다. | `BlockEditor.test.tsx` |
-| engine-level complement | final composition commit once, no observed DOM text fallback, duplicate final removal, differing final commit, repeated-text preedit, history ignore, retargeted composition은 lower-level view engine tests가 덮는다. | `contentEditableViewEngine.test.ts` |
-| test-only boundary | runtime implementation이 `testing`/`fixtures`를 import하면 boundary violation이고, test file import만 허용된다. Test helper가 product implementation을 import하거나 fixture가 non-testing segment를 import하는 것도 막는다. | `scripts/verify-editor-boundaries.test.mjs`, `docs/editor-internal-module-surface-audit.md` |
+| toolbar during composition | toolbar command 전 composition UI state를 끝내는 정책은 trace corpus가 아니라 React toolbar interaction test로 고정한다. | BlockEditor split tests |
+| engine-level complement | final composition commit once, no observed DOM text fallback, duplicate final removal, differing final commit, repeated-text preedit, history ignore, retargeted composition은 lower-level view engine tests가 덮는다. | contentEditable view split tests |
+| test-only boundary | runtime implementation이 `testing`/`fixtures`를 import하면 boundary violation이고, test file import만 허용된다. Test helper가 product implementation을 import하거나 fixture가 non-testing segment를 import하는 것도 막는다. | boundary verifier split tests, `docs/editor-internal-module-surface-audit.md` |
 
 ## 증거 강도
 

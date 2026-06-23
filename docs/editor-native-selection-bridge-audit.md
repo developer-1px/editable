@@ -19,11 +19,12 @@ contenteditable view seam 뒤에 둬야 하는 확정 behavior만 기록한다.
 
 | 근거 | 내용 |
 | --- | --- |
-| `src/editor/internal/view/contentEditableSelection.ts` | DOM `Selection` anchor/focus를 `.text-run[data-path]` text point로 읽고, canonical cursor point를 native collapsed range로 복원한다. |
-| `src/editor/internal/view/contentEditableViewEngine.ts` | native edit/composition tracking이 DOM selection point와 canonical selection fallback을 같이 사용한다. |
-| `src/editor/internal/view/contentEditableViewEngine.test.ts` | grapheme snapping, mark element boundary, code block backing text leaf, scroll into view, empty text run caret placement를 검증한다. |
-| `src/editor/internal/react/BlockEditor.tsx` | selectionchange/select/input/paste/copy/cut/toolbar 경로에서 native selection을 observed command selection 또는 cursor preview로 반영한다. |
-| `src/editor/internal/react/BlockEditor.test.tsx` | pasted text at observed native caret, native range replacement/copy/cut, range overlay hiding, focus loss preservation, read-only selection preservation을 검증한다. |
+| `src/editor/internal/view/contenteditable/contentEditableSelection.ts` | DOM `Selection` anchor/focus를 text point로 읽고, canonical cursor point를 native collapsed range로 복원하는 native selection bridge다. |
+| `src/editor/internal/view/contenteditable/contentEditableTextPoint.ts` | `.text-run[data-path]` DOM position, canonical cursor point, code block backing leaf, text-node offset을 `ContentEditableTextPoint`로 투영한다. |
+| `src/editor/internal/view/contenteditable/contentEditableViewEngine.ts` | native edit/composition tracking이 DOM selection point와 canonical selection fallback을 같이 사용한다. |
+| `contentEditable view split tests` | grapheme snapping, mark element boundary, code block backing text leaf, scroll into view, empty text run caret placement를 검증한다. |
+| `src/editor/internal/react/block-editor/BlockEditor.tsx` | selectionchange/select/input/paste/copy/cut/toolbar 경로에서 native selection을 observed command selection 또는 cursor preview로 반영한다. |
+| BlockEditor split tests | pasted text at observed native caret, native range replacement/copy/cut, range overlay hiding, focus loss preservation, read-only selection preservation을 검증한다. |
 | `docs/editor-contenteditable-buffer-audit.md` | native text buffer와 selection utilities는 internal view adapter라고 정리한다. |
 | `docs/editor-selection-model-audit.md` | public/canonical selection model과 browser native selection policy를 분리한다. |
 | `docs/editor-pointer-selection-audit.md` | pointer selection은 browser native selection보다 canonical selection을 우선한다고 정리한다. |
@@ -52,14 +53,14 @@ contenteditable view seam 뒤에 둬야 하는 확정 behavior만 기록한다.
 
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
-| internal view seam | 확정 | `contentEditableSelection.ts`는 `src/editor/internal/view`에 있고 `BlockEditor.tsx`만 view lifecycle 안에서 read/set/scroll helpers를 사용한다. | `src/editor/public` 또는 `src/editor/react` facade contract는 아니다. |
-| root containment guard | 확정 | `contentEditableViewEngine.test.ts`가 editor root 밖 native selection을 command selection으로 읽지 않는 것을 고정한다. | Full browser `selectionchange` event-ordering까지 닫은 것은 아니다. |
+| internal view seam | 확정 | `contentEditableSelection.ts`와 `contentEditableTextPoint.ts`는 `src/editor/internal/view`에 있고 `BlockEditor.tsx`만 view lifecycle 안에서 read/set/scroll helpers를 사용한다. | `src/editor/public` 또는 `src/editor/react` facade contract는 아니다. |
+| root containment guard | 확정 | contentEditable view split tests가 editor root 밖 native selection을 command selection으로 읽지 않는 것을 고정한다. | Full browser `selectionchange` event-ordering까지 닫은 것은 아니다. |
 | text-run `data-path` translation | 확정 | DOM position은 `.text-run[data-path]`로 제한되고, exact `data-path` lookup과 renderer surface는 `DocumentRenderer`/geometry tests와 같이 고정되어 있다. | Renderer path surface가 바뀌면 이 adapter와 renderer를 함께 바꿔야 한다. |
 | collapsed/range selection read | 확정 | Engine tests가 collapsed grapheme snap과 non-collapsed native text range to canonical range 변환을 직접 검증한다. React tests는 paste/copy/cut/replacement가 observed native caret/range를 쓰는 것을 검증한다. | Multi-range native selection은 지원 contract가 아니다. |
 | grapheme and mark boundary mapping | 확정 | DOM offset은 document text 기준 `snapTextOffset`으로 snap되고, mark element boundary selection도 text-run offset으로 수렴한다. | Safari/Firefox/Chrome 실제 Range boundary 차이 전체를 보장하지 않는다. |
 | canonical to native caret restore | 확정 | `setContentEditableSelection`은 text offset, empty text run, code block backing leaf를 collapsed DOM range로 복원한다. Engine tests가 empty text run caret과 code block edge mapping을 고정한다. | Persisted/session cursor restore DTO라는 뜻은 아니다. |
 | scroll reveal | 확정 | `scrollContentEditableSelectionIntoView`는 focused canonical point를 editable target으로 바꿔 `scrollIntoView({ block: "nearest", inline: "nearest" })`를 호출한다는 단위 테스트가 있다. | Long-document virtualization/offscreen reveal policy는 별도 renderer/geometry 결정이다. |
-| observed command selection | 확정 | `BlockEditor.test.tsx`가 observed native caret paste, native range replacement/copy/cut, active native edit flush 후 copy/cut/paste, history undo caret restore를 검증한다. | DOM selection을 canonical document truth로 승격하지는 않는다. |
+| observed command selection | 확정 | BlockEditor split tests가 observed native caret paste, native range replacement/copy/cut, active native edit flush 후 copy/cut/paste, history undo caret restore를 검증한다. | DOM selection을 canonical document truth로 승격하지는 않는다. |
 | overlay/read-only coherence | 확정 | Native range가 보일 때 custom overlays를 숨기고, focus loss/read-only 전환/copy 경로에서 selection과 mutation policy가 유지되는 React tests가 있다. | Assistive-tech announcement와 mobile touch handles는 QA 미정이다. |
 | public native selection API | 미정 | 현재 external caller가 DOM `Selection` bridge를 직접 사용할 근거가 없고 public surface는 `RichSelection`/commands다. | External embedding 요구가 생기면 public selection model과 별도로 설계해야 한다. |
 | generic selection backend | 미정 | 실제 backend는 contenteditable DOM selection 하나뿐이다. | EditContext/native mobile backend 같은 두 번째 source가 생기기 전에는 얕은 abstraction이다. |
@@ -69,8 +70,9 @@ contenteditable view seam 뒤에 둬야 하는 확정 behavior만 기록한다.
 
 | 항목 | 판정 | 이유 |
 | --- | --- | --- |
-| `contentEditableSelection` utilities | 유지 확정 | DOM `Selection`, renderer `data-path`, canonical cursor point 사이의 translation knowledge를 한 view adapter interface에 모은다. |
-| exact `data-path` lookup helper | 유지 확정 | CSS selector escaping 문제를 caller에게 넘기지 않고 renderer path identity를 adapter 안에서 다룬다. |
+| `contentEditableSelection` bridge | 유지 확정 | DOM `Selection` read/write와 root-local selection lookup은 native selection API 변경 이유를 함께 가진다. |
+| `contentEditableTextPoint` projection | 유지 확정 | renderer `data-path`, canonical cursor point, DOM text-node offset 사이의 translation knowledge를 한 view adapter helper에 모은다. |
+| exact `data-path` lookup helper | 유지 확정 | CSS selector escaping 문제를 caller에게 넘기지 않고 renderer path identity를 text point projection 안에서 다룬다. |
 | empty text node insertion | 유지 확정 | 빈 text run도 native caret target이 필요하다. 이 처리를 React handler마다 반복하면 selection restore가 깨지기 쉽다. |
 | code block backing leaf mapping | 유지 확정 | code block은 block node와 editable text leaf path가 다르다. mapping을 숨겨야 caller가 schema detail을 덜 배운다. |
 | observed native range command source | 유지 확정 | 사용자가 실제로 선택한 browser range를 copy/cut/replacement에 반영해야 stale canonical caret이 우선하지 않는다. |

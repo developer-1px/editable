@@ -119,12 +119,12 @@ only를 null로 두고 plain fallback이 있으면 plain을 읽는 테스트가 
 
 | 항목 | 강도 | 근거 |
 | --- | --- | --- |
-| current `text/html` non-support | 실행 테스트로 확정 | `clipboard.test.ts`가 `text/html` only `data-pm-slice` transfer를 null로 검증한다. |
-| current string transfer contract | 실행 테스트로 확정 | `clipboard.test.ts`, `BlockEditor.test.tsx`, `inputAdapter.test.ts`가 custom/plain/markdown paste/drop을 닫는다. |
-| `text/uri-list` plain fallback | 실행 테스트로 확정 | `clipboard.test.ts`가 comment/blank line 제거와 HTML 미신뢰를 검증한다. |
-| link href allowlist | 실행 테스트로 확정 | `editor-link-mark-audit.md`, `markdown.test.ts`, `DocumentRenderer.test.tsx`, public parse tests |
-| attrs/source metadata non-import | 실행 테스트로 확정 | `editor-attrs-extension-surface-audit.md`, `markdown.test.ts`, renderer attrs sentinel tests |
-| figure media URL trust | 실행 테스트로 확정 | `editor-figure-media-trust-audit.md`, `mediaSrc.test.ts`, `markdown.test.ts`, `textCommands.test.ts`, `DocumentRenderer.test.tsx` |
+| current `text/html` non-support | 실행 테스트로 확정 | `clipboard split tests`가 `text/html` only `data-pm-slice` transfer를 null로 검증한다. |
+| current string transfer contract | 실행 테스트로 확정 | `clipboard split tests`, BlockEditor split tests, inputAdapter split tests가 custom/plain/markdown paste/drop을 닫는다. |
+| `text/uri-list` plain fallback | 실행 테스트로 확정 | `clipboard split tests`가 comment/blank line 제거와 HTML 미신뢰를 검증한다. |
+| link href allowlist | 실행 테스트로 확정 | `editor-link-mark-audit.md`, markdown split tests, `DocumentRenderer split tests`, public parse tests |
+| attrs/source metadata non-import | 실행 테스트로 확정 | `editor-attrs-extension-surface-audit.md`, markdown split tests, renderer attrs sentinel tests |
+| figure media URL trust | 실행 테스트로 확정 | `editor-figure-media-trust-audit.md`, `mediaSrc.test.ts`, markdown split tests, text command split tests, `DocumentRenderer split tests` |
 | Trusted Types need for future HTML import | 외부 spec/source 근거 | ProseMirror changelog, Lexical #6755, Trusted Types WPT/spec |
 | 5-source raw HTML sample corpus | 미수집 | 수집 대상은 정의했지만 실제 raw clipboard payload는 없다. |
 

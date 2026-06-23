@@ -66,12 +66,12 @@ fixture다. Browser별 `beforeinput`/`input` event order는 debug recorder나 de
 
 | fixture | 자동화 | 기대 |
 | --- | --- | --- |
-| paragraph start | `contentEditableViewEngine.test.ts` | offset 0 `insertText`는 `deferToContentEditable` |
-| mark boundary | `contentEditableViewEngine.test.ts` | bold 뒤 다음 text leaf offset 0은 native 허용 |
-| link 뒤 | `contentEditableViewEngine.test.ts` | link 뒤 다음 text leaf offset 0은 native 허용 |
-| mention 뒤 | `contentEditableViewEngine.test.ts` | mention 뒤 다음 text leaf offset 0은 native 허용 |
-| mention 내부 | `contentEditableViewEngine.test.ts` | `contenteditable=false` 내부는 `runHeadless` |
-| block start | `contentEditableViewEngine.test.ts` | block child boundary before first text는 native 허용 |
+| paragraph start | contentEditable view split tests | offset 0 `insertText`는 `deferToContentEditable` |
+| mark boundary | contentEditable view split tests | bold 뒤 다음 text leaf offset 0은 native 허용 |
+| link 뒤 | contentEditable view split tests | link 뒤 다음 text leaf offset 0은 native 허용 |
+| mention 뒤 | contentEditable view split tests | mention 뒤 다음 text leaf offset 0은 native 허용 |
+| mention 내부 | contentEditable view split tests | `contenteditable=false` 내부는 `runHeadless` |
+| block start | contentEditable view split tests | block child boundary before first text는 native 허용 |
 | real browser event trace | manual/debug recorder | `beforeinput insertText`를 막지 않아 뒤따르는 `input`/DOM mutation을 관찰해야 함 |
 
 ## Slate #5603 회귀 fixture

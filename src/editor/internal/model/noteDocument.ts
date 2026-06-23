@@ -188,78 +188,15 @@ export type NoteDocument = z.output<typeof NoteDocumentSchema>;
 export type NoteBlocks = NoteBlock[];
 export type TextBlock = InlineTextBlock;
 
-export const initialNoteDocument: NoteDocument = {
-  schemaVersion: 1,
-  id: "note-1",
-  title: "Rich note",
-  tags: ["json-document", "rich"],
-  root: createDocumentRoot([
-    {
-      id: "block-1",
-      kind: "element",
-      type: "paragraph",
-      flow: "block",
-      children: [
-        textInline("Plain "),
-        textInline("bold", [{ type: "bold" }]),
-        textInline(" "),
-        textInline("italic", [{ type: "italic" }]),
-        textInline(" "),
-        textInline("code", [{ type: "code" }]),
-        textInline(" "),
-        textInline("link", [{ type: "link", href: "https://example.com" }]),
-        textInline(" "),
-        mentionInline("user-ada", "Ada"),
-      ],
-    },
-    figureBlock("figure-1", "/sample-figure.svg", "Figure"),
-    {
-      id: "block-2",
-      kind: "element",
-      type: "paragraph",
-      flow: "block",
-      children: [textInline("After figure.")],
-    },
-    {
-      id: "heading-1",
-      kind: "element",
-      type: "heading",
-      flow: "block",
-      attrs: { level: 2 },
-      level: 2,
-      children: [textInline("Outline")],
-    },
-    {
-      id: "quote-1",
-      kind: "element",
-      type: "quote",
-      flow: "block",
-      children: [textInline("Quote block")],
-    },
-    {
-      id: "list-1",
-      kind: "element",
-      type: "listItem",
-      flow: "block",
-      attrs: { ordered: false, depth: 0 },
-      ordered: false,
-      depth: 0,
-      children: [textInline("List item")],
-    },
-    {
-      id: "code-1",
-      kind: "element",
-      type: "codeBlock",
-      flow: "block",
-      attrs: { language: "ts" },
-      language: "ts",
-      text: "const value = 1;",
-      children: [textInline("const value = 1;")],
-    },
-  ]),
-};
+export {
+  isCodeBlock,
+  isFigureBlock,
+  isInlineTextBlock,
+  isTextBlock,
+  readBlockText,
+} from "./noteDocumentGuards";
 
-let nextBlockId = maxGeneratedBlockId(initialNoteDocument.root.children);
+let nextBlockId = 0;
 
 export function createDocumentRoot(children: NoteBlockInput[]): DocumentRoot {
   return DocumentRootSchema.parse({
@@ -287,6 +224,10 @@ export function createNoteDocument(
 export function createGeneratedBlockId(): string {
   nextBlockId += 1;
   return `block-${nextBlockId}`;
+}
+
+export function seedGeneratedBlockIds(blocks: NoteBlock[]): void {
+  nextBlockId = Math.max(nextBlockId, maxGeneratedBlockId(blocks));
 }
 
 export function createParagraphBlock(text = ""): InlineTextBlock {
@@ -345,48 +286,4 @@ export function figureBlock(
     src: canonicalSrc,
     ...(alt === undefined ? {} : { alt }),
   });
-}
-
-export function isInlineTextBlock(
-  block: NoteBlock | undefined,
-): block is InlineTextBlock {
-  return (
-    block?.kind === "element" &&
-    (block.type === "paragraph" ||
-      block.type === "heading" ||
-      block.type === "quote" ||
-      block.type === "listItem")
-  );
-}
-
-export function isCodeBlock(block: NoteBlock | undefined): block is CodeBlock {
-  return block?.kind === "element" && block.type === "codeBlock";
-}
-
-export function isTextBlock(block: NoteBlock | undefined): block is TextBlock {
-  return isInlineTextBlock(block) || isCodeBlock(block);
-}
-
-export function isFigureBlock(
-  block: NoteBlock | undefined,
-): block is FigureBlock {
-  return block?.kind === "atom" && block.type === "figure";
-}
-
-export function readBlockText(block: NoteBlock): string {
-  if (isFigureBlock(block)) {
-    return "";
-  }
-
-  if (isCodeBlock(block)) {
-    return block.text ?? "";
-  }
-
-  if (!isInlineTextBlock(block)) {
-    return "";
-  }
-
-  return block.children
-    .map((child) => (child.kind === "text" ? child.text : `@${child.label}`))
-    .join("");
 }

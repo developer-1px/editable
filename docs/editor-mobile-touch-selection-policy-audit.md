@@ -106,10 +106,10 @@ mobile touch selection은 desktop mouse drag selection과 같은 owner가 아니
 
 | 항목 | 판정 | 근거 |
 | --- | --- | --- |
-| desktop pointer selection adapter | 실행 테스트로 확정 | `docs/editor-pointer-selection-audit.md`, `BlockEditor.test.tsx` |
+| desktop pointer selection adapter | 실행 테스트로 확정 | `docs/editor-pointer-selection-audit.md`, BlockEditor split tests |
 | native range command source | 실행 테스트로 확정 | `docs/editor-native-selection-bridge-audit.md`, copy/cut/paste/native range tests |
 | mobile touch long press/handle policy | 외부 근거 기반 정책 | Lexical PRs, ProseMirror Android write-up |
-| touch scroll vs selection drag | local branch 분기 테스트로 over-capture 제거 확인 / 실제 scroll은 실기기 미검증 | Lexical #7309, `BlockEditor.test.tsx` touch pointer branch |
+| touch scroll vs selection drag | local branch 분기 테스트로 over-capture 제거 확인 / 실제 scroll은 실기기 미검증 | Lexical #7309, BlockEditor split tests touch pointer branch |
 | toolbar/popup/native menu conflict | 정책 확정 / 실기기 미검증 | current native range visibility/toolbar flush docs, mobile menu trace 부재 |
 | iOS Safari / Android Chrome trace | 미완료 | 로컬에는 실제 device trace가 없다 |
 

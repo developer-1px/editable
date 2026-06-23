@@ -58,12 +58,12 @@ block DecoratorNode Enter, whitespace-only list item Enter를 별도 bug surface
 
 | Fixture / test | 현재 상태 | 닫는 질문 |
 | --- | --- | --- |
-| `textCommands.test.ts`: empty paragraph split | 실행 테스트 있음 | 빈 paragraph Enter는 두 empty paragraphs와 deterministic caret으로 고정된다. |
-| `textCommands.test.ts`: paragraph start Backspace | 실행 테스트 있음 | block start Backspace는 이전 inline text block merge다. |
-| `textCommands.test.ts`: paragraph end Delete | 실행 테스트 있음 | block end Delete는 다음 inline text block merge다. |
-| `textCommands.test.ts`: code block newline | 실행 테스트 있음 | codeBlock Enter는 block split이 아니라 `\n` 삽입이다. |
-| `textCommands.test.ts`: selected code text newline | 실행 테스트 있음 | selected code range Enter는 `\n` replacement다. |
-| `inputAdapter.test.ts`: `insertParagraph`/`insertLineBreak` | 실행 테스트 있음 | browser beforeinput Enter 계열이 같은 split command로 수렴한다. |
+| text command split tests: empty paragraph split | 실행 테스트 있음 | 빈 paragraph Enter는 두 empty paragraphs와 deterministic caret으로 고정된다. |
+| text command split tests: paragraph start Backspace | 실행 테스트 있음 | block start Backspace는 이전 inline text block merge다. |
+| text command split tests: paragraph end Delete | 실행 테스트 있음 | block end Delete는 다음 inline text block merge다. |
+| text command split tests: code block newline | 실행 테스트 있음 | codeBlock Enter는 block split이 아니라 `\n` 삽입이다. |
+| text command split tests: selected code text newline | 실행 테스트 있음 | selected code range Enter는 `\n` replacement다. |
+| inputAdapter split tests: `insertParagraph`/`insertLineBreak` | 실행 테스트 있음 | browser beforeinput Enter 계열이 같은 split command로 수렴한다. |
 | `p0-empty-block-backspace` | replay fixture 있음 | empty paragraph 뒤 Backspace가 빈 block을 제거/merge하고 caret을 결정한다. |
 | whitespace-only listItem Enter | 실행 테스트 있음 | 보이는 빈 list item을 empty로 보고 paragraph로 list exit한다. |
 | empty heading/quote/listItem Enter | 실행 테스트 있음 | empty typed block Enter는 현재 block을 paragraph로 교체하고 selectionAfter를 고정한다. |
@@ -92,13 +92,13 @@ block DecoratorNode Enter, whitespace-only list item Enter를 별도 bug surface
 
 | 항목 | 강도 | 근거 |
 | --- | --- | --- |
-| Enter 계열 headless ownership | 실행 테스트로 확정 | `inputAdapter.test.ts`, `textCommands.test.ts`, `docs/editor-line-break-policy-audit.md` |
-| Backspace/Delete headless ownership | 실행 테스트로 확정 | `inputAdapter.test.ts`, `textCommands.test.ts`, `docs/editor-keyboard-fallback-audit.md` |
-| empty paragraph split/Backspace | 실행 테스트로 확정 | `textCommands.test.ts`, `p0-empty-block-backspace` |
-| codeBlock newline policy | 실행 테스트로 확정 | `textCommands.test.ts`, `inputAdapter.test.ts`, `docs/editor-code-block-compatibility-audit.md` |
+| Enter 계열 headless ownership | 실행 테스트로 확정 | inputAdapter split tests, text command split tests, `docs/editor-line-break-policy-audit.md` |
+| Backspace/Delete headless ownership | 실행 테스트로 확정 | inputAdapter split tests, text command split tests, `docs/editor-keyboard-fallback-audit.md` |
+| empty paragraph split/Backspace | 실행 테스트로 확정 | text command split tests, `p0-empty-block-backspace` |
+| codeBlock newline policy | 실행 테스트로 확정 | text command split tests, inputAdapter split tests, `docs/editor-code-block-compatibility-audit.md` |
 | figure/atom boundary delete/paragraph insertion | 실행 테스트로 부분 확정 | atom delete/replacement와 figure edge split tests는 있으나 selected figure Enter dedicated fixture는 부족하다. |
-| whitespace-only list item empty semantic | 실행 테스트로 확정 | `textCommands.test.ts`와 `inputAdapter.test.ts`가 whitespace-only listItem Enter를 paragraph exit로 검증한다. |
-| empty heading/quote/listItem typed block exit | 실행 테스트로 확정 | `textCommands.test.ts`와 `inputAdapter.test.ts`가 empty typed block Enter의 paragraph replacement와 selectionAfter를 검증한다. |
+| whitespace-only list item empty semantic | 실행 테스트로 확정 | text command split tests와 inputAdapter split tests가 whitespace-only listItem Enter를 paragraph exit로 검증한다. |
+| empty heading/quote/listItem typed block exit | 실행 테스트로 확정 | text command split tests와 inputAdapter split tests가 empty typed block Enter의 paragraph replacement와 selectionAfter를 검증한다. |
 | Android/iOS boundary event ordering | 외부 근거만 있음 | ProseMirror/Lexical changelog는 강한 위험 신호지만 우리 real-device trace가 없다. |
 
 ## /doubt 판정

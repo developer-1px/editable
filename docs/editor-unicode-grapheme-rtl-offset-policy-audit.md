@@ -25,15 +25,15 @@ RTL/BiDi visual movement와 browser geometry parity는 아직 지원 contract가
 | --- | --- |
 | `src/editor/internal/model/textBoundaries.ts` | `Intl.Segmenter(..., { granularity: "grapheme" })`로 text boundary를 만들고, offset을 nearest/forward/backward boundary로 snap한다. |
 | `src/editor/internal/model/cursor.ts` | cursor point normalize와 movement가 text offset을 grapheme boundary로 보정한다. |
-| `src/editor/internal/model/textCommands.ts` | collapsed text deletion은 previous/next grapheme boundary를 기준으로 range를 삭제한다. |
-| `src/editor/internal/view/contentEditableSelection.ts` | DOM selection offset을 text-run `data-path`와 document text 기준 grapheme boundary로 변환한다. |
-| `src/editor/internal/view/contentEditableViewEngine.ts` | native edit flush 후 caret offset을 `snapTextOffset`으로 보정한다. |
+| `src/editor/internal/model/text-command/textCommands.ts` | collapsed text deletion은 previous/next grapheme boundary를 기준으로 range를 삭제한다. |
+| `src/editor/internal/view/contenteditable/contentEditableTextPoint.ts` | DOM selection offset을 text-run `data-path`와 document text 기준 grapheme boundary로 변환한다. |
+| `src/editor/internal/view/contenteditable/contentEditableViewEngine.ts` | native edit flush 후 caret offset을 `snapTextOffset`으로 보정한다. |
 | `src/editor/internal/fixtures/unicodeGraphemeCorpus.ts` | variation selector, keycap, ZWJ emoji, combining mark, committed Hangul jamo corpus를 공유한다. |
 | `src/editor/internal/model/textBoundaries.test.ts` | `Intl.Segmenter` grapheme boundary와 `Intl.Segmenter` 미지원 code point fallback을 고정한다. |
-| `src/editor/internal/model/cursor.test.ts` | emoji surrogate pair, decomposed letter, Unicode corpus movement를 고정한다. |
-| `src/editor/internal/model/textCommands.test.ts` | grapheme cluster Backspace/Delete와 Unicode corpus deletion을 고정한다. |
-| `src/editor/internal/view/contentEditableViewEngine.test.ts` | DOM selection과 native flush caret이 grapheme boundary로 snap되는 것을 Unicode corpus로 고정한다. |
-| `src/editor/internal/model/clipboard.test.ts` | multi-code-unit grapheme range serialization이 text를 누락하지 않는 것을 Unicode corpus로 고정한다. |
+| `cursor model split tests` | emoji surrogate pair, decomposed letter, Unicode corpus movement를 고정한다. |
+| text command split tests | grapheme cluster Backspace/Delete와 Unicode corpus deletion을 고정한다. |
+| `contentEditable view split tests` | DOM selection과 native flush caret이 grapheme boundary로 snap되는 것을 Unicode corpus로 고정한다. |
+| `clipboard split tests` | multi-code-unit grapheme range serialization이 text를 누락하지 않는 것을 Unicode corpus로 고정한다. |
 | Lexical PR #7175 | BMP code point + variation selector emoji인 `❤️` deletion이 surrogate-pair workaround만으로는 부족하다고 설명한다. |
 | Lexical changelog | emoji, Japanese/Korean IME, RTL selection/direction, composition 관련 수정이 반복된다. |
 | ProseMirror view changelog | RTL `coordsAtPos`, line wrap coordinates, right-to-left arrow, `inclusiveStart`/`inclusiveEnd` 명명 변경, composition/cursor 수정이 반복된다. |
@@ -117,7 +117,7 @@ ProseMirror가 `inclusiveLeft`/`inclusiveRight`를 `inclusiveStart`/`inclusiveEn
 | stored offset is UTF-16 index | source 확정 | text node path+offset과 JSON string slice/replace가 UTF-16 index를 사용한다. | Public API 문서로 노출할 때는 grapheme boundary 제약을 같이 적어야 한다. |
 | legal cursor boundary is grapheme | 실행 테스트로 확정 | `textBoundaries.ts`, cursor/textCommands/contentEditable tests가 emoji/decomposed/Unicode corpus snap/delete를 고정한다. | RTL/BiDi visual movement는 별도다. |
 | DOM offset is not canonical | 실행 테스트로 확정 | native selection bridge tests가 root containment, text-run mapping, grapheme snap, mark boundary mapping을 검증한다. | Real browser DOM Range boundary matrix는 별도다. |
-| collapsed text delete is grapheme-owned | 실행 테스트로 확정 | `textCommands.test.ts`가 grapheme cluster backward/forward deletion을 검증한다. | IME preedit 내부 삭제는 native composition owner 영역이다. |
+| collapsed text delete is grapheme-owned | 실행 테스트로 확정 | text command split tests가 grapheme cluster backward/forward deletion을 검증한다. | IME preedit 내부 삭제는 native composition owner 영역이다. |
 | `getTargetRanges()` can be partial grapheme | spec 확정 | W3C Input Events Level 2가 target ranges may cover only code points even when part of grapheme cluster라고 명시한다. | Browser implementation differences는 separate trace가 필요하다. |
 | Unicode upstream risk | 외부 사례 확정 | Lexical #7175, Lexical changelog, ProseMirror changelog가 emoji/IME/RTL/cursor fixes를 반복한다. | 각 upstream fix를 current implementation에 그대로 적용한다는 뜻은 아니다. |
 | logical movement current status | 실행 테스트로 확정 | cursor and cursorCommands tests가 logical stream movement/range extension을 고정한다. | RTL/BiDi visual movement는 미확정이다. |

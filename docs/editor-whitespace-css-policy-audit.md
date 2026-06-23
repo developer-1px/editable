@@ -73,7 +73,7 @@ selection, geometry에 주는 영향을 정리한다.
 | --- | --- |
 | DOM parser | browser-mutated DOM을 일반 parser source of truth로 쓰지 않는다. Native text buffer는 active text leaf 범위에서만 flush한다. |
 | model text | whitespace는 model text 자체가 보존한다. CSS는 model truth가 아니라 layout projection이다. |
-| cursor geometry | `cursorGeometry.test.ts`가 hard newline, empty visual line, code block, wrap fixture를 고정한다. |
+| cursor geometry | cursorGeometry split tests가 hard newline, empty visual line, code block, wrap fixture를 고정한다. |
 | native selection bridge | text-run `data-path`와 DOM Range offset을 canonical grapheme boundary로 snap한다. |
 | Markdown/clipboard | whitespace serialization은 model/markdown/clipboard layer가 담당한다. CSS를 serialization source로 쓰지 않는다. |
 
@@ -92,7 +92,7 @@ selection, geometry에 주는 영향을 정리한다.
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
 | `.text-block pre-wrap` current CSS | source 확정 | `src/styles.css`가 `.text-block { white-space: pre-wrap; }`를 가진다. | CSS computed style browser matrix는 아니다. |
-| block types sharing text-block | source/test 확정 | `DocumentRenderer.tsx`, `DocumentRenderer.test.tsx`가 paragraph/heading/quote/list/code block class surface를 고정한다. | Future custom block은 별도 descriptor가 필요하다. |
+| block types sharing text-block | source/test 확정 | `DocumentRenderer.tsx`, `DocumentRenderer split tests`가 paragraph/heading/quote/list/code block class surface를 고정한다. | Future custom block은 별도 descriptor가 필요하다. |
 | empty text measurable target | 실행 테스트로 확정 | renderer, contenteditable selection, cursor geometry tests가 `data-empty-text` target을 사용한다. | Firefox-specific hack node와 다르다. |
 | geometry dependency | 실행 테스트로 확정 | cursor geometry tests가 hard newline, empty visual line, wrap, code block behavior를 닫는다. | 실제 browser pixel parity는 별도 QA다. |
 | Gecko hack node 필요성 | 미정/보류 | ProseMirror source는 근거지만 current repo에 Firefox failure trace가 없다. | Firefox real browser trace가 필요하다. |

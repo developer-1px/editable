@@ -28,28 +28,28 @@ mutation에 끌려가지 않게 하는 것이다.
 | 경로 | 확정 동작 | 근거 |
 | --- | --- | --- |
 | keydown ownership gate | `Tab`, movement keys, `Escape`, `Cmd/Ctrl+A/B/I/E/K`, structural `Backspace`/`Delete`/`Enter`를 editor-owned keydown으로 본다. Unsupported structural modifier 조합도 native edit을 막기 위해 owned no-op으로 잡는다. | `editorKeyboardPolicy.ts`, `editorKeyboardPolicy.test.ts` |
-| browser/system pass-through | `F1` 같은 function key, `Cmd/Ctrl+S`, `Cmd/Ctrl+P`, `Cmd/Ctrl+U`, `Alt+Tab`처럼 현재 editor command가 아닌 shortcut은 ownership gate에서 false다. | `editorKeyboardPolicy.test.ts`, `inputAdapter.test.ts`, ED-029 |
-| model input adapter | owned keydown은 cursor movement, select-all, mark toggle, link toggle, list indent/outdent, delete, split, no-op selection result로 변환된다. | `inputAdapter.ts`, `inputAdapter.test.ts` |
-| beforeinput adapter | `insertText`, `insertReplacementText`, paste/drop insertion, paragraph/line break, delete/cut, word delete variants는 command layer로 수렴한다. | `inputAdapter.ts`, `inputAdapter.test.ts` |
-| React wiring | `BlockEditor`는 writable mode에서 printable keydown을 document mutation으로 쓰지 않는다. structural keydown은 flush 후 `translateEditorInput`으로 보내고 handled result일 때만 `preventDefault`한다. | `BlockEditor.tsx`, `BlockEditor.test.tsx` |
-| composition guard | composing 중 keydown/beforeinput은 normal command path로 강제하지 않는다. IME commit은 별도 composition/beforeinput path가 맡는다. | `BlockEditor.imeTrace.test.tsx`, `inputAdapter.test.ts` |
-| read-only guard | React read-only mode에서는 beforeinput/paste/delete/printable/mark/Tab mutation을 patch 없이 막고 movement/selection은 유지한다. | `inputAdapter.ts`, `inputAdapter.test.ts`, `editor-read-only-policy-audit.md` |
-| line break/list policy | `Enter`, `insertParagraph`, `insertLineBreak`, list `Tab`/`Shift+Tab`, non-list `Tab` text insertion은 미정이 아니라 실행 테스트로 고정된 current policy다. | `editor-line-break-policy-audit.md`, `inputAdapter.test.ts` |
+| browser/system pass-through | `F1` 같은 function key, `Cmd/Ctrl+S`, `Cmd/Ctrl+P`, `Cmd/Ctrl+U`, `Alt+Tab`처럼 현재 editor command가 아닌 shortcut은 ownership gate에서 false다. | `editorKeyboardPolicy.test.ts`, inputAdapter split tests, ED-029 |
+| model input adapter | owned keydown은 cursor movement, select-all, mark toggle, link toggle, list indent/outdent, delete, split, no-op selection result로 변환된다. Navigation keydown mapping은 `inputAdapterNavigationKeyDown.ts`로 분리되어 read-only path와 writable path가 공유한다. | `inputAdapter.ts`, `inputAdapterNavigationKeyDown.ts`, inputAdapter split tests |
+| beforeinput adapter | `insertText`, `insertReplacementText`, paste/drop insertion, paragraph/line break, delete/cut, word delete variants는 command layer로 수렴한다. | `inputAdapter.ts`, inputAdapter split tests |
+| React wiring | `BlockEditor`는 writable mode에서 printable keydown을 document mutation으로 쓰지 않는다. structural keydown은 flush 후 `translateEditorInput`으로 보내고 handled result일 때만 `preventDefault`한다. | `BlockEditor.tsx`, BlockEditor split tests |
+| composition guard | composing 중 keydown/beforeinput은 normal command path로 강제하지 않는다. IME commit은 별도 composition/beforeinput path가 맡는다. | `BlockEditor.imeTrace.test.tsx`, inputAdapter split tests |
+| read-only guard | React read-only mode에서는 beforeinput/paste/delete/printable/mark/Tab mutation을 patch 없이 막고 movement/selection은 유지한다. | `inputAdapter.ts`, inputAdapter split tests, `editor-read-only-policy-audit.md` |
+| line break/list policy | `Enter`, `insertParagraph`, `insertLineBreak`, list `Tab`/`Shift+Tab`, non-list `Tab` text insertion은 미정이 아니라 실행 테스트로 고정된 current policy다. | `editor-line-break-policy-audit.md`, inputAdapter split tests |
 
 ## 증거 강도
 
 | 항목 | 판정 | 근거 |
 | --- | --- | --- |
 | keydown ownership gate | 실행 테스트로 확정 | `editorKeyboardPolicy.test.ts`가 Tab, movement keys, Escape, supported mark/link/select-all shortcuts, structural editing keys를 editor-owned로 검증한다. |
-| printable keydown pass-through | 실행 테스트로 확정 | `editorKeyboardPolicy.test.ts`가 plain printable keydown을 not-owned로 검증하고, `BlockEditor.test.tsx`가 printable keydown만으로 document mutation이 생기지 않음을 검증한다. |
-| browser/system shortcut pass-through | 실행 테스트로 확정 | `editorKeyboardPolicy.test.ts`와 `inputAdapter.test.ts`가 F-key, `Cmd/Ctrl+S`, `Cmd/Ctrl+P`, writable `Cmd/Ctrl+U`, `Alt+Tab`을 editor command가 아닌 pass-through로 검증한다. |
-| unsupported structural shortcut no-op | 실행 테스트로 확정 | `editorKeyboardPolicy.test.ts`와 `inputAdapter.test.ts`가 command Backspace/Delete, `Alt+Enter`를 editor-owned handled no-op으로 검증한다. |
-| model input adapter mapping | 실행 테스트로 확정 | `inputAdapter.test.ts`가 movement/select-all/mark/link/list/delete/split/Escape keydown mapping을 command 또는 selection result로 검증한다. |
-| beforeinput/paste adapter mapping | 실행 테스트로 확정 | `inputAdapter.test.ts`가 insert text, replacement text, paste/drop, paragraph/line break, delete/cut, word delete beforeinput을 canonical command path로 검증한다. |
-| React keydown/beforeinput split | 실행 테스트로 확정 | `BlockEditor.test.tsx`가 printable keydown은 native/beforeinput path에 맡기고 structural keydown은 headless command path로 처리한다고 검증한다. |
-| composition guard | 실행 테스트로 확정 | `inputAdapter.test.ts`와 `BlockEditor.imeTrace.test.tsx`가 composing 중 normal keydown/beforeinput command path를 강제하지 않고 IME Enter confirmation이 paragraph split으로 새지 않음을 검증한다. |
-| read-only keyboard/input guard | 실행 테스트로 확정 | `inputAdapter.test.ts`, `BlockEditor.test.tsx`, `docs/editor-read-only-policy-audit.md`가 read-only mutation no-op과 movement/selection 유지를 검증한다. |
-| line break/list policy | 실행 테스트로 확정 | `docs/editor-line-break-policy-audit.md`, `docs/editor-block-command-audit.md`, `inputAdapter.test.ts`가 Enter/line break/list Tab/non-list Tab current policy를 검증한다. |
+| printable keydown pass-through | 실행 테스트로 확정 | `editorKeyboardPolicy.test.ts`가 plain printable keydown을 not-owned로 검증하고, BlockEditor split tests가 printable keydown만으로 document mutation이 생기지 않음을 검증한다. |
+| browser/system shortcut pass-through | 실행 테스트로 확정 | `editorKeyboardPolicy.test.ts`와 inputAdapter split tests가 F-key, `Cmd/Ctrl+S`, `Cmd/Ctrl+P`, writable `Cmd/Ctrl+U`, `Alt+Tab`을 editor command가 아닌 pass-through로 검증한다. |
+| unsupported structural shortcut no-op | 실행 테스트로 확정 | `editorKeyboardPolicy.test.ts`와 inputAdapter split tests가 command Backspace/Delete, `Alt+Enter`를 editor-owned handled no-op으로 검증한다. |
+| model input adapter mapping | 실행 테스트로 확정 | inputAdapter split tests가 movement/select-all/mark/link/list/delete/split/Escape keydown mapping을 command 또는 selection result로 검증한다. Navigation mapping은 `inputAdapterNavigationKeyDown.ts`가 맡고, editing shortcut/read-only blocking은 `inputAdapterKeyDown.ts`가 맡는다. |
+| beforeinput/paste adapter mapping | 실행 테스트로 확정 | inputAdapter split tests가 insert text, replacement text, paste/drop, paragraph/line break, delete/cut, word delete beforeinput을 canonical command path로 검증한다. |
+| React keydown/beforeinput split | 실행 테스트로 확정 | BlockEditor split tests가 printable keydown은 native/beforeinput path에 맡기고 structural keydown은 headless command path로 처리한다고 검증한다. |
+| composition guard | 실행 테스트로 확정 | inputAdapter split tests와 `BlockEditor.imeTrace.test.tsx`가 composing 중 normal keydown/beforeinput command path를 강제하지 않고 IME Enter confirmation이 paragraph split으로 새지 않음을 검증한다. |
+| read-only keyboard/input guard | 실행 테스트로 확정 | inputAdapter split tests, BlockEditor split tests, `docs/editor-read-only-policy-audit.md`가 read-only mutation no-op과 movement/selection 유지를 검증한다. |
+| line break/list policy | 실행 테스트로 확정 | `docs/editor-line-break-policy-audit.md`, `docs/editor-block-command-audit.md`, inputAdapter split tests가 Enter/line break/list Tab/non-list Tab current policy를 검증한다. |
 | global app shortcut layer | 미정 | pass-through는 editor command가 아니라는 뜻이며, future app shell 저장/검색/프린트 shortcut policy는 별도 layer 결정이다. |
 | OS/browser shortcut matrix와 customization | 미정 | current tests는 editor-owned/pass-through 분리만 닫고, OS/browser별 native shortcut matrix나 user-configurable hotkey system은 닫지 않는다. |
 | underline mark shortcut | 미정/future feature | schema/renderer/markdown/command에 underline mark가 없으므로 `Cmd/Ctrl+U`는 현재 writable editor command가 아니다. |
@@ -71,6 +71,7 @@ mutation에 끌려가지 않게 하는 것이다.
 | --- | --- | --- |
 | `isHeadlessKeyDown` ownership gate | 유지 확정 | 브라우저 native edit을 막아야 하는 keydown만 React boundary가 가로채게 하는 작은 interface다. 삭제하면 printable keydown과 structural keydown 구분이 흐려진다. |
 | `translateEditorInput` adapter | 유지 확정 | keyboard, beforeinput, paste를 canonical command/selection result로 모으는 model interface다. 삭제하면 React event handling에 command knowledge가 퍼진다. |
+| `inputAdapterNavigationKeyDown` | 유지 확정 | movement/Escape keydown mapping은 read-only와 writable path가 공유하는 navigation policy다. editing shortcut block/read-only policy와 분리해야 mutation key와 movement key 경계가 선명하다. |
 | unsupported command pass-through | 유지 확정 | ED-029가 F-key와 unsupported `Cmd/Ctrl` shortcut을 browser/system-owned로 남긴다. 전부 잡으면 app-level shortcut policy를 성급히 만든다. |
 | separate global hotkey registry | 보류 | 현재 editor correctness를 위해 필요한 개념이 아니다. 저장/검색 같은 app command가 생기기 전에는 과잉 구조다. |
 | underline mark shortcut | 보류 | schema/renderer/markdown에 underline mark가 없으므로 `Cmd/Ctrl+U`만 추가하면 얕은 shortcut이 된다. |

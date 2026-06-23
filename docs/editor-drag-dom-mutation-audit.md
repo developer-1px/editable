@@ -25,7 +25,7 @@ recorder, renderer-owned DOM 상태가 섞일 수 있다.
 | ProseMirror cleanup | `done()`에서 임시 `draggable`/`contentEditable` 속성을 제거하고 observer를 다시 시작한다. |
 | ProseMirror dragstart/drop | drag serialization, `dataTransfer`, drag move/delete transaction과 연결된다. |
 | `src/editor/internal/react/DocumentRenderer.tsx` | mention/figure는 current document atom DOM으로 렌더되지만 native drag preparation attribute를 렌더하지 않는다. |
-| `src/editor/internal/react/useBlockEditorController.tsx` | 현재 `dragover`는 default만 막고, `drop`은 transfer text를 읽어 paste input으로 처리한다. `dragstart`/native move/delete transaction은 없다. |
+| `src/editor/internal/react/block-editor/useBlockEditorController.tsx` | 현재 `dragover`는 default만 막고, `drop`은 transfer text를 읽어 paste input으로 처리한다. `dragstart`/native move/delete transaction은 없다. |
 | `docs/editor-pointer-selection-audit.md` | current pointer drag는 range selection lifecycle이지 node move drag가 아니다. |
 | `docs/editor-clipboard-transfer-audit.md` | drop transfer text는 clipboard/paste transfer reader와 같은 문자열 contract로 들어온다. |
 | `docs/editor-widget-decoration-lifecycle-audit.md` | model 밖 DOM mutation/lifecycle은 widget-like policy로 격리해야 한다. |
@@ -83,7 +83,7 @@ recorder, renderer-owned DOM 상태가 섞일 수 있다.
 
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
-| current temporary drag attr 부재 | 실행 테스트로 확정 | `DocumentRenderer.test.tsx`가 mention/figure atom render output에 `draggable` attr이 없다고 검증한다. | Runtime dragstart path가 없다는 negative coverage다. |
+| current temporary drag attr 부재 | 실행 테스트로 확정 | `DocumentRenderer split tests`가 mention/figure atom render output에 `draggable` attr이 없다고 검증한다. | Runtime dragstart path가 없다는 negative coverage다. |
 | current drop-as-paste behavior | source/tests 확정 | `useBlockEditorController.handleDrop`, transfer reader, input adapter/drop tests가 drop text insertion을 닫는다. | Native same-document drag move는 아니다. |
 | MutationObserver pause 불필요 | source 확정 | 현재 MutationObserver와 drag prep mutation이 없다. | observer를 도입하면 별도 pause policy가 필요하다. |
 | native vs custom drag 분류 | 정책 확정 | current feature set에서는 external drop만 지원하고 node move drag는 보류한다. | 제품 drag UX 요구가 생기면 재평가해야 한다. |

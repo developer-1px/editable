@@ -81,7 +81,7 @@ beforeinput/input
 
 | 항목 | 판정 | 근거 | 한계 |
 | --- | --- | --- | --- |
-| leaf-only native flush | 실행 테스트로 확정 | `contentEditableViewEngine.test.ts`가 native text mutation을 one text-path replace patch로 검증한다. | jsdom text mutation fixture이며 real IME event ordering은 trace tests가 보강한다. |
+| leaf-only native flush | 실행 테스트로 확정 | contentEditable view split tests가 native text mutation을 one text-path replace patch로 검증한다. | jsdom text mutation fixture이며 real IME event ordering은 trace tests가 보강한다. |
 | mark boundary fixture | 실행 테스트로 확정 | mark wrapper 내부 text mutation도 text-run `textContent`만 patch로 읽고 wrapper DOM을 parser source로 삼지 않는 test가 있다. | mark split/merge DOM structural mutation은 headless command 범위다. |
 | same-text wrapper drift guardrail | 실행 테스트로 확정 | native formatting wrapper가 같은 `textContent`를 유지하면 patch 없이 canonical text node로 복구하는 test가 있다. | 실제 OS context menu event order는 별도 trace가 필요하다. |
 | widget boundary fixture | 실행 테스트로 확정 | `contenteditable=false` mention 내부 selection에서 native dirty edit을 시작하지 않는 test가 있다. | pointer/node selection UX는 별도 selection tests가 담당한다. |
