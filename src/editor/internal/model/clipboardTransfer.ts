@@ -1,4 +1,8 @@
-import { type ClipboardFormat, EDITABLE_CLIPBOARD_MIME } from "./clipboard";
+import {
+  type ClipboardFormat,
+  EDITABLE_CLIPBOARD_MIME,
+  type EditorClipboardData,
+} from "./clipboard";
 
 export type ClipboardTransfer = {
   getData(type: string): string;
@@ -37,6 +41,18 @@ export function readClipboardTextFromTransfer(
 
   const uriList = readUriListText(transfer.getData("text/uri-list"));
   return uriList === null ? null : { text: uriList, format: "plain" };
+}
+
+export function readClipboardTextFromEditorClipboardData(
+  data: EditorClipboardData,
+): ClipboardText | null {
+  return readClipboardTextFromTransfer({
+    getData(type) {
+      return Object.hasOwn(data, type)
+        ? data[type as keyof EditorClipboardData]
+        : "";
+    },
+  });
 }
 
 function readStructuredClipboardData(value: string): ClipboardText | null {

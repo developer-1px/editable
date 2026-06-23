@@ -23,7 +23,7 @@ type UseBlockEditorKeyDownHandlerInput = {
   ) => SelectionSnap | null;
   editorPlatform: EditorPlatform;
   flushContentEditableViewBeforeCommand: () => SelectionSnap | null;
-  handleClipboardKeymapCommand: (command: "copy" | "cut") => void;
+  handleClipboardKeymapCommand: (command: "copy" | "cut") => boolean;
   readOnly: boolean;
   runInput: (input: EditorInput, selection?: SelectionSnap) => boolean;
   selectionForInput: () => SelectionSnap;
@@ -63,14 +63,16 @@ export function useBlockEditorKeyDownHandler({
         editorPlatform,
       );
       if (keymapCommand !== null) {
+        if (keymapCommand === "copy" || keymapCommand === "cut") {
+          if (handleClipboardKeymapCommand(keymapCommand)) {
+            event.preventDefault();
+          }
+          return;
+        }
         if (keymapCommand === "paste") {
           return;
         }
         event.preventDefault();
-        if (keymapCommand === "copy" || keymapCommand === "cut") {
-          handleClipboardKeymapCommand(keymapCommand);
-          return;
-        }
         if (readOnly) {
           return;
         }

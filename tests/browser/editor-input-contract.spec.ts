@@ -180,6 +180,49 @@ test("markdown drop uses browser DataTransfer and current DOM selection", async 
   });
 });
 
+test("keyboard cut and paste round-trips editor-owned structured clipboard data", async ({
+  browserName,
+  context,
+  page,
+}) => {
+  test.skip(
+    browserName !== "chromium",
+    "Playwright exposes clipboard read/write permissions only in Chromium.",
+  );
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: "http://127.0.0.1:4173",
+  });
+  const primary = await platformPrimaryModifier(page);
+
+  await pressEditorKey(page, `${primary}+Shift+ArrowRight`);
+  await expectEditorState(page, {
+    selectedRangeCount: 10,
+  });
+
+  await pressEditorKey(page, `${primary}+X`);
+
+  await expectEditorState(page, {
+    mentionCount: 0,
+  });
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toContain("@Ada");
+
+  await pathLocator(page, firstTextPath).click({ position: { x: 1, y: 8 } });
+  await expectEditorState(page, {
+    domSelectionCollapsed: "true",
+    domSelectionFocusPath: firstTextPath,
+    selectionPath: firstTextPath,
+  });
+  await dispatchTransferEvent(page, "paste", {
+    "text/plain": await page.evaluate(() => navigator.clipboard.readText()),
+  });
+
+  await expectEditorState(page, {
+    mentionCount: 1,
+  });
+});
+
 function pathLocator(page: Page, path: string) {
   return page.locator(`[data-path="${path}"]`).first();
 }
@@ -334,6 +377,20 @@ async function readBrowserInputTrace(
     };
 
     return traceWindow.__editableBrowserInputTrace ?? [];
+  });
+}
+
+async function platformPrimaryModifier(page: Page): Promise<"Control" | "Meta"> {
+  return page.evaluate(() => {
+    const navigatorLike = navigator as Navigator & {
+      userAgentData?: { platform?: string };
+    };
+    const platform =
+      navigatorLike.userAgentData?.platform ?? navigatorLike.platform ?? "";
+    const userAgent = navigatorLike.userAgent ?? "";
+    return /mac|darwin|iphone|ipad|ipod/i.test(`${platform} ${userAgent}`)
+      ? "Meta"
+      : "Control";
   });
 }
 

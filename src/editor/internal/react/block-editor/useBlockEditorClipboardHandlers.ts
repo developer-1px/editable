@@ -4,9 +4,18 @@ import {
   type DragEvent,
   type RefObject,
   useCallback,
+  useRef,
 } from "react";
-import { serializeSelectionForClipboard } from "../../model/clipboard";
-import { readClipboardTextFromTransfer } from "../../model/clipboardTransfer";
+import {
+  EDITABLE_CLIPBOARD_MIME,
+  type EditorClipboardData,
+  serializeSelectionForClipboard,
+} from "../../model/clipboard";
+import {
+  type ClipboardText,
+  readClipboardTextFromEditorClipboardData,
+  readClipboardTextFromTransfer,
+} from "../../model/clipboardTransfer";
 import { normalizeCursorPoint } from "../../model/cursor";
 import { selectionFromCursorPoint } from "../../model/cursorCommands";
 import type { EditorInput } from "../../model/inputAdapter";
@@ -41,8 +50,33 @@ export function useBlockEditorClipboardHandlers({
   selectionForInput,
   selectionForObservedCommand,
 }: UseBlockEditorClipboardHandlersInput) {
+  const editorClipboardDataRef = useRef<EditorClipboardData | null>(null);
+  const readPasteClipboardText = useCallback(
+    (clipboardData: DataTransfer): ClipboardText | null => {
+      const clipboardText = readClipboardTextFromTransfer(clipboardData);
+      if (clipboardData.getData(EDITABLE_CLIPBOARD_MIME).length > 0) {
+        return clipboardText;
+      }
+
+      const editorClipboardData = editorClipboardDataRef.current;
+      if (
+        editorClipboardData === null ||
+        clipboardData.getData("text/plain") !==
+          editorClipboardData["text/plain"]
+      ) {
+        return clipboardText;
+      }
+
+      return (
+        readClipboardTextFromEditorClipboardData(editorClipboardData) ??
+        clipboardText
+      );
+    },
+    [],
+  );
+
   const handleClipboardKeymapCommand = useCallback(
-    async (command: "copy" | "cut") => {
+    (command: "copy" | "cut") => {
       const selectionBeforeFlush = selectionForInput();
       const selection = readOnly
         ? selectionBeforeFlush
@@ -52,7 +86,7 @@ export function useBlockEditorClipboardHandlers({
         if (readOnly) {
           resetContentEditableView(selection);
         }
-        return;
+        return false;
       }
 
       const clipboard =
@@ -60,30 +94,35 @@ export function useBlockEditorClipboardHandlers({
           .clipboard ??
         (typeof navigator === "undefined" ? undefined : navigator.clipboard);
       if (clipboard?.writeText === undefined) {
-        return;
+        return false;
       }
 
-      try {
-        await clipboard.writeText(data["text/plain"]);
-      } catch {
-        return;
-      }
+      void (async () => {
+        try {
+          await clipboard.writeText(data["text/plain"]);
+        } catch {
+          return;
+        }
 
-      if (command !== "cut") {
-        return;
-      }
-      if (readOnly) {
-        resetContentEditableView(selection);
-        return;
-      }
+        editorClipboardDataRef.current = data;
+        if (command !== "cut") {
+          return;
+        }
+        if (readOnly) {
+          resetContentEditableView(selection);
+          return;
+        }
 
-      runInput(
-        {
-          type: "beforeinput",
-          inputType: "deleteByCut",
-        },
-        selection,
-      );
+        runInput(
+          {
+            type: "beforeinput",
+            inputType: "deleteByCut",
+          },
+          selection,
+        );
+      })();
+
+      return true;
     },
     [
       document.value,
@@ -99,7 +138,7 @@ export function useBlockEditorClipboardHandlers({
   const handlePaste = useCallback(
     (event: ClipboardEvent<HTMLDivElement>) => {
       event.preventDefault();
-      const clipboardText = readClipboardTextFromTransfer(event.clipboardData);
+      const clipboardText = readPasteClipboardText(event.clipboardData);
       if (clipboardText === null) {
         return;
       }
@@ -122,6 +161,7 @@ export function useBlockEditorClipboardHandlers({
     },
     [
       flushContentEditableViewBeforeCommand,
+      readPasteClipboardText,
       readOnly,
       resetContentEditableView,
       runInput,
@@ -189,6 +229,7 @@ export function useBlockEditorClipboardHandlers({
 
       event.preventDefault();
       writeClipboardData(event.clipboardData, data);
+      editorClipboardDataRef.current = data;
     },
     [
       document.value,
@@ -208,6 +249,7 @@ export function useBlockEditorClipboardHandlers({
       event.preventDefault();
       if (data !== null && event.clipboardData !== null) {
         writeClipboardData(event.clipboardData, data);
+        editorClipboardDataRef.current = data;
       }
 
       if (readOnly) {

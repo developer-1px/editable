@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EDITABLE_CLIPBOARD_MIME } from "./clipboard";
 import { transferData } from "./clipboardTestUtils";
 import {
+  readClipboardTextFromEditorClipboardData,
   readClipboardTextFromTransfer,
   readTextFromTransfer,
 } from "./clipboardTransfer";
@@ -132,6 +133,23 @@ describe("clipboard transfer reader", () => {
         }),
       ),
     ).toBe("@[Ada](mention:user-ada)");
+  });
+
+  it("reads editor clipboard data through the same structured transfer contract", () => {
+    expect(
+      readClipboardTextFromEditorClipboardData({
+        [EDITABLE_CLIPBOARD_MIME]: JSON.stringify({
+          schema: "editable-clipboard@1",
+          plainText: "@Ada",
+          markdown: "@[Ada](mention:user-ada)",
+        }),
+        "text/markdown": "@[Ada](mention:user-ada)",
+        "text/plain": "@Ada",
+      }),
+    ).toEqual({
+      text: "@[Ada](mention:user-ada)",
+      format: "markdown",
+    });
   });
 
   it("uses structured markdown when structured plain text is empty", () => {

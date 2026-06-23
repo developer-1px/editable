@@ -10,6 +10,12 @@
 현재 clipboard transfer seam은 **문자열 중심으로 확정**이다.
 
 - 확정: copy/cut은 `text/plain`, `text/markdown`, editor custom MIME을 쓴다.
+  Native copy/cut event path가 `EditorClipboardData`를 `DataTransfer`에 쓴다.
+  Keyboard `Cmd/Ctrl+C`, `Cmd/Ctrl+X`는 serializable editor selection이 있으면
+  keymap bridge가 `text/plain`을 system clipboard에 쓰고 같은 `EditorClipboardData`를
+  in-memory structured fallback에 보관한다. Keyboard paste는 native paste event를
+  기다리고, event가 `text/plain`만 주더라도 plain fallback이 직전 editor-owned
+  clipboard와 일치하면 structured fallback을 먼저 쓴다.
 - 확정: paste/drop/beforeinput paste는 transfer에서 문자열을 읽어 command layer로
   넘긴다.
 - 확정: custom MIME은 same-app text transfer envelope다. 현재 payload는
@@ -53,6 +59,8 @@ restore가 제품 범위로 결정되면 그때 node payload, migration, trust p
 | 근거 | 의미 |
 | --- | --- |
 | `serializeSelectionForClipboard` | collapsed selection은 null이고, range/atom selection은 plain text와 markdown fallback을 만든다. |
+| native copy/cut event path | `writeClipboardData`가 `DataTransfer`에 `text/plain`, `text/markdown`, editor custom MIME을 함께 쓴다. |
+| editor-owned keymap clipboard bridge | Serializable editor selection은 keymap에서 `text/plain`을 system clipboard에 쓰고, 같은 `EditorClipboardData`를 in-memory structured fallback으로 보관한다. |
 | `readClipboardTextFromTransfer` | custom `markdown`은 markdown format, custom `plainText`와 `text/plain`은 plain format, `text/markdown`은 markdown format, `text/uri-list`는 plain format으로 읽는다. Current external fallback order is custom MIME, external `text/plain`, external `text/markdown`, then external `text/uri-list`. |
 | `BlockEditor` paste/drop handlers | 읽은 text/format을 paste input으로 넘긴다. custom MIME node graph importer를 호출하지 않는다. |
 | inputAdapter split tests | plain paste는 문자열 삽입이고, markdown-format paste는 supported marks/link/mention/figure/multi-block fragment를 복원한다. |
@@ -64,7 +72,7 @@ restore가 제품 범위로 결정되면 그때 node payload, migration, trust p
 | 강도 | 해당 항목 | 현재 의미 |
 | --- | --- | --- |
 | transfer interface 확정 | `EditorClipboardData` keys, `ClipboardText` `{ text, format }`, `ClipboardFormat` `"plain" | "markdown"`, `editable-clipboard@1` envelope | clipboard module의 좁은 interface는 string plus format이다. Node graph, selection topology, identity restore interface가 아니다. |
-| 실행 테스트로 닫힘 | collapsed selection null, text/mark/grapheme/block/atom serialization, custom envelope shape, custom metadata ignore, malformed/wrong schema fallback, beforeinput paste/drop transfer reader, React paste/drop/copy/cut command path, markdown mention/multi-block restore | 현재 regression gate가 직접 잡는 transfer 기준선이다. |
+| 실행 테스트로 닫힘 | collapsed selection null, text/mark/grapheme/block/atom serialization, custom envelope shape, custom metadata ignore, malformed/wrong schema fallback, beforeinput paste/drop transfer reader, React paste/drop/copy/cut command path, keymap native event pass-through, editor-owned keymap cut/paste structured round-trip, markdown mention/multi-block restore | 현재 regression gate가 직접 잡는 transfer 기준선이다. |
 | source behavior로 확인 | external fallback order가 custom MIME -> `text/plain` -> `text/markdown` -> `text/uri-list`인 점, BlockEditor drop handler의 coordinate-based drop point 선택 | 코드 경로는 명확하지만, 모든 browser clipboard 조합이나 product rich external paste preference를 닫은 것은 아니다. |
 | adapter complement | `inputAdapter`는 `format: "markdown"`일 때 markdown importer를 시도하고 실패/비-markdown format은 plain text insertion으로 수렴한다. | rich restore는 clipboard payload가 아니라 markdown adapter가 표현할 수 있는 fragment 범위에 묶인다. |
 
