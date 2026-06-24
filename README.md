@@ -1,204 +1,260 @@
-Welcome to your new TanStack Start app! 
+# Editable
 
-# Getting Started
+`editable` is a TanStack Start app that hosts a structured rich-text editor.
 
-To run this application:
+The editor's document and selection state are canonical JSON state managed
+through `@interactive-os/json-document`. The DOM is a rendered view plus a native
+text input buffer for ordinary typing and IME composition; it is not the source
+of document truth.
+
+## Run
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-# Building For Production
+The dev server runs on port `3000` by default.
 
-To build this application for production:
+## Verify
 
-```bash
-pnpm build
-```
-
-## Testing
-
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
+Use the full internal gate before treating an editor change as correct:
 
 ```bash
-pnpm test
+pnpm run verify:internal -- --repeat=1
 ```
 
-## Styling
+That gate runs:
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
+- focused/skipped/todo test marker scan
+- Vitest discovery parity check for marker scanning
+- README Docs inventory and editor evidence-section verification
+- editor boundary verification
+- TypeScript checking
+- Vitest
+- Vitest with deterministic shuffle seed `20260621`
+- Biome check
+- production build with generated route tree stability check
+- `git diff --check`
 
-### Removing Tailwind CSS
-
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Uninstall the packages: `pnpm add @tailwindcss/vite tailwindcss --dev`
-
-## Linting & Formatting
-
-This project uses [Biome](https://biomejs.dev/) for linting and formatting. The following scripts are available:
-
+For heavier repeat checks:
 
 ```bash
-pnpm lint
-pnpm format
-pnpm check
+pnpm run verify:internal:stress
+pnpm run verify:internal:soak
 ```
 
+Real browser P0 smoke is separate from the internal fast gate:
 
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
+```bash
+pnpm run verify:browser
 ```
 
-Then anywhere in your JSX you can use it like so:
+That gate runs the minimal input contract smoke in Chromium, Firefox, and
+WebKit. IME cases remain recorded trace fixtures plus manual browser capture.
 
-```tsx
-<Link to="/about">About</Link>
+## Editor Boundaries
+
+Public imports should go through these entrypoints:
+
+- `src/editor/public`
+- `src/editor/react`
+
+The implementation is intentionally hidden under `src/editor/internal`.
+Application routes should not import `src/editor/internal/*` directly.
+The two public entrypoints are also separate: `src/editor/public` is headless,
+and `src/editor/react` is the React editor surface.
+
+Boundary rules are enforced by:
+
+```bash
+pnpm run verify:boundaries
 ```
 
-This will create a link that will navigate to the `/about` route.
+## Architecture
 
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
+Current split:
 
-### Using A Layout
+- `src/editor/internal/model`: canonical document, cursor, selection, command,
+  markdown, clipboard, and normalization logic
+- `src/editor/internal/view`: contenteditable buffering, DOM selection,
+  keyboard policy, clipboard transfer, and geometry adapters
+- `src/editor/internal/react`: React wiring, toolbar, document renderer, caret
+  and selection overlays, debug recorder
+- `src/editor/internal/debug`: interaction recording and report helpers
+- `src/editor/internal/testing`: trace replay helpers
 
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
+The intended ownership rule is:
 
-Here is an example layout that includes a header:
+- model commands mutate document and canonical selection
+- view code may read DOM geometry and native input state
+- React code wires events and renders state, but should not become the document
+  model
 
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
+## Docs
 
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
+- `docs/rich-model-design.md`: design direction and model invariants
+- `docs/editor-issues.md`: implementation issue history and accepted work
+- `docs/editor-required-feature-list.md`: product/QA checklist of expected
+  editor behavior
+- `docs/editor-input-contract.md`: P0 browser input event to editor
+  intent/model/selection/render contract
+- `docs/editor-input-oracle-triage.md`: oracle source and triage procedure for
+  new P0 input expectations
+- `docs/editor-p0-input-conformance-matrix.md`: stable P0 input scenario matrix,
+  headless runner, replay coverage, and browser evidence gate
+- `docs/editor-browser-input-gate.md`: Playwright browser smoke gate and IME
+  manual capture split
+- `docs/editor-test-environment-policy-audit.md`: model/jsdom/browser/device
+  test environment responsibility audit
+- `docs/repo-analysis-report.md`: current confirmed-vs-ambiguous repo analysis
+- `docs/editor-document-authority-audit.md`: document authority and stale-risk
+  audit
+- `docs/editor-document-normal-form-audit.md`: document schema and normal form
+  audit
+- `docs/editor-document-metadata-surface-audit.md`: document metadata and title
+  surface audit
+- `docs/editor-attrs-extension-surface-audit.md`: attrs compatibility and
+  extension surface audit
+- `docs/editor-code-block-compatibility-audit.md`: code block text and
+  compatibility children audit
+- `docs/editor-figure-media-trust-audit.md`: figure media source and trust
+  policy audit
+- `docs/editor-identity-policy-audit.md`: local document/block identity and
+  collaboration policy audit
+- `docs/editor-schema-migration-policy-audit.md`: schema version and migration
+  policy audit
+- `docs/editor-render-surface-audit.md`: document-to-DOM render surface audit
+- `docs/editor-feature-coverage-audit.md`: required feature coverage split into
+  confirmed, partially confirmed, and ambiguous areas
+- `docs/editor-selection-model-audit.md`: canonical selection model and native
+  selection policy audit
+- `docs/editor-cross-block-range-policy-audit.md`: cross-block range,
+  multi-range DOM selection, composition/delete policy audit
+- `docs/editor-pointer-selection-audit.md`: pointer and mouse selection adapter
+  audit
+- `docs/editor-mobile-touch-selection-policy-audit.md`: mobile touch selection,
+  long press, handle drag, and native menu policy audit
+- `docs/editor-mobile-viewport-caret-policy-audit.md`: mobile visual viewport,
+  virtual keyboard, auto-zoom, scroll, and caret visibility policy audit
+- `docs/editor-text-mutation-command-audit.md`: text mutation command and
+  replacement policy audit
+- `docs/editor-mutation-observer-policy-audit.md`: MutationObserver stale
+  record, pause/resume, and DOM drift policy audit
+- `docs/editor-block-command-audit.md`: list depth block command and block
+  editing extension audit
+- `docs/editor-mark-command-audit.md`: rich text mark command and active mark
+  context audit
+- `docs/editor-cursor-navigation-model-audit.md`: logical cursor stream and
+  navigation command audit
+- `docs/editor-unicode-grapheme-rtl-offset-policy-audit.md`: Unicode grapheme,
+  DOM offset, deletion, logical movement, and RTL/BiDi policy audit
+- `docs/editor-coordinate-hit-testing-audit.md`: coordinate to cursor point
+  hit-testing fallback policy audit
+- `docs/editor-markdown-adapter-audit.md`: markdown import/export adapter audit
+- `docs/editor-clipboard-transfer-audit.md`: clipboard text transfer vs rich
+  paste restore audit
+- `docs/editor-paste-drop-payload-policy-audit.md`: paste/drop MIME,
+  uri-list, file, HTML, plain, markdown, and debug payload policy audit
+- `docs/editor-clipboard-slice-context-audit.md`: clipboard HTML slice context
+  and data-pm-slice policy audit
+- `docs/editor-paste-html-security-policy-audit.md`: pasted HTML,
+  Trusted Types, sanitizer, URL, and source sample corpus policy audit
+- `docs/editor-hidden-clipboard-fallback-audit.md`: hidden clipboard DOM
+  fallback and blur/refocus policy audit
+- `docs/editor-drag-dom-mutation-audit.md`: drag preparation DOM mutation and
+  cleanup policy audit
+- `docs/editor-link-mark-audit.md`: link mark command vs URL input policy audit
+- `docs/editor-line-break-policy-audit.md`: current line-break and block split
+  policy audit
+- `docs/editor-block-boundary-key-policy-audit.md`: empty block, list item, code
+  block, and atom Enter/Backspace/Delete boundary policy audit
+- `docs/editor-keyboard-input-policy-audit.md`: keyboard ownership vs input
+  adapter policy audit
+- `docs/editor-keyboard-shortcut-layout-policy-audit.md`: keyboard shortcut
+  layout, modifier, IME, and macOS Ctrl policy audit
+- `docs/editor-keyboard-fallback-audit.md`: ignored DOM and atom keyboard
+  native fallback audit
+- `docs/editor-beforeinput-policy-audit.md`: beforeinput trust boundary and
+  Chrome Android delete fallback audit
+- `docs/editor-native-formatting-context-menu-policy-audit.md`: browser native
+  formatting, context menu, and mark command authority audit
+- `docs/editor-offset-zero-input-policy-audit.md`: offset 0, mark/link
+  boundary, and native insertText policy audit
+- `docs/editor-event-ownership-audit.md`: editor root vs node/widget DOM event
+  ownership audit
+- `docs/editor-contenteditable-buffer-audit.md`: native contenteditable buffer
+  adapter audit
+- `docs/editor-native-selection-bridge-audit.md`: DOM selection to canonical
+  selection bridge audit
+- `docs/editor-selection-visibility-lifecycle-audit.md`: native selection and
+  custom overlay visibility lifecycle audit
+- `docs/editor-dom-position-equivalence-audit.md`: DOM position equivalence,
+  bias, and contenteditable=false boundary audit
+- `docs/editor-dom-dirty-range-policy-audit.md`: DOM dirty range, leaf-only
+  reparse, and model diff restore policy audit
+- `docs/editor-contentdom-stability-audit.md`: contentDOM stability, render
+  surface integrity, and decoration placement audit
+- `docs/editor-custom-view-mutation-policy-audit.md`: custom view mutation
+  ignore vs selection ownership policy audit
+- `docs/editor-shadow-selection-fallback-audit.md`: ShadowRoot selection and
+  Safari fallback policy audit
+- `docs/editor-root-context-policy-audit.md`: document, ShadowRoot, iframe,
+  popup, selection, clipboard, geometry, and overlay root policy audit
+- `docs/editor-scroll-focus-policy-audit.md`: scroll reveal and focus
+  preventScroll policy audit
+- `docs/editor-focus-selectionchange-race-audit.md`: focus, blur,
+  selectionchange, stale DOM selection, and scroll race audit
+- `docs/editor-custom-selection-handoff-audit.md`: custom node selection owner
+  handoff audit
+- `docs/editor-nested-editable-handoff-policy-audit.md`: nested editable,
+  caption, iframe, focus, selection, and clipboard handoff policy audit
+- `docs/editor-widget-decoration-lifecycle-audit.md`: widget-like DOM identity,
+  key, and destroy lifecycle audit
+- `docs/editor-decoration-boundary-composition-audit.md`: decoration, widget,
+  mark boundary, composition, and cursor policy audit
+- `docs/editor-cursor-geometry-audit.md`: cursor geometry adapter audit
+- `docs/editor-css-layout-geometry-policy-audit.md`: CSS layout, transform,
+  zoom, and overlay geometry policy audit
+- `docs/editor-model-command-surface-audit.md`: headless model command surface
+  audit
+- `docs/editor-history-grouping-audit.md`: undo unit and history grouping audit
+- `docs/editor-composition-history-policy-audit.md`: IME composition,
+  native buffer flush, and undo/redo grouping policy audit
+- `docs/editor-public-surface-audit.md`: public headless and React editor
+  surface audit
+- `docs/editor-read-only-policy-audit.md`: React read-only mutation policy audit
+- `docs/editor-read-only-selection-clipboard-policy-audit.md`: read-only and
+  noneditable selection/copy/cut policy audit
+- `docs/editor-toolbar-command-audit.md`: React toolbar command bridge audit
+- `docs/editor-popup-ime-selection-policy-audit.md`: popup, toolbar, IME, and
+  selection ownership policy audit
+- `docs/editor-debug-recorder-audit.md`: internal debug recorder certainty audit
+- `docs/editor-verification-gate-audit.md`: internal verification gate audit
+- `docs/editor-ime-trace-replay-audit.md`: internal IME trace replay audit
+- `docs/editor-ime-signal-policy-audit.md`: IME signal trust,
+  compositionend data, and keyCode 229 policy audit
+- `docs/editor-composition-render-update-policy-audit.md`: composition-time
+  render, decoration, and remote update policy audit
+- `docs/editor-style-surface-audit.md`: editor style surface certainty audit
+- `docs/editor-whitespace-css-policy-audit.md`: text block white-space and
+  Gecko hack-node policy audit
+- `docs/editor-app-route-embedding-audit.md`: app route editor embedding audit
+- `docs/editor-package-surface-audit.md`: package script and dependency audit
+- `docs/editor-static-assets-audit.md`: public static asset and starter residue
+  audit
+- `docs/editor-root-config-audit.md`: root config and scaffold residue audit
+- `docs/editor-internal-module-surface-audit.md`: internal module surface and
+  import direction audit
+- `docs/editor-public-export-audit.md`: public facade export certainty audit
+- `docs/editor-public-schema-audit.md`: public document schema validation audit
+- `docs/editor-public-type-export-audit.md`: public type-only export audit
+- `docs/editor-git-rename-audit.md`: current legacy-to-internal editor tree
+  rename/refactor audit
+- `docs/editor-visual-selection-audit.md`: functional selection overlay vs
+  visual styling audit
 
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+Keep implementation status out of the design document. Use executable tests,
+`docs/editor-issues.md`, and audit docs for coverage claims. Run
+`pnpm run verify:docs` to keep this section aligned with top-level docs. It also
+requires the `## 증거 강도` heading in every `docs/editor-*.md` file.

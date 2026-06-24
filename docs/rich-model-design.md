@@ -38,6 +38,10 @@ This keeps cursor offsets over visible text and atoms, not delimiter syntax.
 
 ## Schema Shape
 
+This section is the design shape, not the exact persisted schema contract.
+The current source of truth for concrete fields and validation is
+`src/editor/internal/model/noteDocument.ts`.
+
 ```ts
 type Mark =
   | { type: "bold"; attrs?: Record<string, JSONValue> }
@@ -193,17 +197,27 @@ Keep `contenteditable`, but reduce its authority.
 - DOM mutation outside the active text leaf is prevented or reverted.
 - Atom and block selection is rendered by our overlay, not trusted from browser selection drawing.
 
-## Implementation Order
+Minimal native DOM contract:
 
-1. Extract `normalizeDocument(document)` from `textCommands.ts`.
-2. Add structured marks to text nodes and make mark normalization canonical.
-3. Replace ED-012 Markdown-source behavior with Markdown import/export tests.
-4. Introduce `RichSelection` internally and map it to `SelectionSnap`.
-5. Generalize cursor stream names from atom-only edges to `EdgeCursorPoint`.
-6. Add heading/list/code block schemas without changing the cursor stream contract.
-7. Add mark commands: `toggleMark`, `setLink`, `clearMarks`.
-8. Keep figure as a block atom until editable caption is required.
-9. Move contenteditable text buffering into its own input-buffer module.
+- `beforeinput` classifies: native text-leaf path or controlled command path.
+- `input` only marks/updates the active native text leaf session.
+- composition protects one active text target until the session is released.
+- `MutationObserver` is postponed until renderer self-mutations can be ignored.
+- Do not add a generic `InputBackend` or `EditContextBackend` until there are two real backends.
+
+## Architecture Rule
+
+Keep implementation status out of this design document. Feature coverage belongs
+in `docs/editor-feature-coverage-audit.md`, `docs/editor-issues.md`, and
+executable tests. Product expectations belong in
+`docs/editor-required-feature-list.md`.
+
+The editor view should keep narrowing toward this shape:
+
+- `contentEditableViewEngine` owns native text buffering, IME phases, DOM
+  selection mapping, and text-leaf flushes.
+- `BlockEditor` wires React events, focus, toolbar controls, and rendering.
+- Model commands own document and canonical selection mutation.
 
 ## References
 

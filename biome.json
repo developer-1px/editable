@@ -9,12 +9,12 @@
     "ignoreUnknown": false,
     "includes": [
       "**/src/**/*",
+      "**/scripts/**/*.mjs",
       "**/.vscode/**/*",
       "**/index.html",
       "**/vite.config.ts",
       "!**/src/routeTree.gen.ts",
-      "!**/src/vendor/**/*",
-      "!**/src/styles.css"
+      "!**/src/vendor/**/*"
     ]
   },
   "formatter": {

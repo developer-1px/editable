@@ -1,0 +1,189 @@
+import type {
+  SelectionPoint,
+  SelectionSnap,
+} from "@interactive-os/json-document";
+import type { CSSProperties } from "react";
+import type { CursorPoint } from "../model/cursor";
+import type { CursorGeometry } from "../view/cursorGeometry";
+import { FixedViewportOverlay } from "./FixedViewportOverlay";
+
+type SelectionOverlayProps = {
+  geometry: CursorGeometry;
+  ownerDocument: Document | null;
+  selection?: SelectionSnap;
+};
+
+export function SelectionOverlay({
+  geometry,
+  ownerDocument,
+  selection,
+}: SelectionOverlayProps) {
+  if (selection === undefined) {
+    return null;
+  }
+
+  const selectedRanges = selectionRangeRects(geometry, selection);
+  const selectedRangeItems = rangeOverlayItems(selectedRanges);
+  const selectedAtoms = selectedAtomRects(geometry, selection);
+
+  return (
+    <FixedViewportOverlay
+      className="selection-overlay"
+      ownerDocument={ownerDocument}
+    >
+      {selectedRangeItems.map((item) => (
+        <div
+          className="selection-range"
+          data-overlay="selected-range"
+          key={item.key}
+          style={rectStyle(item.rect)}
+        />
+      ))}
+      {selectedAtoms.map((atom) => (
+        <div
+          className={`selection-atom selection-atom-${atom.kind}`}
+          data-overlay="selected-atom"
+          data-path={atom.path}
+          key={atom.path}
+          style={rectStyle(atom.rect)}
+        />
+      ))}
+    </FixedViewportOverlay>
+  );
+}
+
+function selectionRangeRects(
+  geometry: CursorGeometry,
+  selection: SelectionSnap,
+) {
+  const range = selection.selectionRanges[selection.primaryIndex];
+  if (range === undefined) {
+    return [];
+  }
+
+  const anchor = selectionPointToCursorPoint(range.anchor);
+  const focus = selectionPointToCursorPoint(range.focus);
+  if (anchor === null || focus === null || cursorPointsEqual(anchor, focus)) {
+    return [];
+  }
+
+  return geometry.rectsForRange(anchor, focus);
+}
+
+function rangeOverlayItems(rects: DOMRect[]) {
+  const occurrences = new Map<string, number>();
+  return rects.map((rect) => {
+    const signature = `${rect.left}:${rect.top}:${rect.width}:${rect.height}`;
+    const occurrence = occurrences.get(signature) ?? 0;
+    occurrences.set(signature, occurrence + 1);
+
+    return {
+      key: `range:${signature}:${occurrence}`,
+      rect,
+    };
+  });
+}
+
+function selectedAtomRects(geometry: CursorGeometry, selection: SelectionSnap) {
+  return selection.selectedPointers.flatMap((path) => {
+    const before = geometry.rectForPoint({ path, edge: "before" });
+    const after = geometry.rectForPoint({ path, edge: "after" });
+    if (before === null || after === null) {
+      return [];
+    }
+
+    return [
+      {
+        path,
+        kind: atomKind(path),
+        rect: unionRect(before, after),
+      },
+    ];
+  });
+}
+
+function selectionPointToCursorPoint(
+  point: SelectionPoint | null,
+): CursorPoint | null {
+  if (point === null || typeof point === "string") {
+    return null;
+  }
+
+  if (point.offset !== undefined) {
+    return {
+      path: point.path,
+      offset: point.offset,
+      ...(point.affinity !== undefined ? { affinity: point.affinity } : {}),
+    };
+  }
+
+  if (point.edge !== undefined) {
+    return {
+      path: point.path,
+      edge: point.edge,
+      ...(point.affinity !== undefined ? { affinity: point.affinity } : {}),
+    };
+  }
+
+  return null;
+}
+
+function atomKind(path: string): "figure" | "mention" {
+  return /^\/root\/children\/\d+$/.test(path) ? "figure" : "mention";
+}
+
+function cursorPointsEqual(left: CursorPoint, right: CursorPoint): boolean {
+  if ("offset" in left || "offset" in right) {
+    return (
+      "offset" in left &&
+      "offset" in right &&
+      left.path === right.path &&
+      left.offset === right.offset
+    );
+  }
+
+  return left.path === right.path && left.edge === right.edge;
+}
+
+function unionRect(left: DOMRect, right: DOMRect): DOMRect {
+  const x = Math.min(left.left, right.left);
+  const y = Math.min(left.top, right.top);
+  const maxX = Math.max(left.right, right.right);
+  const maxY = Math.max(left.bottom, right.bottom);
+
+  return makeRect(x, y, maxX - x, maxY - y);
+}
+
+function rectStyle(rect: DOMRect): CSSProperties {
+  return {
+    height: rect.height,
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+  };
+}
+
+function makeRect(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): DOMRect {
+  if (typeof DOMRect !== "undefined") {
+    return new DOMRect(x, y, width, height);
+  }
+
+  return {
+    x,
+    y,
+    width,
+    height,
+    left: x,
+    top: y,
+    right: x + width,
+    bottom: y + height,
+    toJSON() {
+      return { x, y, width, height };
+    },
+  } as DOMRect;
+}
