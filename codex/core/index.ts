@@ -12,6 +12,8 @@ export type {
   JsonContentEditableAtomRecord,
   JsonContentEditableFragment,
   JsonContentEditableOptions,
+  JsonContentEditableRelatedPath,
+  JsonContentEditableRangeRecord,
   JsonContentEditableUpdate,
 } from "./contract";
 export {

@@ -13,7 +13,7 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "Editable",
+        title: "JSON Contenteditable Core",
       },
     ],
     links: [
@@ -23,6 +23,7 @@ export const Route = createRootRoute({
       },
     ],
   }),
+  notFoundComponent: () => null,
   shellComponent: RootDocument,
 });
 

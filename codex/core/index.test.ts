@@ -3,6 +3,7 @@
 import { createJSONDocument } from "@interactive-os/json-document";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import * as PublicCore from "./index";
 import {
   createJsonContentEditable,
   JSON_ATOM_ATTRIBUTE,
@@ -29,7 +30,20 @@ const AtomDocumentSchema = z.object({
   ),
 });
 
+const RangeDocumentSchema = z.object({
+  text: z.string(),
+  marks: z.record(
+    z.string(),
+    z.object({
+      type: z.union([z.literal("bold"), z.literal("underline")]),
+      start: z.number().int().nonnegative(),
+      end: z.number().int().nonnegative(),
+    }),
+  ),
+});
+
 type TestAtomRecord = z.infer<typeof AtomDocumentSchema>["atoms"];
+type TestRangeRecord = z.infer<typeof RangeDocumentSchema>["marks"];
 
 function setup(initial = "Plain") {
   const document = createJSONDocument(
@@ -83,7 +97,84 @@ function setupAtomDocument(
   return { core, document, root, textElement };
 }
 
+function setupTrailingAtomDocument() {
+  const document = createJSONDocument(
+    AtomDocumentSchema,
+    {
+      text: `A${JSON_ATOM_REPLACEMENT}`,
+      atoms: {
+        ada: {
+          type: "mention",
+          userId: "ada",
+          label: "@Ada",
+          offset: 1,
+        },
+      },
+    },
+    { history: 20, selection: true, trustedInitial: true },
+  );
+  const root = window.document.createElement("div");
+  root.contentEditable = "true";
+  root.innerHTML = `<span ${JSON_TEXT_ATTRIBUTE}="/text">A<span ${JSON_ATOM_ATTRIBUTE}="ada" contenteditable="false">@Ada</span></span>`;
+  window.document.body.append(root);
+  const textElement = root.querySelector(`[${JSON_TEXT_ATTRIBUTE}]`);
+  if (!(textElement instanceof HTMLElement)) {
+    throw new Error("Fixture failed to create trailing atom text.");
+  }
+
+  const core = createJsonContentEditable({
+    root,
+    document,
+    atomsPath: "/atoms",
+  });
+  return { core, document, root, textElement };
+}
+
+function setupRangeDocument(
+  initial = "Hello world",
+  marks: TestRangeRecord = {
+    bold: {
+      type: "bold" as const,
+      start: 0,
+      end: 5,
+    },
+  },
+) {
+  const document = createJSONDocument(
+    RangeDocumentSchema,
+    { text: initial, marks },
+    { history: 20, selection: true, trustedInitial: true },
+  );
+  const root = window.document.createElement("div");
+  root.contentEditable = "true";
+  root.innerHTML = `<span ${JSON_TEXT_ATTRIBUTE}="/text">${initial}</span>`;
+  window.document.body.append(root);
+  const textElement = root.querySelector(`[${JSON_TEXT_ATTRIBUTE}]`);
+  if (!(textElement instanceof HTMLElement) || textElement.firstChild === null) {
+    throw new Error("Fixture failed to create range text.");
+  }
+
+  const core = createJsonContentEditable({
+    root,
+    document,
+    rangesPath: "/marks",
+  });
+  return { core, document, root, textElement, textNode: textElement.firstChild };
+}
+
 describe("codex/core json contenteditable", () => {
+  it("locks the runtime public API surface", () => {
+    expect(Object.keys(PublicCore).sort()).toEqual([
+      "JSON_ATOM_ATTRIBUTE",
+      "JSON_ATOM_REPLACEMENT",
+      "JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA",
+      "JSON_CONTENT_EDITABLE_MIME",
+      "JSON_TEXT_ATTRIBUTE",
+      "createJsonContentEditable",
+      "isJsonContentEditableFragment",
+    ]);
+  });
+
   it("syncs DOM ranges into json-document selection", () => {
     const { core, document, textNode } = setup("Plain");
 
@@ -223,6 +314,111 @@ describe("codex/core json contenteditable", () => {
     });
   });
 
+  it("moves the caret after a trailing atom for command line-end", () => {
+    const { core, document, textElement } = setupTrailingAtomDocument();
+
+    setDOMRange(textElement, 1, textElement, 1);
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowRight",
+      metaKey: true,
+    });
+    const result = core.handle(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 2,
+    });
+    expect(window.document.getSelection()?.focusOffset).toBe(2);
+  });
+
+  it("extends the selection through a trailing atom for command-shift line-end", () => {
+    const { core, document, textElement } = setupTrailingAtomDocument();
+    const textNode = textElement.firstChild;
+    if (textNode === null) {
+      throw new Error("Missing leading text node.");
+    }
+
+    setDOMRange(textNode, 0, textNode, 0);
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowRight",
+      metaKey: true,
+      shiftKey: true,
+    });
+    const result = core.handle(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(document.selection?.selectionRanges[0]).toMatchObject({
+      anchor: { path: "/text", offset: 0 },
+      focus: { path: "/text", offset: 2 },
+    });
+    expect(window.document.getSelection()?.toString()).toBe("A@Ada");
+  });
+
+  it("moves command arrows to text line boundaries instead of the whole text", () => {
+    const { core, document, textNode } = setup("One\nTwo\nThree");
+
+    setDOMRange(textNode, 5, textNode, 5);
+    expect(
+      core.handle(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "ArrowRight",
+          metaKey: true,
+        }),
+      ).ok,
+    ).toBe(true);
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 7,
+    });
+
+    setDOMRange(textNode, 5, textNode, 5);
+    expect(
+      core.handle(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "ArrowLeft",
+          metaKey: true,
+        }),
+      ).ok,
+    ).toBe(true);
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 4,
+    });
+  });
+
+  it("does not own command-arrow movement during native IME composition", () => {
+    const { core, document, textNode } = setup("Plain");
+
+    setDOMRange(textNode, 1, textNode, 1);
+    core.handle(new CompositionEvent("compositionstart", { bubbles: true }));
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowRight",
+      metaKey: true,
+    });
+    const result = core.handle(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(result.ok).toBe(true);
+    if (!result.ok || !("kind" in result)) {
+      throw new Error("Expected a contenteditable update.");
+    }
+    expect(result.kind).toBe("no-change");
+    expect(document.selection?.focus ?? null).toBe(null);
+  });
+
   it("copies selected atoms as a structured fragment with plain text fallback", () => {
     const { core, document, textElement } = setupAtomDocument();
 
@@ -301,6 +497,91 @@ describe("codex/core json contenteditable", () => {
     expect(result.ok).toBe(true);
     expect(document.value.text).toBe(`XA${JSON_ATOM_REPLACEMENT}B`);
     expect(document.value.atoms.ada.offset).toBe(2);
+  });
+
+  it("copies selected ranges as a structured fragment", () => {
+    const { core, document, textNode } = setupRangeDocument();
+
+    setDOMRange(textNode, 0, textNode, 5);
+    const clipboard = createClipboardEvent("copy");
+    const copied = core.copy(clipboard);
+    const payload = JSON.parse(
+      clipboard.clipboardData?.getData(JSON_CONTENT_EDITABLE_MIME) ?? "{}",
+    );
+
+    expect(copied.ok).toBe(true);
+    expect(clipboard.clipboardData?.getData("text/plain")).toBe("Hello");
+    expect(payload).toMatchObject({
+      schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
+      text: "Hello",
+      ranges: {
+        bold: {
+          type: "bold",
+          start: 0,
+          end: 5,
+        },
+      },
+    });
+    expect(document.clipboard.read()).toMatchObject({
+      ok: true,
+      payload,
+    });
+  });
+
+  it("pastes range fragments back into text with live range metadata", () => {
+    const { core, document, textNode } = setupRangeDocument("AB", {});
+
+    setDOMRange(textNode, 1, textNode, 1);
+    core.syncSelectionFromDOM();
+    const clipboard = createClipboardEvent("paste");
+    clipboard.clipboardData?.setData("text/plain", "Hi");
+    clipboard.clipboardData?.setData(
+      JSON_CONTENT_EDITABLE_MIME,
+      JSON.stringify({
+        schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
+        text: "Hi",
+        ranges: {
+          bold: {
+            type: "bold",
+            start: 0,
+            end: 2,
+          },
+        },
+      }),
+    );
+
+    const pasted = core.paste(clipboard);
+
+    expect(pasted.ok).toBe(true);
+    expect(document.value.text).toBe("AHiB");
+    expect(document.value.marks.bold).toMatchObject({
+      type: "bold",
+      start: 1,
+      end: 3,
+    });
+  });
+
+  it("keeps range offsets in sync when native input happens before a range", () => {
+    const { core, document, textNode } = setupRangeDocument("Hello world", {
+      bold: {
+        type: "bold",
+        start: 6,
+        end: 11,
+      },
+    });
+
+    textNode.textContent = "Big Hello world";
+    setDOMRange(textNode, 4, textNode, 4);
+    const result = core.handle(
+      new InputEvent("input", { bubbles: true, inputType: "insertText" }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(document.value.text).toBe("Big Hello world");
+    expect(document.value.marks.bold).toMatchObject({
+      start: 10,
+      end: 15,
+    });
   });
 
   it("keeps native IME composition buffered until commit", () => {

@@ -85,6 +85,19 @@ export function selectionFromPoint(point: SelectionPoint): SelectionSnap {
   return selectionFromPoints(point, point);
 }
 
+export function selectionFromPoints(
+  anchor: SelectionPoint,
+  focus: SelectionPoint,
+): SelectionSnap {
+  return {
+    selectedPointers: [],
+    selectionRanges: [{ anchor, focus }],
+    primaryIndex: 0,
+    anchor,
+    focus,
+  };
+}
+
 export function textPointFromDOMSelection(
   root: HTMLElement,
   textAttribute: string,
@@ -134,15 +147,16 @@ export function restoreDOMSelection(
     return false;
   }
 
-  const domRange = root.ownerDocument.createRange();
-  domRange.setStart(anchor.node, anchor.offset);
-  domRange.setEnd(focus.node, focus.offset);
   const domSelection = root.ownerDocument.getSelection();
   if (domSelection === null) {
     return false;
   }
+
   domSelection.removeAllRanges();
-  domSelection.addRange(domRange);
+  domSelection.collapse(anchor.node, anchor.offset);
+  if (!sameDOMPosition(anchor, focus)) {
+    domSelection.extend(focus.node, focus.offset);
+  }
   return true;
 }
 
@@ -158,19 +172,6 @@ function selectionIsCollapsed(selection: SelectionSnap): boolean {
     range === undefined ||
     sameSelectionPoint(range.anchor, range.focus)
   );
-}
-
-function selectionFromPoints(
-  anchor: SelectionPoint,
-  focus: SelectionPoint,
-): SelectionSnap {
-  return {
-    selectedPointers: [],
-    selectionRanges: [{ anchor, focus }],
-    primaryIndex: 0,
-    anchor,
-    focus,
-  };
 }
 
 function textPointFromDOMPosition(
@@ -218,4 +219,11 @@ function sameSelectionPoint(left: SelectionPoint, right: SelectionPoint): boolea
     left.offset === right.offset &&
     left.edge === right.edge
   );
+}
+
+function sameDOMPosition(
+  left: { node: Node; offset: number },
+  right: { node: Node; offset: number },
+): boolean {
+  return left.node === right.node && left.offset === right.offset;
 }
