@@ -162,7 +162,7 @@ function setupRangeDocument(
   return { core, document, root, textElement, textNode: textElement.firstChild };
 }
 
-describe("codex/core json contenteditable", () => {
+describe("contenteditable-web json-document bridge", () => {
   it("locks the runtime public API surface", () => {
     expect(Object.keys(PublicCore).sort()).toEqual([
       "JSON_ATOM_ATTRIBUTE",

@@ -27,27 +27,30 @@ import {
   createJsonContentEditable,
   isJsonContentEditableFragment,
   type JsonContentEditable,
-} from "../../codex/core";
+} from "../../packages/contenteditable-web";
 import {
-  type CodexDemoDocument,
-  codexDemoAtomsPathForTextPath,
-  codexDemoBlockActive,
-  codexDemoMarkActive,
-  codexDemoRangesPathForTextPath,
-  createCodexDemoDocument,
-  createCodexDemoValue,
+  type ContentEditableDemoDocument,
+  contentEditableDemoAtomsPathForTextPath,
+  contentEditableDemoBlockActive,
+  contentEditableDemoMarkActive,
+  contentEditableDemoRangesPathForTextPath,
+  createContentEditableDemoDocument,
+  createContentEditableDemoValue,
   createMentionFragment,
-  renderCodexDemoContent,
-  toggleCodexDemoBlock,
-  toggleCodexDemoMark,
-} from "../codex-demo/document";
+  renderContentEditableDemoContent,
+  toggleContentEditableDemoBlock,
+  toggleContentEditableDemoMark,
+} from "../contenteditable-demo/document";
 
-export const Route = createFileRoute("/codex")({ component: CodexDemo });
+export const Route = createFileRoute("/codex")({
+  component: ContentEditableDemo,
+});
 
-function CodexDemo() {
-  const document = useMemo(() => createCodexDemoDocument(), []);
+function ContentEditableDemo() {
+  const document = useMemo(() => createContentEditableDemoDocument(), []);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const coreRef = useRef<JsonContentEditable<CodexDemoDocument> | null>(null);
+  const coreRef =
+    useRef<JsonContentEditable<ContentEditableDemoDocument> | null>(null);
   const [, refreshState] = useState(0);
   const [isReady, setIsReady] = useState(false);
 
@@ -56,7 +59,7 @@ function CodexDemo() {
     if (root === null) {
       return;
     }
-    renderCodexDemoContent(root, document.value);
+    renderContentEditableDemoContent(root, document.value);
     coreRef.current?.restoreSelectionToDOM();
   }, [document]);
 
@@ -80,8 +83,8 @@ function CodexDemo() {
     coreRef.current = createJsonContentEditable({
       root,
       document,
-      atomsPath: codexDemoAtomsPathForTextPath,
-      rangesPath: codexDemoRangesPathForTextPath,
+      atomsPath: contentEditableDemoAtomsPathForTextPath,
+      rangesPath: contentEditableDemoRangesPathForTextPath,
     });
     renderEditorContent();
     setIsReady(true);
@@ -175,13 +178,13 @@ function CodexDemo() {
         if (commandSelection !== null) {
           document.selection?.restore(commandSelection);
         }
-        toggleCodexDemoBlock(document, "heading1", commandSelection);
+        toggleContentEditableDemoBlock(document, "heading1", commandSelection);
       } else if (name === "bold" || name === "underline") {
         core.flush({ intent: "range-command", label: `format ${name}` });
         if (commandSelection !== null) {
           document.selection?.restore(commandSelection);
         }
-        toggleCodexDemoMark(document, name, commandSelection);
+        toggleContentEditableDemoMark(document, name, commandSelection);
       } else if (name === "paste") {
         const internalPayload = document.clipboard.read();
         if (
@@ -202,7 +205,7 @@ function CodexDemo() {
       } else if (name === "redo") {
         core.redo();
       } else {
-        document.reset(createCodexDemoValue());
+        document.reset(createContentEditableDemoValue());
         core.reset();
       }
       refresh({ renderText: name !== "copy" });
@@ -212,21 +215,32 @@ function CodexDemo() {
 
   const selection = document.selection?.snapshot() ?? null;
   const clipboard = document.clipboard.read();
-  const isHeading = codexDemoBlockActive(document.value, selection, "heading1");
-  const isBold = codexDemoMarkActive(document.value, selection, "bold");
-  const isUnderline = codexDemoMarkActive(
+  const isHeading = contentEditableDemoBlockActive(
+    document.value,
+    selection,
+    "heading1",
+  );
+  const isBold = contentEditableDemoMarkActive(
+    document.value,
+    selection,
+    "bold",
+  );
+  const isUnderline = contentEditableDemoMarkActive(
     document.value,
     selection,
     "underline",
   );
 
   return (
-    <main className="codex-shell">
-      <section className="codex-workspace" aria-label="Codex core demo">
-        <div className="codex-main">
+    <main className="contenteditable-shell">
+      <section
+        className="contenteditable-workspace"
+        aria-label="Contenteditable demo"
+      >
+        <div className="contenteditable-main">
           <div
             aria-label="Document commands"
-            className="codex-toolbar"
+            className="contenteditable-toolbar"
             onPointerDown={handleToolbarPointerDown}
             role="toolbar"
           >
@@ -242,7 +256,7 @@ function CodexDemo() {
             <IconButton label="Mention" onClick={() => command("mention")}>
               <AtSign size={16} />
             </IconButton>
-            <span className="codex-toolbar-gap" />
+            <span className="contenteditable-toolbar-gap" />
             <IconButton
               active={isHeading}
               label="Heading 1"
@@ -264,7 +278,7 @@ function CodexDemo() {
             >
               <Underline size={16} />
             </IconButton>
-            <span className="codex-toolbar-gap" />
+            <span className="contenteditable-toolbar-gap" />
             <IconButton
               disabled={!document.canUndo().ok}
               label="Undo"
@@ -279,7 +293,7 @@ function CodexDemo() {
             >
               <Redo2 size={16} />
             </IconButton>
-            <span className="codex-toolbar-gap" />
+            <span className="contenteditable-toolbar-gap" />
             <IconButton label="Reset" onClick={() => command("reset")}>
               <RotateCcw size={16} />
             </IconButton>
@@ -287,7 +301,7 @@ function CodexDemo() {
           {/* biome-ignore lint/a11y/useSemanticElements: this demo must exercise a contenteditable host, not a textarea. */}
           <div
             aria-label="JSON document text"
-            className="codex-editor"
+            className="contenteditable-editor"
             contentEditable="plaintext-only"
             data-ready={isReady ? "true" : "false"}
             onBeforeInput={handleBeforeInput}
@@ -306,7 +320,10 @@ function CodexDemo() {
             tabIndex={0}
           />
         </div>
-        <aside className="codex-state" aria-label="JSON document state">
+        <aside
+          className="contenteditable-state"
+          aria-label="JSON document state"
+        >
           <StateBlock label="value" value={document.value} />
           <StateBlock label="selection" value={selection} />
           <StateBlock
@@ -341,7 +358,7 @@ async function readBrowserClipboardText(): Promise<string | null> {
 
 function shouldRefreshDemo(
   result:
-    | ReturnType<JsonContentEditable<CodexDemoDocument>["handle"]>
+    | ReturnType<JsonContentEditable<ContentEditableDemoDocument>["handle"]>
     | undefined,
 ): boolean {
   if (result === undefined || !result.ok) {
@@ -394,7 +411,7 @@ function IconButton({
 
 function StateBlock({ label, value }: { label: string; value: unknown }) {
   return (
-    <section className="codex-state-block">
+    <section className="contenteditable-state-block">
       <h2>{label}</h2>
       <pre>{JSON.stringify(value, null, 2)}</pre>
     </section>

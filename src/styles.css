@@ -26,12 +26,12 @@ button {
   font-weight: 700;
 }
 
-.codex-shell {
+.contenteditable-shell {
   min-height: 100vh;
   padding: 48px clamp(18px, 5vw, 64px);
 }
 
-.codex-workspace {
+.contenteditable-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
   gap: 28px;
@@ -39,18 +39,18 @@ button {
   margin: 0 auto;
 }
 
-.codex-main {
+.contenteditable-main {
   min-width: 0;
 }
 
-.codex-toolbar {
+.contenteditable-toolbar {
   display: flex;
   align-items: center;
   gap: 4px;
   margin-bottom: 18px;
 }
 
-.codex-toolbar-gap {
+.contenteditable-toolbar-gap {
   width: 10px;
 }
 
@@ -80,7 +80,7 @@ button {
   opacity: 0.42;
 }
 
-.codex-editor {
+.contenteditable-editor {
   min-height: 360px;
   outline: 0;
   border-radius: 6px;
@@ -92,20 +92,20 @@ button {
   white-space: pre-wrap;
 }
 
-.codex-editor:focus,
-.codex-editor:focus-visible {
+.contenteditable-editor:focus,
+.contenteditable-editor:focus-visible {
   box-shadow: inset 0 0 0 2px rgb(36 89 197 / 28%);
 }
 
-.codex-block {
+.contenteditable-block {
   min-height: 1.75em;
 }
 
-.codex-block + .codex-block {
+.contenteditable-block + .contenteditable-block {
   margin-top: 0.2em;
 }
 
-.codex-block-heading {
+.contenteditable-block-heading {
   font-size: 1.9rem;
   font-weight: 760;
   line-height: 1.28;
@@ -121,18 +121,18 @@ button {
   white-space: nowrap;
 }
 
-.codex-state {
+.contenteditable-state {
   display: grid;
   align-content: start;
   gap: 12px;
   min-width: 0;
 }
 
-.codex-state-block {
+.contenteditable-state-block {
   min-width: 0;
 }
 
-.codex-state-block h2 {
+.contenteditable-state-block h2 {
   margin: 0 0 5px;
   color: #6b6258;
   font-size: 0.74rem;
@@ -141,7 +141,7 @@ button {
   text-transform: uppercase;
 }
 
-.codex-state-block pre {
+.contenteditable-state-block pre {
   overflow: auto;
   max-height: 220px;
   margin: 0;
@@ -155,15 +155,15 @@ button {
 }
 
 @media (max-width: 720px) {
-  .codex-shell {
+  .contenteditable-shell {
     padding: 28px 18px;
   }
 
-  .codex-workspace {
+  .contenteditable-workspace {
     grid-template-columns: 1fr;
   }
 
-  .codex-editor {
+  .contenteditable-editor {
     min-height: 260px;
     padding: 22px;
   }

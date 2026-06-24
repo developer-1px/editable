@@ -11,7 +11,7 @@ import {
   JSON_ATOM_REPLACEMENT,
   JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
   type JsonContentEditableFragment,
-} from "../../codex/core";
+} from "../../packages/contenteditable-web";
 
 const INITIAL_MENTION_ID = "mention-ada";
 const INITIAL_TEXT = `Plain text. 한글과 日本語 IME. ${JSON_ATOM_REPLACEMENT}`;
@@ -29,42 +29,44 @@ const RichTextMarkSchema = z.object({
   end: z.number().int().nonnegative(),
 });
 
-const CodexDemoBlockSchema = z.object({
+const ContentEditableDemoBlockSchema = z.object({
   type: z.union([z.literal("paragraph"), z.literal("heading1")]),
   text: z.string(),
   atoms: z.record(z.string(), MentionAtomSchema),
   marks: z.record(z.string(), RichTextMarkSchema),
 });
 
-const CodexDemoDocumentSchema = z.object({
-  blocks: z.array(CodexDemoBlockSchema).min(1),
+const ContentEditableDemoDocumentSchema = z.object({
+  blocks: z.array(ContentEditableDemoBlockSchema).min(1),
 });
 
-export type CodexDemoDocument = z.infer<typeof CodexDemoDocumentSchema>;
-type CodexDemoBlock = z.infer<typeof CodexDemoBlockSchema>;
+export type ContentEditableDemoDocument = z.infer<
+  typeof ContentEditableDemoDocumentSchema
+>;
+type ContentEditableDemoBlock = z.infer<typeof ContentEditableDemoBlockSchema>;
 type MentionAtom = z.infer<typeof MentionAtomSchema>;
 type RichTextMark = z.infer<typeof RichTextMarkSchema>;
 export type RichTextMarkType = RichTextMark["type"];
 
-export function codexDemoTextPath(blockIndex: number): Pointer {
+export function contentEditableDemoTextPath(blockIndex: number): Pointer {
   return `/blocks/${blockIndex}/text`;
 }
 
-export function codexDemoAtomsPathForTextPath(
+export function contentEditableDemoAtomsPathForTextPath(
   textPath: Pointer,
 ): Pointer | null {
   const index = blockIndexFromTextPath(textPath);
   return index === null ? null : `/blocks/${index}/atoms`;
 }
 
-export function codexDemoRangesPathForTextPath(
+export function contentEditableDemoRangesPathForTextPath(
   textPath: Pointer,
 ): Pointer | null {
   const index = blockIndexFromTextPath(textPath);
   return index === null ? null : `/blocks/${index}/marks`;
 }
 
-export function createCodexDemoValue(): CodexDemoDocument {
+export function createContentEditableDemoValue(): ContentEditableDemoDocument {
   return {
     blocks: [
       {
@@ -84,12 +86,16 @@ export function createCodexDemoValue(): CodexDemoDocument {
   };
 }
 
-export function createCodexDemoDocument() {
-  return createJSONDocument(CodexDemoDocumentSchema, createCodexDemoValue(), {
-    history: 100,
-    selection: true,
-    trustedInitial: true,
-  });
+export function createContentEditableDemoDocument() {
+  return createJSONDocument(
+    ContentEditableDemoDocumentSchema,
+    createContentEditableDemoValue(),
+    {
+      history: 100,
+      selection: true,
+      trustedInitial: true,
+    },
+  );
 }
 
 export function createMentionFragment(): JsonContentEditableFragment {
@@ -110,9 +116,9 @@ export function createMentionFragment(): JsonContentEditableFragment {
 
 let markId = 0;
 
-export function toggleCodexDemoBlock(
-  document: JSONDocument<CodexDemoDocument>,
-  type: CodexDemoBlock["type"],
+export function toggleContentEditableDemoBlock(
+  document: JSONDocument<ContentEditableDemoDocument>,
+  type: ContentEditableDemoBlock["type"],
   selection: SelectionSnap | null,
 ): void {
   const target = blockRangeFromSelection(selection);
@@ -136,7 +142,7 @@ export function toggleCodexDemoBlock(
       ],
       {
         label: "toggle block",
-        origin: "codex-demo",
+        origin: "contenteditable-demo",
         selectionAfter: selection ?? undefined,
       },
     );
@@ -151,13 +157,13 @@ export function toggleCodexDemoBlock(
 
   document.commit([{ op: "replace", path: "/blocks", value: blocks }], {
     label: "toggle block",
-    origin: "codex-demo",
+    origin: "contenteditable-demo",
     selectionAfter,
   });
 }
 
-export function toggleCodexDemoMark(
-  document: JSONDocument<CodexDemoDocument>,
+export function toggleContentEditableDemoMark(
+  document: JSONDocument<ContentEditableDemoDocument>,
   type: RichTextMarkType,
   selection: SelectionSnap | null,
 ): void {
@@ -228,15 +234,15 @@ export function toggleCodexDemoMark(
 
   document.commit(patch, {
     label: `toggle ${type}`,
-    origin: "codex-demo",
+    origin: "contenteditable-demo",
     selectionAfter: selection ?? undefined,
   });
 }
 
-export function codexDemoBlockActive(
-  document: CodexDemoDocument,
+export function contentEditableDemoBlockActive(
+  document: ContentEditableDemoDocument,
   selection: SelectionSnap | null,
-  type: CodexDemoBlock["type"],
+  type: ContentEditableDemoBlock["type"],
 ): boolean {
   const range = blockRangeFromSelection(selection);
   if (range === null) {
@@ -252,8 +258,8 @@ export function codexDemoBlockActive(
   return false;
 }
 
-export function codexDemoMarkActive(
-  document: CodexDemoDocument,
+export function contentEditableDemoMarkActive(
+  document: ContentEditableDemoDocument,
   selection: SelectionSnap | null,
   type: RichTextMarkType,
 ): boolean {
@@ -281,17 +287,23 @@ export function codexDemoMarkActive(
   return active;
 }
 
-export function renderCodexDemoContent(
+export function renderContentEditableDemoContent(
   root: HTMLElement,
-  document: CodexDemoDocument,
+  document: ContentEditableDemoDocument,
 ): void {
   root.replaceChildren();
   document.blocks.forEach((block, blockIndex) => {
     const element = root.ownerDocument.createElement("div");
-    element.className = "codex-block";
+    element.className = "contenteditable-block";
     element.dataset.blockType = block.type;
-    element.classList.toggle("codex-block-heading", block.type === "heading1");
-    element.setAttribute("data-json-text", codexDemoTextPath(blockIndex));
+    element.classList.toggle(
+      "contenteditable-block-heading",
+      block.type === "heading1",
+    );
+    element.setAttribute(
+      "data-json-text",
+      contentEditableDemoTextPath(blockIndex),
+    );
     renderBlockContent(element, block);
     root.append(element);
   });
@@ -306,7 +318,10 @@ type BlockRange = {
 };
 type ActiveMarks = { bold: boolean; underline: boolean };
 
-function renderBlockContent(root: HTMLElement, block: CodexDemoBlock): void {
+function renderBlockContent(
+  root: HTMLElement,
+  block: ContentEditableDemoBlock,
+): void {
   const byOffset = new Map<number, [string, MentionAtom]>();
   for (const entry of Object.entries(block.atoms)) {
     byOffset.set(entry[1].offset, entry);
@@ -354,11 +369,11 @@ function renderBlockContent(root: HTMLElement, block: CodexDemoBlock): void {
 }
 
 function splitBlocksForRange(
-  blocks: ReadonlyArray<CodexDemoBlock>,
+  blocks: ReadonlyArray<ContentEditableDemoBlock>,
   range: BlockRange,
-  type: CodexDemoBlock["type"],
-): { blocks: CodexDemoBlock[]; selectionAfter: SelectionSnap } {
-  const next: CodexDemoBlock[] = [];
+  type: ContentEditableDemoBlock["type"],
+): { blocks: ContentEditableDemoBlock[]; selectionAfter: SelectionSnap } {
+  const next: ContentEditableDemoBlock[] = [];
   let selectionStart: BlockPoint | null = null;
   let selectionEnd: BlockPoint | null = null;
 
@@ -398,10 +413,10 @@ function splitBlocksForRange(
 }
 
 function forEachSelectedBlockRange(
-  blocks: ReadonlyArray<CodexDemoBlock>,
+  blocks: ReadonlyArray<ContentEditableDemoBlock>,
   range: BlockRange,
   callback: (
-    block: CodexDemoBlock,
+    block: ContentEditableDemoBlock,
     blockIndex: number,
     part: TextRange,
   ) => void,
@@ -425,11 +440,11 @@ function forEachSelectedBlockRange(
 }
 
 function sliceBlock(
-  block: CodexDemoBlock,
+  block: ContentEditableDemoBlock,
   start: number,
   end: number,
-  type: CodexDemoBlock["type"],
-): CodexDemoBlock {
+  type: ContentEditableDemoBlock["type"],
+): ContentEditableDemoBlock {
   const atoms: Record<string, MentionAtom> = {};
   for (const [id, atom] of Object.entries(block.atoms)) {
     if (start <= atom.offset && atom.offset < end) {
@@ -458,7 +473,7 @@ function sliceBlock(
   };
 }
 
-function cloneBlock(block: CodexDemoBlock): CodexDemoBlock {
+function cloneBlock(block: ContentEditableDemoBlock): ContentEditableDemoBlock {
   return {
     type: block.type,
     text: block.text,
@@ -520,11 +535,11 @@ function selectionFromRange(
   focus: BlockPoint,
 ): SelectionSnap {
   const anchorPoint = {
-    path: codexDemoTextPath(anchor.block),
+    path: contentEditableDemoTextPath(anchor.block),
     offset: anchor.offset,
   };
   const focusPoint = {
-    path: codexDemoTextPath(focus.block),
+    path: contentEditableDemoTextPath(focus.block),
     offset: focus.offset,
   };
   return {
