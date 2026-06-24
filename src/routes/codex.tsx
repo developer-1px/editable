@@ -1,11 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
   AtSign,
+  Bold,
   ClipboardPaste,
   Copy,
+  Heading1,
   Redo2,
   RotateCcw,
   Scissors,
+  Underline,
   Undo2,
 } from "lucide-react";
 import {
@@ -23,16 +26,20 @@ import {
 import {
   createJsonContentEditable,
   isJsonContentEditableFragment,
-  JSON_TEXT_ATTRIBUTE,
   type JsonContentEditable,
 } from "../../codex/core";
 import {
-  CODEX_DEMO_ATOMS_PATH,
   type CodexDemoDocument,
+  codexDemoAtomsPathForTextPath,
+  codexDemoBlockActive,
+  codexDemoMarkActive,
+  codexDemoRangesPathForTextPath,
   createCodexDemoDocument,
   createCodexDemoValue,
   createMentionFragment,
   renderCodexDemoContent,
+  toggleCodexDemoBlock,
+  toggleCodexDemoMark,
 } from "../codex-demo/document";
 
 export const Route = createFileRoute("/codex")({ component: CodexDemo });
@@ -73,7 +80,8 @@ function CodexDemo() {
     coreRef.current = createJsonContentEditable({
       root,
       document,
-      atomsPath: CODEX_DEMO_ATOMS_PATH,
+      atomsPath: codexDemoAtomsPathForTextPath,
+      rangesPath: codexDemoRangesPathForTextPath,
     });
     renderEditorContent();
     setIsReady(true);
@@ -139,7 +147,17 @@ function CodexDemo() {
 
   const command = useCallback(
     async (
-      name: "copy" | "cut" | "mention" | "paste" | "undo" | "redo" | "reset",
+      name:
+        | "bold"
+        | "copy"
+        | "cut"
+        | "h1"
+        | "mention"
+        | "paste"
+        | "redo"
+        | "reset"
+        | "underline"
+        | "undo",
     ) => {
       const core = coreRef.current;
       if (core === null) {
@@ -152,6 +170,18 @@ function CodexDemo() {
         core.cut();
       } else if (name === "mention") {
         core.pasteFragment(createMentionFragment(), commandSelection);
+      } else if (name === "h1") {
+        core.flush({ intent: "range-command", label: "format heading" });
+        if (commandSelection !== null) {
+          document.selection?.restore(commandSelection);
+        }
+        toggleCodexDemoBlock(document, "heading1", commandSelection);
+      } else if (name === "bold" || name === "underline") {
+        core.flush({ intent: "range-command", label: `format ${name}` });
+        if (commandSelection !== null) {
+          document.selection?.restore(commandSelection);
+        }
+        toggleCodexDemoMark(document, name, commandSelection);
       } else if (name === "paste") {
         const internalPayload = document.clipboard.read();
         if (
@@ -182,6 +212,13 @@ function CodexDemo() {
 
   const selection = document.selection?.snapshot() ?? null;
   const clipboard = document.clipboard.read();
+  const isHeading = codexDemoBlockActive(document.value, selection, "heading1");
+  const isBold = codexDemoMarkActive(document.value, selection, "bold");
+  const isUnderline = codexDemoMarkActive(
+    document.value,
+    selection,
+    "underline",
+  );
 
   return (
     <main className="codex-shell">
@@ -204,6 +241,28 @@ function CodexDemo() {
             </IconButton>
             <IconButton label="Mention" onClick={() => command("mention")}>
               <AtSign size={16} />
+            </IconButton>
+            <span className="codex-toolbar-gap" />
+            <IconButton
+              active={isHeading}
+              label="Heading 1"
+              onClick={() => command("h1")}
+            >
+              <Heading1 size={16} />
+            </IconButton>
+            <IconButton
+              active={isBold}
+              label="Bold"
+              onClick={() => command("bold")}
+            >
+              <Bold size={16} />
+            </IconButton>
+            <IconButton
+              active={isUnderline}
+              label="Underline"
+              onClick={() => command("underline")}
+            >
+              <Underline size={16} />
             </IconButton>
             <span className="codex-toolbar-gap" />
             <IconButton
@@ -231,7 +290,6 @@ function CodexDemo() {
             className="codex-editor"
             contentEditable="plaintext-only"
             data-ready={isReady ? "true" : "false"}
-            {...{ [JSON_TEXT_ATTRIBUTE]: "/text" }}
             onBeforeInput={handleBeforeInput}
             onCompositionEnd={handleCompositionEnd}
             onCompositionStart={handleCompositionStart}
@@ -307,11 +365,13 @@ function shouldRenderEditorText(event: Event): boolean {
 }
 
 function IconButton({
+  active,
   children,
   disabled,
   label,
   onClick,
 }: {
+  active?: boolean;
   children: React.ReactNode;
   disabled?: boolean;
   label: string;
@@ -321,6 +381,7 @@ function IconButton({
     <button
       aria-label={label}
       className="icon-button"
+      data-active={active ? "true" : "false"}
       disabled={disabled}
       onClick={onClick}
       title={label}

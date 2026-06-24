@@ -70,8 +70,8 @@ test("codex demo paste toolbar uses the command-start selection", async ({
       configurable: true,
       value: {
         readText: async () => {
-          const editor = document.querySelector(".codex-editor");
-          const textNode = editor?.firstChild;
+          const textHost = document.querySelector("[data-json-text]");
+          const textNode = textHost?.firstChild;
           if (textNode === undefined || textNode === null) {
             throw new Error("Missing codex editor text node.");
           }
@@ -107,16 +107,158 @@ test("codex demo mention copy paste preserves a live atom", async ({ page }) => 
   await expect
     .poll(() => getCodexValue(page))
     .toMatchObject({
-      text: `${ATOM}${INITIAL_MODEL}`,
+      blocks: [{ text: `${ATOM}${INITIAL_MODEL}` }],
     });
   await expect
     .poll(async () => {
       const value = await getCodexValue(page);
-      return Object.values(value.atoms as Record<string, { offset: number }>)
-        .map((atom) => atom.offset)
-        .sort((left, right) => left - right);
+      return value.blocks
+        .flatMap((block: { atoms: Record<string, { offset: number }> }) =>
+          Object.values(block.atoms),
+        )
+        .map((atom: { offset: number }) => atom.offset)
+        .sort((left: number, right: number) => left - right);
     })
     .toEqual([0, INITIAL_MODEL.indexOf(ATOM) + 1]);
+});
+
+test("codex demo command-arrow line boundaries include a trailing mention", async ({
+  page,
+}) => {
+  await selectEditorText(page, 0, 0);
+
+  await page.keyboard.press("Meta+ArrowRight");
+
+  await expectCodexSelectionOffset(page, INITIAL_MODEL.length);
+
+  await page.keyboard.press("Meta+Shift+ArrowLeft");
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const blocks = Array.from(
+          document.querySelectorAll(".codex-state-block"),
+        );
+        const selectionBlock = blocks.find(
+          (block) => block.querySelector("h2")?.textContent === "selection",
+        );
+        const selection = JSON.parse(
+          selectionBlock?.querySelector("pre")?.textContent ?? "null",
+        );
+        return selection?.selectionRanges?.[0];
+      }),
+    )
+    .toMatchObject({
+      anchor: { offset: INITIAL_MODEL.length },
+      focus: { offset: 0 },
+    });
+});
+
+test("codex demo applies heading, bold, and underline ranges", async ({
+  page,
+}) => {
+  const editor = page.getByRole("textbox", { name: "JSON document text" });
+  await selectEditorText(page, 0, 5);
+
+  await page.getByRole("button", { name: "Bold" }).click();
+  await page.getByRole("button", { name: "Underline" }).click();
+  await page.getByRole("button", { name: "Heading 1" }).click();
+
+  const blocks = editor.locator(".codex-block");
+  await expect(blocks).toHaveCount(2);
+  await expect(blocks.nth(0)).toHaveAttribute("data-block-type", "heading1");
+  await expect(blocks.nth(0)).toHaveText("Plain");
+  await expect(blocks.nth(1)).toHaveAttribute("data-block-type", "paragraph");
+  await expect(editor.locator("strong")).toContainText("Plain");
+  await expect(editor.locator("u")).toContainText("Plain");
+  await expect
+    .poll(async () => {
+      const value = await getCodexValue(page);
+      return value.blocks.map(
+        (block: {
+          type: string;
+          text: string;
+          marks: Record<string, { type: string; start: number; end: number }>;
+        }) => ({
+          type: block.type,
+          text: block.text,
+          marks: Object.values(block.marks).sort((left, right) =>
+            left.type.localeCompare(right.type),
+          ),
+        }),
+      );
+    })
+    .toEqual([
+      {
+        type: "heading1",
+        text: "Plain",
+        marks: [
+          { type: "bold", start: 0, end: 5 },
+          { type: "underline", start: 0, end: 5 },
+        ],
+      },
+      {
+        type: "paragraph",
+        text: INITIAL_MODEL.slice(5),
+        marks: [],
+      },
+    ]);
+});
+
+test("codex demo keeps DOM selection after a first mark wraps plain text", async ({
+  page,
+}) => {
+  const editor = page.getByRole("textbox", { name: "JSON document text" });
+  await selectEditorText(page, 5, 0);
+
+  await page.getByRole("button", { name: "Bold" }).click();
+
+  await expect(editor.locator("strong")).toContainText("Plain");
+  await expect.poll(() => getCodexDOMSelection(page)).toEqual({
+    anchorInEditor: true,
+    focusInEditor: true,
+    isCollapsed: false,
+    text: "Plain",
+  });
+});
+
+test("codex demo rich range copy paste preserves marks", async ({ page }) => {
+  await selectEditorText(page, 0, 5);
+  await page.getByRole("button", { name: "Bold" }).click();
+  await page.getByRole("button", { name: "Copy" }).click();
+  await selectEditorText(page, INITIAL_MODEL.length, INITIAL_MODEL.length);
+
+  await page.getByRole("button", { name: "Paste" }).click();
+
+  await expect
+    .poll(() => getCodexValue(page))
+    .toMatchObject({
+      blocks: [{ text: `${INITIAL_MODEL}Plain` }],
+    });
+  await expect
+    .poll(async () => {
+      const value = await getCodexValue(page);
+      return Object.values(
+        value.blocks[0].marks as Record<
+          string,
+          { type: string; start: number; end: number }
+        >,
+      )
+        .map((mark) => ({
+          type: mark.type,
+          start: mark.start,
+          end: mark.end,
+        }))
+        .sort((left, right) => left.start - right.start);
+    })
+    .toEqual([
+      { type: "bold", start: 0, end: 5 },
+      {
+        type: "bold",
+        start: INITIAL_MODEL.length,
+        end: INITIAL_MODEL.length + 5,
+      },
+    ]);
 });
 
 test("codex demo mention cut does not let React remove browser-owned nodes", async ({
@@ -171,16 +313,59 @@ async function selectEditorText(page: Page, start: number, end: number) {
   await page.evaluate(
     ({ start, end }) => {
       const editor = document.querySelector(".codex-editor");
-      const textNode = editor?.firstChild;
-      if (textNode === undefined || textNode === null) {
-        throw new Error("Missing codex editor text node.");
+      if (editor === null) {
+        throw new Error("Missing codex editor.");
       }
-      const range = document.createRange();
-      range.setStart(textNode, start);
-      range.setEnd(textNode, end);
+      const locate = (target: number): { node: Node; offset: number } => {
+        let remaining = target;
+        const visit = (node: Node): { node: Node; offset: number } | null => {
+          if (
+            node instanceof HTMLElement &&
+            node.hasAttribute("data-json-atom")
+          ) {
+            const parent = node.parentNode;
+            if (parent === null) {
+              return null;
+            }
+            const index = Array.from(parent.childNodes).indexOf(node);
+            if (remaining <= 0) {
+              return { node: parent, offset: index };
+            }
+            if (remaining <= 1) {
+              return { node: parent, offset: index + 1 };
+            }
+            remaining -= 1;
+            return null;
+          }
+          if (node.nodeType === Node.TEXT_NODE) {
+            const length = node.textContent?.length ?? 0;
+            if (remaining <= length) {
+              return { node, offset: remaining };
+            }
+            remaining -= length;
+            return null;
+          }
+          for (const child of Array.from(node.childNodes)) {
+            const found = visit(child);
+            if (found !== null) {
+              return found;
+            }
+          }
+          return null;
+        };
+        return (
+          visit(editor) ?? {
+            node: editor,
+            offset: editor.childNodes.length,
+          }
+        );
+      };
+      const anchor = locate(start);
+      const focus = locate(end);
       const selection = window.getSelection();
       selection?.removeAllRanges();
-      selection?.addRange(range);
+      selection?.collapse(anchor.node, anchor.offset);
+      selection?.extend(focus.node, focus.offset);
     },
     { start, end },
   );
@@ -224,8 +409,12 @@ async function expectCodexValue(page: Page, text: string) {
         const valueBlock = blocks.find(
           (block) => block.querySelector("h2")?.textContent === "value",
         );
-        return JSON.parse(valueBlock?.querySelector("pre")?.textContent ?? "{}")
-          .text;
+        const value = JSON.parse(
+          valueBlock?.querySelector("pre")?.textContent ?? "{}",
+        );
+        return value.blocks
+          ?.map((block: { text: string }) => block.text)
+          .join("");
       }),
     )
     .toBe(text);
@@ -238,6 +427,27 @@ async function getCodexValue(page: Page) {
       (block) => block.querySelector("h2")?.textContent === "value",
     );
     return JSON.parse(valueBlock?.querySelector("pre")?.textContent ?? "{}");
+  });
+}
+
+async function getCodexDOMSelection(page: Page) {
+  return page.evaluate(() => {
+    const editor = document.querySelector(".codex-editor");
+    const selection = window.getSelection();
+    return {
+      anchorInEditor:
+        editor !== null &&
+        selection?.anchorNode !== null &&
+        selection?.anchorNode !== undefined &&
+        editor.contains(selection.anchorNode),
+      focusInEditor:
+        editor !== null &&
+        selection?.focusNode !== null &&
+        selection?.focusNode !== undefined &&
+        editor.contains(selection.focusNode),
+      isCollapsed: selection?.isCollapsed ?? true,
+      text: selection?.toString() ?? "",
+    };
   });
 }
 

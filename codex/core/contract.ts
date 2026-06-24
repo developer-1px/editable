@@ -17,10 +17,15 @@ export const JSON_CONTENT_EDITABLE_MIME =
 export type JsonContentEditableOptions<T> = {
   root: HTMLElement;
   document: JSONDocument<T>;
-  atomsPath?: Pointer | null;
+  atomsPath?: JsonContentEditableRelatedPath | null;
+  rangesPath?: JsonContentEditableRelatedPath | null;
   atomAttribute?: string;
   textAttribute?: string;
 };
+
+export type JsonContentEditableRelatedPath =
+  | Pointer
+  | ((textPath: Pointer) => Pointer | null);
 
 export type JsonContentEditableAtomRecord = {
   offset: number;
@@ -31,6 +36,13 @@ export type JsonContentEditableFragment = {
   schema: typeof JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA;
   text: string;
   atoms?: Record<string, JsonContentEditableAtomRecord>;
+  ranges?: Record<string, JsonContentEditableRangeRecord>;
+};
+
+export type JsonContentEditableRangeRecord = {
+  start: number;
+  end: number;
+  [key: string]: unknown;
 };
 
 export type FlushOptions = {

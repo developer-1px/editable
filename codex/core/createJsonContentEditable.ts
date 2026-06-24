@@ -11,6 +11,7 @@ import type {
   JsonContentEditable,
   JsonContentEditableFragment,
   JsonContentEditableOptions,
+  JsonContentEditableRelatedPath,
   JsonContentEditableUpdate,
 } from "./contract";
 import {
@@ -30,12 +31,20 @@ import {
   findElementByAttribute,
 } from "./internal/domText";
 import { readString } from "./internal/jsonDocument";
-import { historyCommandFromKey } from "./internal/keyboard";
+import {
+  historyCommandFromKey,
+  lineBoundaryCommandFromKey,
+} from "./internal/keyboard";
+import {
+  rangeReplacementPatches,
+  rangeSyncPatchesFromTextChange,
+} from "./internal/ranges";
 import {
   chooseSelection,
   restoreDOMSelection,
   selectionFromDOM,
   selectionFromPoint,
+  selectionFromPoints,
   textPointFromDOMSelection,
 } from "./internal/selection";
 import { changedRegionEnd } from "./internal/textDiff";
@@ -51,6 +60,7 @@ export function createJsonContentEditable<T>({
   atomAttribute = JSON_ATOM_ATTRIBUTE,
   atomsPath = null,
   document,
+  rangesPath = null,
   root,
   textAttribute = JSON_TEXT_ATTRIBUTE,
 }: JsonContentEditableOptions<T>): JsonContentEditable<T> {
@@ -141,12 +151,22 @@ export function createJsonContentEditable<T>({
 
     const atomSyncPatch = atomSyncPatchesFromDOM(
       document,
-      atomsPath,
+      relatedPath(atomsPath, path),
       textElement,
       atomAttribute,
     );
+    const rangeSyncPatch = rangeSyncPatchesFromTextChange({
+      document,
+      nextText,
+      previousText: current.value,
+      rangesPath: relatedPath(rangesPath, path),
+    });
 
-    if (current.value === nextText && atomSyncPatch.length === 0) {
+    if (
+      current.value === nextText &&
+      atomSyncPatch.length === 0 &&
+      rangeSyncPatch.length === 0
+    ) {
       document.selection?.restore(selectionAfter);
       lease = null;
       return {
@@ -160,6 +180,7 @@ export function createJsonContentEditable<T>({
     const patch: JSONPatchOperation[] = [
       { op: "replace", path, value: nextText },
       ...atomSyncPatch,
+      ...rangeSyncPatch,
     ];
     const commit = document.commit(patch, {
       label: options.label ?? "contenteditable text",
@@ -187,10 +208,16 @@ export function createJsonContentEditable<T>({
   const copy = (event?: ClipboardEvent): ClipboardUpdate<T> => {
     flush({ intent: "range-command", label: "copy selection" });
     const selection = document.selection?.snapshot() ?? null;
+    const selectionPath = textPathFromSelection(selection);
     const fragment =
       selection === null
         ? null
-        : selectedFragment(document, selection, atomsPath);
+        : selectedFragment(
+            document,
+            selection,
+            relatedPath(atomsPath, selectionPath),
+            relatedPath(rangesPath, selectionPath),
+          );
     if (fragment !== null) {
       writeBrowserClipboard(event, fragment.plainText, fragment.payload);
       document.clipboard.write(fragment.payload, { trustedPayload: true });
@@ -219,18 +246,29 @@ export function createJsonContentEditable<T>({
       const textPatch = document.selection?.textPatch("");
       if (textPatch?.ok) {
         const selection = document.selection?.snapshot() ?? null;
+        const selectionPath = textPathFromSelection(selection);
         const atomPatch = atomReplacementPatches({
-          atomsPath,
+          atomsPath: relatedPath(atomsPath, selectionPath),
           document,
           insertedAtoms: null,
           insertedTextLength: 0,
           selection,
         });
-        const commit = document.commit([...textPatch.patch, ...atomPatch], {
-          label: "cut text",
-          origin: "contenteditable",
-          selectionAfter: textPatch.selection,
+        const rangePatch = rangeReplacementPatches({
+          document,
+          insertedRanges: null,
+          insertedTextLength: 0,
+          rangesPath: relatedPath(rangesPath, selectionPath),
+          selection,
         });
+        const commit = document.commit(
+          [...textPatch.patch, ...atomPatch, ...rangePatch],
+          {
+            label: "cut text",
+            origin: "contenteditable",
+            selectionAfter: textPatch.selection,
+          },
+        );
         result = commit.ok
           ? { ok: true, value: document.value }
           : {
@@ -296,23 +334,35 @@ export function createJsonContentEditable<T>({
           : null;
         const replacementText = fragment?.text ?? clipboardText;
         const insertedAtoms = fragment?.atoms ?? null;
+        const insertedRanges = fragment?.ranges ?? null;
 
         if (replacementText.length > 0 && document.selection !== undefined) {
           const selection = document.selection.snapshot();
+          const selectionPath = textPathFromSelection(selection);
           const textPatch = document.selection.textPatch(replacementText);
           if (textPatch.ok) {
             const atomPatch = atomReplacementPatches({
-              atomsPath,
+              atomsPath: relatedPath(atomsPath, selectionPath),
               document,
               insertedAtoms,
               insertedTextLength: replacementText.length,
               selection,
             });
-            const commit = document.commit([...textPatch.patch, ...atomPatch], {
-              label: "paste text",
-              origin: "contenteditable",
-              selectionAfter: textPatch.selection,
+            const rangePatch = rangeReplacementPatches({
+              document,
+              insertedRanges,
+              insertedTextLength: replacementText.length,
+              rangesPath: relatedPath(rangesPath, selectionPath),
+              selection,
             });
+            const commit = document.commit(
+              [...textPatch.patch, ...atomPatch, ...rangePatch],
+              {
+                label: "paste text",
+                origin: "contenteditable",
+                selectionAfter: textPatch.selection,
+              },
+            );
             result = commit.ok
               ? { ok: true, value: document.value }
               : {
@@ -469,7 +519,9 @@ export function createJsonContentEditable<T>({
       }
 
       if (event.type === "keydown" && event instanceof KeyboardEvent) {
-        if (lease?.phase === "composing" || lease?.phase === "pending-commit") {
+        const isComposing =
+          lease?.phase === "composing" || lease?.phase === "pending-commit";
+        if (isComposing) {
           const composingCommand = historyCommandFromKey(event);
           if (composingCommand !== null) {
             event.preventDefault();
@@ -480,6 +532,13 @@ export function createJsonContentEditable<T>({
               patch: [],
             };
           }
+        }
+        const lineBoundaryCommand = isComposing
+          ? null
+          : lineBoundaryCommandFromKey(event);
+        if (lineBoundaryCommand !== null) {
+          event.preventDefault();
+          return moveSelectionToLineBoundary(lineBoundaryCommand, event.shiftKey);
         }
         const command = historyCommandFromKey(event);
         if (command === "undo") {
@@ -544,6 +603,58 @@ export function createJsonContentEditable<T>({
     );
     return result;
   }
+
+  function moveSelectionToLineBoundary(
+    command: "line-start" | "line-end",
+    extend: boolean,
+  ): JsonContentEditableUpdate {
+    const currentSelection = selectionFromDOM(
+      root,
+      textAttribute,
+      atomAttribute,
+    );
+    const range =
+      currentSelection?.selectionRanges[currentSelection.primaryIndex] ??
+      null;
+    const focus = textPointFromDOMSelection(
+      root,
+      textAttribute,
+      atomAttribute,
+    );
+    if (focus === null) {
+      return {
+        ok: true,
+        kind: "no-change",
+        selection: document.selection?.snapshot() ?? null,
+        patch: [],
+      };
+    }
+
+    const currentText = readString(document, focus.path);
+    if (!currentText.ok) {
+      return {
+        ok: false,
+        code: "missing_text_path",
+        reason: `No text value found for ${focus.path}.`,
+      };
+    }
+
+    const boundary = {
+      path: focus.path,
+      offset: lineBoundaryOffset(currentText.value, focus.offset, command),
+    };
+    const anchor = extend && range !== null ? range.anchor : boundary;
+    const selection = selectionFromPoints(anchor, boundary);
+    document.selection?.restore(selection);
+    restoreDOMSelection(root, selection, textAttribute, atomAttribute);
+    lease = null;
+    return {
+      ok: true,
+      kind: "selection",
+      selection,
+      patch: [],
+    };
+  }
 }
 
 function capabilityToUpdate(result: JSONCapabilityResult): JsonContentEditableUpdate {
@@ -554,4 +665,44 @@ function capabilityToUpdate(result: JSONCapabilityResult): JsonContentEditableUp
         code: "commit_failed",
         reason: result.reason ?? "Command failed.",
       };
+}
+
+function lineBoundaryOffset(
+  text: string,
+  offset: number,
+  command: "line-start" | "line-end",
+): number {
+  const current = Math.max(0, Math.min(offset, text.length));
+  if (command === "line-start") {
+    const previousBreak = text.lastIndexOf("\n", Math.max(0, current - 1));
+    return previousBreak === -1 ? 0 : previousBreak + 1;
+  }
+  const nextBreak = text.indexOf("\n", current);
+  return nextBreak === -1 ? text.length : nextBreak;
+}
+
+function relatedPath(
+  path: JsonContentEditableRelatedPath | null,
+  textPath: Pointer | null,
+): Pointer | null {
+  if (path === null || textPath === null) {
+    return null;
+  }
+  return typeof path === "function" ? path(textPath) : path;
+}
+
+function textPathFromSelection(selection: SelectionSnap | null): Pointer | null {
+  const range =
+    selection === null
+      ? undefined
+      : selection.selectionRanges[selection.primaryIndex];
+  if (
+    range === undefined ||
+    typeof range.anchor === "string" ||
+    typeof range.focus === "string" ||
+    range.anchor.path !== range.focus.path
+  ) {
+    return null;
+  }
+  return range.anchor.path;
 }

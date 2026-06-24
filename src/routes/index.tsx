@@ -1,8 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { BlockEditor } from "../editor/react/index";
 
 export const Route = createFileRoute("/")({ component: Home });
 
 function Home() {
-  return <BlockEditor />;
+  return (
+    <main className="codex-shell">
+      <a className="home-link" href="/codex">
+        Open JSON contenteditable core demo
+      </a>
+    </main>
+  );
 }

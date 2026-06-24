@@ -12,6 +12,7 @@ import {
 } from "../contract";
 import { selectedAtoms } from "./atoms";
 import { readString } from "./jsonDocument";
+import { selectedRanges } from "./ranges";
 import { isRecord } from "./record";
 import { isTextPoint } from "./selection";
 
@@ -19,6 +20,7 @@ export function selectedFragment<T>(
   document: JSONDocument<T>,
   selection: SelectionSnap,
   atomsPath: Pointer | null,
+  rangesPath: Pointer | null,
 ): { plainText: string; payload: unknown } | null {
   const range = selection.selectionRanges[selection.primaryIndex];
   if (range === undefined) {
@@ -42,15 +44,21 @@ export function selectedFragment<T>(
   }
   const text = value.value.slice(start, end);
   const atoms = selectedAtoms(document, atomsPath, start, end);
-  if (Object.keys(atoms).length === 0) {
+  const ranges = selectedRanges(document, rangesPath, start, end);
+  if (Object.keys(atoms).length === 0 && Object.keys(ranges).length === 0) {
     return { plainText: text, payload: text };
   }
 
   const payload: JsonContentEditableFragment = {
     schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
     text,
-    atoms,
   };
+  if (Object.keys(atoms).length > 0) {
+    payload.atoms = atoms;
+  }
+  if (Object.keys(ranges).length > 0) {
+    payload.ranges = ranges;
+  }
   return {
     plainText: plainTextFromFragment(payload),
     payload,
@@ -69,7 +77,8 @@ export function isJsonContentEditableFragment(
     isRecord(value) &&
     value.schema === JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA &&
     typeof value.text === "string" &&
-    (value.atoms === undefined || isRecord(value.atoms))
+    (value.atoms === undefined || isRecord(value.atoms)) &&
+    (value.ranges === undefined || isRecord(value.ranges))
   );
 }
 
