@@ -10,7 +10,7 @@ export const JSON_TEXT_ATTRIBUTE = "data-json-text";
 export const JSON_ATOM_ATTRIBUTE = "data-json-atom";
 export const JSON_ATOM_REPLACEMENT = "\uFFFC";
 export const JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA =
-  "codex-json-contenteditable-fragment@1";
+  "json-document-contenteditable-fragment@1";
 export const JSON_CONTENT_EDITABLE_MIME =
   "application/x-json-document-fragment";
 

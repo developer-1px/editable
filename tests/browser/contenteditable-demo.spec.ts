@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
   await expect(editor).toHaveText(INITIAL_VISIBLE);
 });
 
-test("codex demo keyboard paste replaces the current DOM range", async ({
+test("contenteditable demo keyboard paste replaces the current DOM range", async ({
   browserName,
   context,
   page,
@@ -33,11 +33,11 @@ test("codex demo keyboard paste replaces the current DOM range", async ({
   await page.keyboard.press(await platformPasteShortcut(page));
 
   await expect(editor).toHaveText(PASTE_VISIBLE);
-  await expectCodexValue(page, PASTE_MODEL);
-  await expectCodexSelectionOffset(page, 5);
+  await expectContentEditableValue(page, PASTE_MODEL);
+  await expectContentEditableSelectionOffset(page, 5);
 });
 
-test("codex demo paste toolbar reads browser clipboard", async ({
+test("contenteditable demo paste toolbar reads browser clipboard", async ({
   browserName,
   context,
   page,
@@ -56,11 +56,11 @@ test("codex demo paste toolbar reads browser clipboard", async ({
   await page.getByRole("button", { name: "Paste" }).click();
 
   await expect(editor).toHaveText(PASTE_VISIBLE);
-  await expectCodexValue(page, PASTE_MODEL);
-  await expectCodexSelectionOffset(page, 5);
+  await expectContentEditableValue(page, PASTE_MODEL);
+  await expectContentEditableSelectionOffset(page, 5);
 });
 
-test("codex demo paste toolbar uses the command-start selection", async ({
+test("contenteditable demo paste toolbar uses the command-start selection", async ({
   page,
 }) => {
   const editor = page.getByRole("textbox", { name: "JSON document text" });
@@ -73,7 +73,7 @@ test("codex demo paste toolbar uses the command-start selection", async ({
           const textHost = document.querySelector("[data-json-text]");
           const textNode = textHost?.firstChild;
           if (textNode === undefined || textNode === null) {
-            throw new Error("Missing codex editor text node.");
+            throw new Error("Missing contenteditable editor text node.");
           }
           const offset = textNode.textContent?.length ?? 0;
           const range = document.createRange();
@@ -91,11 +91,11 @@ test("codex demo paste toolbar uses the command-start selection", async ({
   await page.getByRole("button", { name: "Paste" }).click();
 
   await expect(editor).toHaveText("PlPasteain text. 한글과 日本語 IME. @Ada");
-  await expectCodexValue(page, `PlPasteain text. 한글과 日本語 IME. ${ATOM}`);
-  await expectCodexSelectionOffset(page, 7);
+  await expectContentEditableValue(page, `PlPasteain text. 한글과 日本語 IME. ${ATOM}`);
+  await expectContentEditableSelectionOffset(page, 7);
 });
 
-test("codex demo mention copy paste preserves a live atom", async ({ page }) => {
+test("contenteditable demo mention copy paste preserves a live atom", async ({ page }) => {
   const editor = page.getByRole("textbox", { name: "JSON document text" });
   await selectMentionAtom(page);
 
@@ -105,13 +105,13 @@ test("codex demo mention copy paste preserves a live atom", async ({ page }) => 
 
   await expect(editor).toHaveText(`@Ada${INITIAL_VISIBLE}`);
   await expect
-    .poll(() => getCodexValue(page))
+    .poll(() => getContentEditableValue(page))
     .toMatchObject({
       blocks: [{ text: `${ATOM}${INITIAL_MODEL}` }],
     });
   await expect
     .poll(async () => {
-      const value = await getCodexValue(page);
+      const value = await getContentEditableValue(page);
       return value.blocks
         .flatMap((block: { atoms: Record<string, { offset: number }> }) =>
           Object.values(block.atoms),
@@ -122,14 +122,14 @@ test("codex demo mention copy paste preserves a live atom", async ({ page }) => 
     .toEqual([0, INITIAL_MODEL.indexOf(ATOM) + 1]);
 });
 
-test("codex demo command-arrow line boundaries include a trailing mention", async ({
+test("contenteditable demo command-arrow line boundaries include a trailing mention", async ({
   page,
 }) => {
   await selectEditorText(page, 0, 0);
 
   await page.keyboard.press("Meta+ArrowRight");
 
-  await expectCodexSelectionOffset(page, INITIAL_MODEL.length);
+  await expectContentEditableSelectionOffset(page, INITIAL_MODEL.length);
 
   await page.keyboard.press("Meta+Shift+ArrowLeft");
 
@@ -137,7 +137,7 @@ test("codex demo command-arrow line boundaries include a trailing mention", asyn
     .poll(() =>
       page.evaluate(() => {
         const blocks = Array.from(
-          document.querySelectorAll(".codex-state-block"),
+          document.querySelectorAll(".contenteditable-state-block"),
         );
         const selectionBlock = blocks.find(
           (block) => block.querySelector("h2")?.textContent === "selection",
@@ -154,7 +154,7 @@ test("codex demo command-arrow line boundaries include a trailing mention", asyn
     });
 });
 
-test("codex demo applies heading, bold, and underline ranges", async ({
+test("contenteditable demo applies heading, bold, and underline ranges", async ({
   page,
 }) => {
   const editor = page.getByRole("textbox", { name: "JSON document text" });
@@ -164,7 +164,7 @@ test("codex demo applies heading, bold, and underline ranges", async ({
   await page.getByRole("button", { name: "Underline" }).click();
   await page.getByRole("button", { name: "Heading 1" }).click();
 
-  const blocks = editor.locator(".codex-block");
+  const blocks = editor.locator(".contenteditable-block");
   await expect(blocks).toHaveCount(2);
   await expect(blocks.nth(0)).toHaveAttribute("data-block-type", "heading1");
   await expect(blocks.nth(0)).toHaveText("Plain");
@@ -173,7 +173,7 @@ test("codex demo applies heading, bold, and underline ranges", async ({
   await expect(editor.locator("u")).toContainText("Plain");
   await expect
     .poll(async () => {
-      const value = await getCodexValue(page);
+      const value = await getContentEditableValue(page);
       return value.blocks.map(
         (block: {
           type: string;
@@ -205,7 +205,7 @@ test("codex demo applies heading, bold, and underline ranges", async ({
     ]);
 });
 
-test("codex demo keeps DOM selection after a first mark wraps plain text", async ({
+test("contenteditable demo keeps DOM selection after a first mark wraps plain text", async ({
   page,
 }) => {
   const editor = page.getByRole("textbox", { name: "JSON document text" });
@@ -214,7 +214,7 @@ test("codex demo keeps DOM selection after a first mark wraps plain text", async
   await page.getByRole("button", { name: "Bold" }).click();
 
   await expect(editor.locator("strong")).toContainText("Plain");
-  await expect.poll(() => getCodexDOMSelection(page)).toEqual({
+  await expect.poll(() => getContentEditableDOMSelection(page)).toEqual({
     anchorInEditor: true,
     focusInEditor: true,
     isCollapsed: false,
@@ -222,7 +222,7 @@ test("codex demo keeps DOM selection after a first mark wraps plain text", async
   });
 });
 
-test("codex demo rich range copy paste preserves marks", async ({ page }) => {
+test("contenteditable demo rich range copy paste preserves marks", async ({ page }) => {
   await selectEditorText(page, 0, 5);
   await page.getByRole("button", { name: "Bold" }).click();
   await page.getByRole("button", { name: "Copy" }).click();
@@ -231,13 +231,13 @@ test("codex demo rich range copy paste preserves marks", async ({ page }) => {
   await page.getByRole("button", { name: "Paste" }).click();
 
   await expect
-    .poll(() => getCodexValue(page))
+    .poll(() => getContentEditableValue(page))
     .toMatchObject({
       blocks: [{ text: `${INITIAL_MODEL}Plain` }],
     });
   await expect
     .poll(async () => {
-      const value = await getCodexValue(page);
+      const value = await getContentEditableValue(page);
       return Object.values(
         value.blocks[0].marks as Record<
           string,
@@ -261,7 +261,7 @@ test("codex demo rich range copy paste preserves marks", async ({ page }) => {
     ]);
 });
 
-test("codex demo mention cut does not let React remove browser-owned nodes", async ({
+test("contenteditable demo mention cut does not let React remove browser-owned nodes", async ({
   browserName,
   context,
   page,
@@ -286,7 +286,7 @@ test("codex demo mention cut does not let React remove browser-owned nodes", asy
   );
 });
 
-test("codex demo survives when native editing removes the atom DOM before state render", async ({
+test("contenteditable demo survives when native editing removes the atom DOM before state render", async ({
   page,
 }) => {
   const errors: string[] = [];
@@ -312,9 +312,9 @@ async function selectEditorText(page: Page, start: number, end: number) {
   await page.getByRole("textbox", { name: "JSON document text" }).focus();
   await page.evaluate(
     ({ start, end }) => {
-      const editor = document.querySelector(".codex-editor");
+      const editor = document.querySelector(".contenteditable-editor");
       if (editor === null) {
-        throw new Error("Missing codex editor.");
+        throw new Error("Missing contenteditable editor.");
       }
       const locate = (target: number): { node: Node; offset: number } => {
         let remaining = target;
@@ -399,12 +399,12 @@ async function platformCutShortcut(page: Page): Promise<string> {
     : "Control+X";
 }
 
-async function expectCodexValue(page: Page, text: string) {
+async function expectContentEditableValue(page: Page, text: string) {
   await expect
     .poll(() =>
       page.evaluate(() => {
         const blocks = Array.from(
-          document.querySelectorAll(".codex-state-block"),
+          document.querySelectorAll(".contenteditable-state-block"),
         );
         const valueBlock = blocks.find(
           (block) => block.querySelector("h2")?.textContent === "value",
@@ -420,9 +420,9 @@ async function expectCodexValue(page: Page, text: string) {
     .toBe(text);
 }
 
-async function getCodexValue(page: Page) {
+async function getContentEditableValue(page: Page) {
   return page.evaluate(() => {
-    const blocks = Array.from(document.querySelectorAll(".codex-state-block"));
+    const blocks = Array.from(document.querySelectorAll(".contenteditable-state-block"));
     const valueBlock = blocks.find(
       (block) => block.querySelector("h2")?.textContent === "value",
     );
@@ -430,9 +430,9 @@ async function getCodexValue(page: Page) {
   });
 }
 
-async function getCodexDOMSelection(page: Page) {
+async function getContentEditableDOMSelection(page: Page) {
   return page.evaluate(() => {
-    const editor = document.querySelector(".codex-editor");
+    const editor = document.querySelector(".contenteditable-editor");
     const selection = window.getSelection();
     return {
       anchorInEditor:
@@ -451,7 +451,7 @@ async function getCodexDOMSelection(page: Page) {
   });
 }
 
-async function expectCodexSelectionOffset(
+async function expectContentEditableSelectionOffset(
   page: Page,
   offset: number,
 ) {
@@ -459,7 +459,7 @@ async function expectCodexSelectionOffset(
     .poll(() =>
       page.evaluate(() => {
         const blocks = Array.from(
-          document.querySelectorAll(".codex-state-block"),
+          document.querySelectorAll(".contenteditable-state-block"),
         );
         const selectionBlock = blocks.find(
           (block) => block.querySelector("h2")?.textContent === "selection",

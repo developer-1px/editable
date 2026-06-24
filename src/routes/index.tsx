@@ -4,7 +4,7 @@ export const Route = createFileRoute("/")({ component: Home });
 
 function Home() {
   return (
-    <main className="codex-shell">
+    <main className="contenteditable-shell">
       <a className="home-link" href="/codex">
         Open JSON contenteditable core demo
       </a>

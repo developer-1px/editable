@@ -1,10 +1,11 @@
-# JSON Contenteditable Core
+# JSON Document Contenteditable Web
 
 This repo is a small `@interactive-os/json-document` contenteditable bridge.
 It is not a full editor product.
 
-The core lives in `codex/core` and provides the thin layer that is hard to
-rebuild correctly:
+The package lives in `packages/contenteditable-web`, following the same naming
+shape as `../json-document/packages/contenteditable-web`. It provides the thin
+web layer that is hard to rebuild correctly:
 
 - DOM selection to `json-document` selection mapping
 - native contenteditable text and IME lease/flush
@@ -36,19 +37,20 @@ pnpm run verify:browser
 pnpm run verify:internal
 ```
 
-`test:core` runs the jsdom contract tests for the core API. `verify:browser`
+`test:core` runs the jsdom contract tests for the package API. `verify:browser`
 runs the `/codex` browser smoke tests. `verify:internal` runs TypeScript,
 Vitest, Biome, and production build checks.
 
 ## Public Surface
 
-Use `codex/core`.
+Use `packages/contenteditable-web`.
 
 The public API is intentionally small:
 
 - `createJsonContentEditable`
 - `isJsonContentEditableFragment`
 - constants for text, atom, and clipboard attributes
-- types in `codex/core/contract.ts`
+- types in `packages/contenteditable-web/contract.ts`
 
-Anything under `codex/core/internal` is private implementation detail.
+Anything under `packages/contenteditable-web/internal` is private
+implementation detail.
