@@ -12,6 +12,7 @@ import type {
   JsonContentEditableFragment,
   JsonContentEditableOptions,
   JsonContentEditableRelatedPath,
+  JsonContentEditableTextProjection,
   JsonContentEditableUpdate,
 } from "./contract";
 import {
@@ -30,6 +31,12 @@ import {
   editableTextContent,
   findElementByAttribute,
 } from "./internal/domText";
+import {
+  isLineBreakInput,
+  modelCommandUpdate,
+  nativeTextUpdate,
+  type SelectionIntent,
+} from "./internal/editFlow";
 import { readString } from "./internal/jsonDocument";
 import {
   historyCommandFromKey,
@@ -45,15 +52,20 @@ import {
   selectionFromDOM,
   selectionFromPoint,
   selectionFromPoints,
+  type TextOffsetMapper,
   textPointFromDOMSelection,
 } from "./internal/selection";
 import { changedRegionEnd } from "./internal/textDiff";
+import {
+  moveSelectionVertically,
+  type VerticalMotion,
+} from "./internal/visualSelection";
 
 export { isJsonContentEditableFragment } from "./internal/clipboard";
 
 type BrowserLease = {
   path: Pointer;
-  phase: "native" | "composing" | "pending-commit";
+  composing: boolean;
 };
 
 export function createJsonContentEditable<T>({
@@ -63,16 +75,42 @@ export function createJsonContentEditable<T>({
   rangesPath = null,
   root,
   textAttribute = JSON_TEXT_ATTRIBUTE,
+  projection = null,
+  visualLayout = null,
 }: JsonContentEditableOptions<T>): JsonContentEditable<T> {
   let lease: BrowserLease | null = null;
+  let verticalGoalX: number | null = null;
 
   const textElementForPath = (path: Pointer): HTMLElement | null =>
     findElementByAttribute(root, textAttribute, path);
 
-  const beginLeaseFromDOM = (
-    phase: BrowserLease["phase"] = "native",
-  ): BrowserLease | null => {
-    const point = textPointFromDOMSelection(root, textAttribute, atomAttribute);
+  const projectionForPath = (
+    path: Pointer | null,
+  ): JsonContentEditableTextProjection<T> | null =>
+    path === null ? null : projection?.(path) ?? null;
+
+  const offsetMapper: TextOffsetMapper = {
+    editableOffsetToDocumentOffset(path, offset) {
+      return (
+        projectionForPath(path)?.editableOffsetToDocumentOffset(offset) ??
+        offset
+      );
+    },
+    documentOffsetToEditableOffset(path, offset) {
+      return (
+        projectionForPath(path)?.documentOffsetToEditableOffset(offset) ??
+        offset
+      );
+    },
+  };
+
+  const beginLeaseFromDOM = (composing = false): BrowserLease | null => {
+    const point = textPointFromDOMSelection(
+      root,
+      textAttribute,
+      atomAttribute,
+      offsetMapper,
+    );
     if (point === null) {
       return lease;
     }
@@ -84,7 +122,7 @@ export function createJsonContentEditable<T>({
 
     lease = {
       path: point.path,
-      phase,
+      composing,
     };
     return lease;
   };
@@ -94,6 +132,7 @@ export function createJsonContentEditable<T>({
       root,
       textAttribute,
       atomAttribute,
+      offsetMapper,
     );
     if (selection !== null) {
       document.selection?.restore(selection);
@@ -101,20 +140,28 @@ export function createJsonContentEditable<T>({
     return selection;
   };
 
-  const flush = (options: FlushOptions = {}): JsonContentEditableUpdate => {
-    const intent = options.intent ?? "text-commit";
+  const readVisualLayout = () => visualLayout?.() ?? null;
+
+  const commitTextFromDOM = (
+    selectionIntent: SelectionIntent,
+    options: FlushOptions = {},
+  ): JsonContentEditableUpdate => {
+    verticalGoalX = null;
     const path =
       lease?.path ??
-      textPointFromDOMSelection(root, textAttribute, atomAttribute)?.path ??
+      textPointFromDOMSelection(
+        root,
+        textAttribute,
+        atomAttribute,
+        offsetMapper,
+      )?.path ??
       null;
     if (path === null) {
       const selection = syncSelectionFromDOM();
-      return {
-        ok: true,
+      return nativeTextUpdate({
         kind: selection === null ? "no-change" : "selection",
         selection,
-        patch: [],
-      };
+      });
     }
 
     const textElement = textElementForPath(path);
@@ -131,11 +178,15 @@ export function createJsonContentEditable<T>({
       return current;
     }
 
-    const nextText = editableTextContent(textElement, atomAttribute);
+    const editableText = editableTextContent(textElement, atomAttribute);
+    const textProjection = projectionForPath(path);
+    const nextText =
+      textProjection?.editableTextToDocumentText(editableText) ?? editableText;
     const mappedSelection = selectionFromDOM(
       root,
       textAttribute,
       atomAttribute,
+      offsetMapper,
     );
     const previousSelection = document.selection?.snapshot() ?? null;
     const derivedCaret = selectionFromPoint({
@@ -143,7 +194,7 @@ export function createJsonContentEditable<T>({
       offset: changedRegionEnd(current.value, nextText),
     });
     const selectionAfter = chooseSelection(
-      intent,
+      selectionIntent,
       mappedSelection,
       derivedCaret,
       previousSelection,
@@ -154,6 +205,9 @@ export function createJsonContentEditable<T>({
       relatedPath(atomsPath, path),
       textElement,
       atomAttribute,
+      textProjection === null
+        ? null
+        : (offset) => textProjection.editableOffsetToDocumentOffset(offset),
     );
     const rangeSyncPatch = rangeSyncPatchesFromTextChange({
       document,
@@ -169,12 +223,63 @@ export function createJsonContentEditable<T>({
     ) {
       document.selection?.restore(selectionAfter);
       lease = null;
-      return {
-        ok: true,
+      return nativeTextUpdate({
         kind: "selection",
         selection: selectionAfter,
-        patch: [],
-      };
+      });
+    }
+
+    const projectionChange =
+      textProjection?.applyTextChange?.({
+        document,
+        editableText,
+        path,
+        selection: selectionAfter,
+      }) ?? null;
+    if (projectionChange !== null) {
+      if (!projectionChange.ok) {
+        return {
+          ok: false,
+          code:
+            projectionChange.code === "commit_failed"
+              ? "commit_failed"
+              : "commit_failed",
+          reason: projectionChange.reason,
+        };
+      }
+      if (
+        projectionChange.kind === "no-change" ||
+        projectionChange.patch.length === 0
+      ) {
+        if (projectionChange.selection !== null) {
+          document.selection?.restore(projectionChange.selection);
+        }
+        lease = null;
+        return nativeTextUpdate({
+          kind: "selection",
+          selection: projectionChange.selection,
+        });
+      }
+      const commit = document.commit(projectionChange.patch, {
+        label: options.label ?? "contenteditable text",
+        mergeKey: options.mergeKey,
+        origin: "contenteditable",
+        selectionAfter: projectionChange.selection ?? undefined,
+      });
+      if (!commit.ok) {
+        return {
+          ok: false,
+          code: "commit_failed",
+          reason: commit.reason ?? commit.code,
+        };
+      }
+
+      lease = null;
+      return nativeTextUpdate({
+        kind: "text",
+        selection: projectionChange.selection,
+        patch: projectionChange.patch,
+      });
     }
 
     const patch: JSONPatchOperation[] = [
@@ -197,16 +302,21 @@ export function createJsonContentEditable<T>({
     }
 
     lease = null;
-    return {
-      ok: true,
+    return nativeTextUpdate({
       kind: "text",
       selection: selectionAfter,
       patch,
-    };
+    });
   };
 
+  const commitNativeText = (options: FlushOptions = {}): JsonContentEditableUpdate =>
+    commitTextFromDOM("text-commit", options);
+
+  const prepareModelCommand = (options: FlushOptions = {}): JsonContentEditableUpdate =>
+    commitTextFromDOM("range-command", options);
+
   const copy = (event?: ClipboardEvent): ClipboardUpdate<T> => {
-    flush({ intent: "range-command", label: "copy selection" });
+    prepareModelCommand({ label: "copy selection" });
     const selection = document.selection?.snapshot() ?? null;
     const selectionPath = textPathFromSelection(selection);
     const fragment =
@@ -308,7 +418,7 @@ export function createJsonContentEditable<T>({
     document.history.transaction(
       { label: "paste", origin: "contenteditable" },
       () => {
-        flush({ intent: "range-command", label: "flush before paste" });
+        prepareModelCommand({ label: "prepare paste" });
         if (selection !== undefined && selection !== null) {
           document.selection?.restore(selection);
         }
@@ -426,20 +536,81 @@ export function createJsonContentEditable<T>({
     return pastePayload({ clipboardText: text, jsonPayload: fragment, selection });
   };
 
+  const insertTextCommand = (
+    replacementText: string,
+    label: string,
+  ): JsonContentEditableUpdate => {
+    verticalGoalX = null;
+    const selection = syncSelectionFromDOM();
+    if (selection === null || document.selection === undefined) {
+      return modelCommandUpdate({
+        kind: "no-change",
+        render: false,
+        selection: document.selection?.snapshot() ?? null,
+      });
+    }
+
+    const selectionPath = textPathFromSelection(selection);
+    const textPatch = document.selection.textPatch(replacementText);
+    if (!textPatch.ok) {
+      return {
+        ok: false,
+        code: "commit_failed",
+        reason: textPatch.reason ?? textPatch.code,
+      };
+    }
+
+    const patch = [
+      ...textPatch.patch,
+      ...atomReplacementPatches({
+        atomsPath: relatedPath(atomsPath, selectionPath),
+        document,
+        insertedAtoms: null,
+        insertedTextLength: replacementText.length,
+        selection,
+      }),
+      ...rangeReplacementPatches({
+        document,
+        insertedRanges: null,
+        insertedTextLength: replacementText.length,
+        rangesPath: relatedPath(rangesPath, selectionPath),
+        selection,
+      }),
+    ];
+    const commit = document.commit(patch, {
+      label,
+      origin: "contenteditable",
+      selectionAfter: textPatch.selection,
+    });
+    lease = null;
+    if (!commit.ok) {
+      return {
+        ok: false,
+        code: "commit_failed",
+        reason: commit.reason ?? commit.code,
+      };
+    }
+    return modelCommandUpdate({
+      kind: "text",
+      render: true,
+      selection: textPatch.selection,
+      patch,
+    });
+  };
+
   return {
     handle(event) {
       if (event.type === "beforeinput" && event instanceof InputEvent) {
+        verticalGoalX = null;
         if (
-          (lease?.phase === "composing" || lease?.phase === "pending-commit") &&
+          lease?.composing === true &&
           (event.inputType === "historyUndo" || event.inputType === "historyRedo")
         ) {
           event.preventDefault();
-          return {
-            ok: true,
+          return nativeTextUpdate({
             kind: "no-change",
             selection: document.selection?.snapshot() ?? null,
-            patch: [],
-          };
+          });
         }
         if (event.inputType === "historyUndo") {
           event.preventDefault();
@@ -449,90 +620,104 @@ export function createJsonContentEditable<T>({
           event.preventDefault();
           return capabilityToUpdate(redo());
         }
-        beginLeaseFromDOM("native");
-        return {
-          ok: true,
+        if (isLineBreakInput(event) && !event.isComposing) {
+          event.preventDefault();
+          return insertTextCommand("\n", "insert line break");
+        }
+        beginLeaseFromDOM(false);
+        return nativeTextUpdate({
           kind: "no-change",
           selection: document.selection?.snapshot() ?? null,
-          patch: [],
-        };
+        });
       }
 
       if (event.type === "compositionstart") {
-        beginLeaseFromDOM("composing");
-        return {
-          ok: true,
+        verticalGoalX = null;
+        beginLeaseFromDOM(true);
+        return nativeTextUpdate({
           kind: "no-change",
           selection: document.selection?.snapshot() ?? null,
-          patch: [],
-        };
+        });
       }
 
       if (event.type === "compositionend") {
+        verticalGoalX = null;
         if (lease !== null) {
-          lease = { ...lease, phase: "pending-commit" };
+          lease = { ...lease, composing: false };
         }
-        return flush({ intent: "text-commit", label: "composition commit" });
+        return nativeTextUpdate({
+          kind: "no-change",
+          selection: document.selection?.snapshot() ?? null,
+        });
       }
 
       if (event.type === "input") {
+        verticalGoalX = null;
         if (event instanceof InputEvent && event.isComposing) {
-          beginLeaseFromDOM("composing");
-          return {
-            ok: true,
+          beginLeaseFromDOM(true);
+          return nativeTextUpdate({
             kind: "no-change",
             selection: document.selection?.snapshot() ?? null,
-            patch: [],
-          };
+          });
         }
-        beginLeaseFromDOM(lease?.phase === "pending-commit" ? "pending-commit" : "native");
-        return flush({
-          intent: "text-commit",
+        beginLeaseFromDOM(false);
+        return commitNativeText({
           label: "native input",
           mergeKey: lease === null ? undefined : `native:${lease.path}`,
         });
       }
 
       if (event.type === "selectionchange" || event.type === "select") {
+        verticalGoalX = null;
         const selection = syncSelectionFromDOM();
-        return {
-          ok: true,
+        return modelCommandUpdate({
           kind: selection === null ? "no-change" : "selection",
+          render: false,
           selection,
-          patch: [],
-        };
+        });
       }
 
       if (event.type === "copy" && event instanceof ClipboardEvent) {
+        verticalGoalX = null;
         event.preventDefault();
         return copy(event);
       }
 
       if (event.type === "cut" && event instanceof ClipboardEvent) {
+        verticalGoalX = null;
         event.preventDefault();
         return cut(event);
       }
 
       if (event.type === "paste" && event instanceof ClipboardEvent) {
+        verticalGoalX = null;
         event.preventDefault();
         return paste(event);
       }
 
       if (event.type === "keydown" && event instanceof KeyboardEvent) {
-        const isComposing =
-          lease?.phase === "composing" || lease?.phase === "pending-commit";
+        const isComposing = lease?.composing === true;
         if (isComposing) {
           const composingCommand = historyCommandFromKey(event);
           if (composingCommand !== null) {
             event.preventDefault();
-            return {
-              ok: true,
+            return nativeTextUpdate({
               kind: "no-change",
               selection: document.selection?.snapshot() ?? null,
-              patch: [],
-            };
+            });
           }
         }
+        const verticalMotionCommand = isComposing
+          ? null
+          : verticalMotionCommandFromKey(event);
+        if (verticalMotionCommand !== null) {
+          event.preventDefault();
+          return moveSelectionToVisualLine(
+            verticalMotionCommand,
+            event.shiftKey,
+          );
+        }
+        verticalGoalX = null;
         const lineBoundaryCommand = isComposing
           ? null
           : lineBoundaryCommandFromKey(event);
@@ -551,14 +736,14 @@ export function createJsonContentEditable<T>({
         }
       }
 
-      return {
-        ok: true,
+      return modelCommandUpdate({
         kind: "no-change",
+        render: false,
         selection: document.selection?.snapshot() ?? null,
-        patch: [],
-      };
+      });
     },
-    flush,
+    commitNativeText,
+    prepareModelCommand,
     syncSelectionFromDOM,
     restoreSelectionToDOM(selection = document.selection?.snapshot()) {
       return selection === undefined
@@ -568,6 +753,7 @@ export function createJsonContentEditable<T>({
             selection,
             textAttribute,
             atomAttribute,
+            offsetMapper,
           );
     },
     copy,
@@ -579,6 +765,7 @@ export function createJsonContentEditable<T>({
     redo,
     reset() {
       lease = null;
+      verticalGoalX = null;
     },
   };
 
@@ -589,6 +776,7 @@ export function createJsonContentEditable<T>({
       document.selection?.snapshot(),
       textAttribute,
       atomAttribute,
+      offsetMapper,
     );
     return result;
   }
@@ -600,6 +788,7 @@ export function createJsonContentEditable<T>({
       document.selection?.snapshot(),
       textAttribute,
       atomAttribute,
+      offsetMapper,
     );
     return result;
   }
@@ -612,6 +801,7 @@ export function createJsonContentEditable<T>({
       root,
       textAttribute,
       atomAttribute,
+      offsetMapper,
     );
     const range =
       currentSelection?.selectionRanges[currentSelection.primaryIndex] ??
@@ -620,14 +810,14 @@ export function createJsonContentEditable<T>({
       root,
       textAttribute,
       atomAttribute,
+      offsetMapper,
     );
     if (focus === null) {
-      return {
-        ok: true,
+      return modelCommandUpdate({
         kind: "no-change",
+        render: false,
         selection: document.selection?.snapshot() ?? null,
-        patch: [],
-      };
+      });
     }
 
     const currentText = readString(document, focus.path);
@@ -646,20 +836,70 @@ export function createJsonContentEditable<T>({
     const anchor = extend && range !== null ? range.anchor : boundary;
     const selection = selectionFromPoints(anchor, boundary);
     document.selection?.restore(selection);
-    restoreDOMSelection(root, selection, textAttribute, atomAttribute);
-    lease = null;
-    return {
-      ok: true,
-      kind: "selection",
+    restoreDOMSelection(
+      root,
       selection,
-      patch: [],
-    };
+      textAttribute,
+      atomAttribute,
+      offsetMapper,
+    );
+    lease = null;
+    return modelCommandUpdate({
+      kind: "selection",
+      render: true,
+      selection,
+    });
+  }
+
+  function moveSelectionToVisualLine(
+    direction: VerticalMotion,
+    extend: boolean,
+  ): JsonContentEditableUpdate {
+    const currentSelection =
+      selectionFromDOM(root, textAttribute, atomAttribute, offsetMapper) ??
+      document.selection?.snapshot() ??
+      null;
+    const moved = moveSelectionVertically({
+      direction,
+      extend,
+      goalX: verticalGoalX,
+      layout: readVisualLayout(),
+      selection: currentSelection,
+    });
+    if (moved === null) {
+      return modelCommandUpdate({
+        kind: "no-change",
+        render: false,
+        selection: currentSelection,
+      });
+    }
+
+    verticalGoalX = moved.goalX;
+    document.selection?.restore(moved.selection);
+    restoreDOMSelection(
+      root,
+      moved.selection,
+      textAttribute,
+      atomAttribute,
+      offsetMapper,
+    );
+    lease = null;
+    return modelCommandUpdate({
+      kind: "selection",
+      render: true,
+      selection: moved.selection,
+    });
   }
 }
 
 function capabilityToUpdate(result: JSONCapabilityResult): JsonContentEditableUpdate {
   return result.ok
-    ? { ok: true, kind: "text", selection: null, patch: [] }
+    ? modelCommandUpdate({
+        kind: "text",
+        render: true,
+        selection: null,
+        patch: [],
+      })
     : {
         ok: false,
         code: "commit_failed",
@@ -679,6 +919,21 @@ function lineBoundaryOffset(
   }
   const nextBreak = text.indexOf("\n", current);
   return nextBreak === -1 ? text.length : nextBreak;
+}
+
+function verticalMotionCommandFromKey(
+  event: KeyboardEvent,
+): "up" | "down" | null {
+  if (event.metaKey || event.altKey || event.ctrlKey) {
+    return null;
+  }
+  if (event.key === "ArrowUp") {
+    return "up";
+  }
+  if (event.key === "ArrowDown") {
+    return "down";
+  }
+  return null;
 }
 
 function relatedPath(

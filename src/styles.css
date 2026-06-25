@@ -102,23 +102,112 @@ button {
 }
 
 .contenteditable-block + .contenteditable-block {
-  margin-top: 0.2em;
+  margin-top: 0.28em;
 }
 
 .contenteditable-block-heading {
+  margin: 0.65em 0 0.1em;
   font-size: 1.9rem;
   font-weight: 760;
   line-height: 1.28;
 }
 
-.mention-chip {
+.contenteditable-block-list-item {
+  padding-left: 0;
+}
+
+.contenteditable-block-marker {
+  display: inline-flex;
+  width: 0.9em;
+  height: 0.9em;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.42em;
+  border: 1.5px solid #7d7468;
+  border-radius: 3px;
+  color: #1d3f7a;
+  font-size: 0.82em;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: -0.08em;
+  user-select: text;
+}
+
+.contenteditable-block-marker[data-checked="true"] {
+  border-color: #1d3f7a;
+  background: #e9eef8;
+}
+
+.contenteditable-text-surface {
+  display: inline;
+}
+
+.editable-syntax-marker {
+  color: #8a8176;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-weight: 650;
+}
+
+.contenteditable-block-quote {
+  color: #4c453d;
+  font-style: italic;
+}
+
+.contenteditable-block-code {
+  margin-top: 0.55em;
+  border-radius: 6px;
+  background: #eeeae1;
+  padding: 0.35em 0.55em;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.atom-chip {
   display: inline-flex;
   align-items: center;
   border-radius: 6px;
-  background: #e9eef8;
   padding: 0 0.28em;
-  color: #1d3f7a;
   white-space: nowrap;
+}
+
+.mention-chip {
+  background: #e9eef8;
+  color: #1d3f7a;
+}
+
+.tag-chip {
+  background: #edf4e6;
+  color: #315d1f;
+}
+
+.wiki-chip {
+  background: #f3ebd8;
+  color: #6a4a16;
+}
+
+.attachment-chip {
+  background: #eeeae1;
+  color: #4c453d;
+}
+
+.inline-code {
+  border-radius: 4px;
+  background: #eeeae1;
+  padding: 0.05em 0.22em;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.inline-highlight {
+  background: #fff0a8;
+  color: inherit;
+}
+
+.inline-link {
+  color: #1d3f7a;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
 }
 
 .contenteditable-state {

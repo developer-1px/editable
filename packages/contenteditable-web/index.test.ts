@@ -11,10 +11,23 @@ import {
   JSON_CONTENT_EDITABLE_MIME,
   JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
   JSON_TEXT_ATTRIBUTE,
+  type JsonContentEditableVisualLayout,
 } from "./index";
 
 const TestDocumentSchema = z.object({
   text: z.string(),
+});
+
+const MarkerDocumentSchema = z.object({
+  text: z.string(),
+  atoms: z.record(
+    z.string(),
+    z.object({
+      type: z.literal("taskMarker"),
+      label: z.string(),
+      offset: z.number().int().nonnegative(),
+    }),
+  ),
 });
 
 const AtomDocumentSchema = z.object({
@@ -62,6 +75,51 @@ function setup(initial = "Plain") {
 
   const core = createJsonContentEditable({ root, document });
   return { core, document, root, textElement, textNode: textElement.firstChild };
+}
+
+function setupMarkerDocument(initial = "Task text") {
+  const text = `${JSON_ATOM_REPLACEMENT}${initial}`;
+  const document = createJSONDocument(
+    MarkerDocumentSchema,
+    {
+      text,
+      atoms: {
+        "task-marker": {
+          type: "taskMarker",
+          label: "- [ ] ",
+          offset: 0,
+        },
+      },
+    },
+    { history: 20, selection: true, trustedInitial: true },
+  );
+  const root = window.document.createElement("div");
+  root.contentEditable = "true";
+  root.innerHTML = `<div><span ${JSON_TEXT_ATTRIBUTE}="/text"><span ${JSON_ATOM_ATTRIBUTE}="task-marker" contenteditable="false">- [ ] </span>${initial}</span></div>`;
+  window.document.body.append(root);
+  const block = root.firstElementChild;
+  const marker = root.querySelector(`[${JSON_ATOM_ATTRIBUTE}="task-marker"]`);
+  const textElement = root.querySelector(`[${JSON_TEXT_ATTRIBUTE}]`);
+  const textNode = marker?.nextSibling ?? null;
+  if (
+    !(block instanceof HTMLElement) ||
+    !(marker instanceof HTMLElement) ||
+    !(textElement instanceof HTMLElement) ||
+    textNode === null
+  ) {
+    throw new Error("Fixture failed to create marker text.");
+  }
+
+  const core = createJsonContentEditable({ root, document, atomsPath: "/atoms" });
+  return {
+    block,
+    core,
+    document,
+    marker,
+    root,
+    textElement,
+    textNode,
+  };
 }
 
 function setupAtomDocument(
@@ -162,6 +220,48 @@ function setupRangeDocument(
   return { core, document, root, textElement, textNode: textElement.firstChild };
 }
 
+function visualLine({
+  bottom,
+  endOffset,
+  index,
+  startOffset,
+  top,
+  xs,
+}: {
+  bottom: number;
+  endOffset: number;
+  index: number;
+  startOffset: number;
+  top: number;
+  xs: number[];
+}) {
+  const id = `/text:line:${index}:${startOffset}-${endOffset}`;
+  return {
+    id,
+    sourceId: id,
+    path: "/text",
+    startOffset,
+    endOffset,
+    kind: "text" as const,
+    lineIndex: index,
+    top,
+    bottom,
+    box: {
+      x: xs[0] ?? 0,
+      y: top,
+      width: (xs.at(-1) ?? 0) - (xs[0] ?? 0),
+      height: bottom - top,
+    },
+    carets: xs.map((x, offsetIndex) => ({
+      path: "/text",
+      offset: startOffset + offsetIndex,
+      x,
+      top,
+      bottom,
+    })),
+  };
+}
+
 describe("contenteditable-web json-document bridge", () => {
   it("locks the runtime public API surface", () => {
     expect(Object.keys(PublicCore).sort()).toEqual([
@@ -171,7 +271,9 @@ describe("contenteditable-web json-document bridge", () => {
       "JSON_CONTENT_EDITABLE_MIME",
       "JSON_TEXT_ATTRIBUTE",
       "createJsonContentEditable",
+      "createJsonContentEditableVisualLayoutStore",
       "isJsonContentEditableFragment",
+      "measureJsonContentEditableVisualLayout",
     ]);
   });
 
@@ -191,6 +293,93 @@ describe("contenteditable-web json-document bridge", () => {
     });
   });
 
+  it("maps generated marker atoms as selectable model characters", () => {
+    const { core, document, textElement } = setupMarkerDocument("Task text");
+
+    setDOMRange(textElement, 0, textElement, textElement.childNodes.length);
+    const selection = core.syncSelectionFromDOM();
+
+    expect(selection?.selectionRanges[0]).toMatchObject({
+      anchor: { path: "/text", offset: 0 },
+      focus: { path: "/text", offset: 10 },
+    });
+    expect(document.selection?.snapshot().selectionRanges[0]).toMatchObject({
+      anchor: { path: "/text", offset: 0 },
+      focus: { path: "/text", offset: 10 },
+    });
+  });
+
+  it("restores selections around generated marker atoms", () => {
+    const { core, textElement, textNode } = setupMarkerDocument("Task text");
+
+    const restored = core.restoreSelectionToDOM({
+      selectedPointers: [],
+      selectionRanges: [
+        {
+          anchor: { path: "/text", offset: 0 },
+          focus: { path: "/text", offset: 10 },
+        },
+      ],
+      primaryIndex: 0,
+      anchor: { path: "/text", offset: 0 },
+      focus: { path: "/text", offset: 10 },
+    });
+
+    const selection = window.document.getSelection();
+    expect(restored).toBe(true);
+    expect(selection?.anchorNode).toBe(textElement);
+    expect(selection?.anchorOffset).toBe(0);
+    expect(selection?.focusNode).toBe(textNode);
+    expect(selection?.focusOffset).toBe(9);
+  });
+
+  it("copies generated marker atoms as structured fragments", () => {
+    const { core, document, textElement } = setupMarkerDocument("Task text");
+
+    setDOMRange(textElement, 0, textElement, textElement.childNodes.length);
+    const clipboard = createClipboardEvent("copy");
+    const copied = core.copy(clipboard);
+    const payload = JSON.parse(
+      clipboard.clipboardData?.getData(JSON_CONTENT_EDITABLE_MIME) ?? "{}",
+    );
+
+    expect(copied.ok).toBe(true);
+    expect(clipboard.clipboardData?.getData("text/plain")).toBe("- [ ] Task text");
+    expect(payload).toMatchObject({
+      schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
+      text: `${JSON_ATOM_REPLACEMENT}Task text`,
+      atoms: {
+        "task-marker": {
+          type: "taskMarker",
+          label: "- [ ] ",
+          offset: 0,
+        },
+      },
+    });
+    expect(document.clipboard.read()).toMatchObject({
+      ok: true,
+      payload,
+    });
+  });
+
+  it("commits native text changes from the text surface without marker text", () => {
+    const { core, document, textNode } = setupMarkerDocument("Task text");
+
+    textNode.textContent = "New Task text";
+    setDOMRange(textNode, 3, textNode, 3);
+    const result = core.handle(
+      new InputEvent("input", { bubbles: true, inputType: "insertText" }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result).toMatchObject({ flow: "native-text", render: false });
+    expect(document.value.text).toBe(`${JSON_ATOM_REPLACEMENT}New Task text`);
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 5,
+    });
+  });
+
   it("commits native DOM text changes through json-document history", () => {
     const { core, document, textNode } = setup("Plain");
 
@@ -201,6 +390,7 @@ describe("contenteditable-web json-document bridge", () => {
     );
 
     expect(result.ok).toBe(true);
+    expect(result).toMatchObject({ flow: "native-text", render: false });
     expect(document.value.text).toBe("가Plain");
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
@@ -395,6 +585,175 @@ describe("contenteditable-web json-document bridge", () => {
       path: "/text",
       offset: 4,
     });
+  });
+
+  it("moves arrow up and down through a visual layout snapshot", () => {
+    const visualLayout: JsonContentEditableVisualLayout = {
+      lines: [
+        visualLine({
+          bottom: 10,
+          endOffset: 3,
+          index: 0,
+          startOffset: 0,
+          top: 0,
+          xs: [0, 10, 20, 30],
+        }),
+        visualLine({
+          bottom: 20,
+          endOffset: 8,
+          index: 1,
+          startOffset: 5,
+          top: 10,
+          xs: [0, 9, 18, 27],
+        }),
+      ],
+    };
+    const { document, root, textNode } = setup("abcd\nefgh");
+    const core = createJsonContentEditable({
+      root,
+      document,
+      visualLayout: () => visualLayout,
+    });
+
+    setDOMRange(textNode, 2, textNode, 2);
+    const down = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowDown",
+    });
+
+    expect(core.handle(down)).toMatchObject({
+      flow: "model-command",
+      kind: "selection",
+      render: true,
+    });
+    expect(down.defaultPrevented).toBe(true);
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 7,
+    });
+
+    const up = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowUp",
+    });
+    expect(core.handle(up)).toMatchObject({
+      flow: "model-command",
+      kind: "selection",
+      render: true,
+    });
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 2,
+    });
+  });
+
+  it("keeps the original visual x while moving through shorter lines", () => {
+    const visualLayout: JsonContentEditableVisualLayout = {
+      lines: [
+        visualLine({
+          bottom: 10,
+          endOffset: 2,
+          index: 0,
+          startOffset: 0,
+          top: 0,
+          xs: [0, 10, 20],
+        }),
+        visualLine({
+          bottom: 20,
+          endOffset: 5,
+          index: 1,
+          startOffset: 4,
+          top: 10,
+          xs: [0, 8],
+        }),
+        visualLine({
+          bottom: 30,
+          endOffset: 9,
+          index: 2,
+          startOffset: 7,
+          top: 20,
+          xs: [0, 10, 20],
+        }),
+      ],
+    };
+    const { document, root, textNode } = setup("abc\nde\nfgh");
+    const core = createJsonContentEditable({
+      root,
+      document,
+      visualLayout: () => visualLayout,
+    });
+
+    setDOMRange(textNode, 2, textNode, 2);
+    core.handle(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "ArrowDown",
+      }),
+    );
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 5,
+    });
+
+    core.handle(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "ArrowDown",
+      }),
+    );
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 9,
+    });
+  });
+
+  it("does not measure the DOM on vertical motion without a stored visual layout", () => {
+    const { core, document, textNode } = setup("first\nsecond");
+
+    setDOMRange(textNode, 2, textNode, 2);
+    core.syncSelectionFromDOM();
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowDown",
+    });
+    const result = core.handle(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(result).toMatchObject({
+      flow: "model-command",
+      kind: "no-change",
+      render: false,
+    });
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 2,
+    });
+  });
+
+  it("does not own arrow up and down during native IME composition", () => {
+    const { core, document, textNode } = setup("Plain");
+
+    setDOMRange(textNode, 1, textNode, 1);
+    core.handle(new CompositionEvent("compositionstart", { bubbles: true }));
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowDown",
+    });
+    const result = core.handle(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(result.ok).toBe(true);
+    if (!result.ok || !("kind" in result)) {
+      throw new Error("Expected a contenteditable update.");
+    }
+    expect(result.kind).toBe("no-change");
+    expect(document.selection?.focus ?? null).toBe(null);
   });
 
   it("does not own command-arrow movement during native IME composition", () => {
@@ -688,6 +1047,48 @@ describe("contenteditable-web json-document bridge", () => {
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
       offset: 2,
+    });
+  });
+
+  it("handles line breaks as a model command before native DOM mutation", () => {
+    const { core, document, textNode } = setup("안녕하세요.");
+
+    setDOMRange(textNode, 6, textNode, 6);
+    const event = new InputEvent("beforeinput", {
+      bubbles: true,
+      cancelable: true,
+      inputType: "insertParagraph",
+    });
+    const result = core.handle(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(result).toMatchObject({ flow: "model-command", render: true });
+    expect(document.value.text).toBe("안녕하세요.\n");
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 7,
+    });
+  });
+
+  it("keeps character input on the native input path", () => {
+    const { core, document, textNode } = setup("안녕하세요.");
+
+    textNode.textContent = "안녕하세요.a";
+    setDOMRange(textNode, 7, textNode, 7);
+    const result = core.handle(
+      new InputEvent("input", {
+        bubbles: true,
+        inputType: "insertText",
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result).toMatchObject({ flow: "native-text", render: false });
+    expect(document.value.text).toBe("안녕하세요.a");
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 7,
     });
   });
 

@@ -1,94 +1,208 @@
 import {
   createJSONDocument,
   type JSONDocument,
-  type JSONPatchOperation,
-  type Pointer,
   type SelectionSnap,
 } from "@interactive-os/json-document";
-import { z } from "zod";
 import {
-  JSON_ATOM_ATTRIBUTE,
-  JSON_ATOM_REPLACEMENT,
   JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
   type JsonContentEditableFragment,
+  type JsonContentEditableTextProjection,
 } from "../../packages/contenteditable-web";
+import {
+  applyRichProjectionTextChange,
+  canonicalEditableAtomAttributes,
+  canonicalEditableBlockAttributes,
+  canonicalEditableMarkAttributes,
+  createRichBlock,
+  createRichDocument,
+  createRichProjection,
+  EDITABLE_ATOM_ATTRIBUTE,
+  EDITABLE_ATOM_TYPE_ATTRIBUTE,
+  EDITABLE_BLOCK_ATTRIBUTE,
+  EDITABLE_BLOCK_TYPE_ATTRIBUTE,
+  EDITABLE_HEADING_LEVEL_ATTRIBUTE,
+  EDITABLE_MARK_ATTRIBUTE,
+  EDITABLE_TEXT_ATTRIBUTE,
+  RICH_TEXT_ATOM_REPLACEMENT,
+  type RichBlock,
+  type RichDocument,
+  type RichDocumentPlan,
+  RichDocumentSchema,
+  type RichInlineAtom,
+  type RichInlineRange,
+  type RichProjection,
+  type RichProjectionBlock,
+  type RichProjectionSpan,
+  richAtomsPathForTextPath,
+  richBlockStyleActive,
+  richInlineRangeActive,
+  richModelOffsetToProjectionOffset,
+  richProjectionBlockForTextPath,
+  richProjectionOffsetToModelOffset,
+  richProjectionTextToModelText,
+  richRangesPathForTextPath,
+  richTextPathForBlock,
+  richTextSurfaceForBlock,
+  toggleRichBlockStyleForSelection,
+  toggleRichInlineRangeForSelection,
+  toggleRichTaskListItem,
+} from "../../packages/rich-document";
 
 const INITIAL_MENTION_ID = "mention-ada";
-const INITIAL_TEXT = `Plain text. 한글과 日本語 IME. ${JSON_ATOM_REPLACEMENT}`;
+const TASK_MARKER_ID = "task-marker-block-4";
+const INITIAL_TEXT = `Plain text. 한글과 日本語 IME. ${RICH_TEXT_ATOM_REPLACEMENT}`;
+const RICH_PARAGRAPH_TEXT = `Ranges can mix bold, italic, underline, code, highlight, and a link beside ${RICH_TEXT_ATOM_REPLACEMENT} and ${RICH_TEXT_ATOM_REPLACEMENT}.`;
+const TASK_TEXT = `${RICH_TEXT_ATOM_REPLACEMENT}Keep the DOM bridge tiny and the model commands headless.`;
+const QUOTE_TEXT = "The browser proves the path; the model owns the state.";
+const ATTACHMENT_TEXT = `Atoms stay alive across copy and paste: ${RICH_TEXT_ATOM_REPLACEMENT}`;
 
-const MentionAtomSchema = z.object({
-  type: z.literal("mention"),
-  userId: z.string(),
-  label: z.string(),
-  offset: z.number().int().nonnegative(),
-});
+export type ContentEditableDemoDocument = RichDocument;
+export type RichTextMarkType = "bold" | "underline";
 
-const RichTextMarkSchema = z.object({
-  type: z.union([z.literal("bold"), z.literal("underline")]),
-  start: z.number().int().nonnegative(),
-  end: z.number().int().nonnegative(),
-});
-
-const ContentEditableDemoBlockSchema = z.object({
-  type: z.union([z.literal("paragraph"), z.literal("heading1")]),
-  text: z.string(),
-  atoms: z.record(z.string(), MentionAtomSchema),
-  marks: z.record(z.string(), RichTextMarkSchema),
-});
-
-const ContentEditableDemoDocumentSchema = z.object({
-  blocks: z.array(ContentEditableDemoBlockSchema).min(1),
-});
-
-export type ContentEditableDemoDocument = z.infer<
-  typeof ContentEditableDemoDocumentSchema
->;
-type ContentEditableDemoBlock = z.infer<typeof ContentEditableDemoBlockSchema>;
-type MentionAtom = z.infer<typeof MentionAtomSchema>;
-type RichTextMark = z.infer<typeof RichTextMarkSchema>;
-export type RichTextMarkType = RichTextMark["type"];
-
-export function contentEditableDemoTextPath(blockIndex: number): Pointer {
-  return `/blocks/${blockIndex}/text`;
-}
-
-export function contentEditableDemoAtomsPathForTextPath(
-  textPath: Pointer,
-): Pointer | null {
-  const index = blockIndexFromTextPath(textPath);
-  return index === null ? null : `/blocks/${index}/atoms`;
-}
-
-export function contentEditableDemoRangesPathForTextPath(
-  textPath: Pointer,
-): Pointer | null {
-  const index = blockIndexFromTextPath(textPath);
-  return index === null ? null : `/blocks/${index}/marks`;
-}
+export const contentEditableDemoTextPath = richTextPathForBlock;
+export const contentEditableDemoAtomsPathForTextPath = richAtomsPathForTextPath;
+export const contentEditableDemoRangesPathForTextPath =
+  richRangesPathForTextPath;
 
 export function createContentEditableDemoValue(): ContentEditableDemoDocument {
-  return {
+  return createRichDocument({
+    id: "contenteditable-demo",
     blocks: [
       {
-        type: "paragraph",
-        text: INITIAL_TEXT,
+        ...createRichBlock({
+          id: "block-1",
+          type: "paragraph",
+          text: INITIAL_TEXT,
+        }),
         atoms: {
           [INITIAL_MENTION_ID]: {
             type: "mention",
             userId: "ada",
             label: "@Ada",
-            offset: INITIAL_TEXT.indexOf(JSON_ATOM_REPLACEMENT),
+            offset: INITIAL_TEXT.indexOf(RICH_TEXT_ATOM_REPLACEMENT),
           },
         },
-        marks: {},
+      },
+      createRichBlock({
+        id: "block-2",
+        type: "heading",
+        level: 1,
+        text: "Rich JSON document",
+      }),
+      {
+        ...createRichBlock({
+          id: "block-3",
+          type: "paragraph",
+          text: RICH_PARAGRAPH_TEXT,
+        }),
+        atoms: {
+          "tag-core": {
+            type: "tag",
+            label: "#core",
+            target: "core",
+            offset: nthIndexOf(
+              RICH_PARAGRAPH_TEXT,
+              RICH_TEXT_ATOM_REPLACEMENT,
+              1,
+            ),
+          },
+          "wiki-canonical-html": {
+            type: "wikiLink",
+            label: "[[canonical-html]]",
+            target: "canonical-editable-html",
+            offset: nthIndexOf(
+              RICH_PARAGRAPH_TEXT,
+              RICH_TEXT_ATOM_REPLACEMENT,
+              2,
+            ),
+          },
+        },
+        ranges: {
+          "range-bold": rangeForText(RICH_PARAGRAPH_TEXT, "bold", "bold"),
+          "range-italic": rangeForText(RICH_PARAGRAPH_TEXT, "italic", "italic"),
+          "range-underline": rangeForText(
+            RICH_PARAGRAPH_TEXT,
+            "underline",
+            "underline",
+          ),
+          "range-code": rangeForText(RICH_PARAGRAPH_TEXT, "code", "code"),
+          "range-highlight": rangeForText(
+            RICH_PARAGRAPH_TEXT,
+            "highlight",
+            "highlight",
+          ),
+          "range-link": rangeForText(RICH_PARAGRAPH_TEXT, "a link", "link", {
+            href: "https://example.com/editable",
+          }),
+        },
+      },
+      {
+        ...createRichBlock({
+          id: "block-4",
+          type: "listItem",
+          listKind: "task",
+          checked: false,
+          text: TASK_TEXT,
+        }),
+        atoms: {
+          [TASK_MARKER_ID]: {
+            type: "taskMarker",
+            label: "- [ ] ",
+            checked: false,
+            offset: 0,
+          },
+        },
+        ranges: {
+          "range-task-bold": rangeForText(TASK_TEXT, "DOM bridge", "bold"),
+          "range-task-underline": rangeForText(
+            TASK_TEXT,
+            "headless",
+            "underline",
+          ),
+        },
+      },
+      {
+        ...createRichBlock({
+          id: "block-5",
+          type: "quote",
+          text: QUOTE_TEXT,
+        }),
+        ranges: {
+          "range-quote-italic": rangeForText(
+            QUOTE_TEXT,
+            "browser proves",
+            "italic",
+          ),
+        },
+      },
+      createRichBlock({
+        id: "block-6",
+        type: "code",
+        language: "ts",
+        text: "replaceRichTextRange(document, selection, fragment)",
+      }),
+      {
+        ...createRichBlock({
+          id: "block-7",
+          type: "paragraph",
+          text: ATTACHMENT_TEXT,
+        }),
+        atoms: {
+          "attachment-spec": {
+            type: "attachment",
+            label: "engine-spec.md",
+            target: "docs/engine-spec.md",
+            offset: ATTACHMENT_TEXT.indexOf(RICH_TEXT_ATOM_REPLACEMENT),
+          },
+        },
       },
     ],
-  };
+  });
 }
 
-export function createContentEditableDemoDocument() {
+export function createContentEditableDemoDocument(): JSONDocument<ContentEditableDemoDocument> {
   return createJSONDocument(
-    ContentEditableDemoDocumentSchema,
+    RichDocumentSchema,
     createContentEditableDemoValue(),
     {
       history: 100,
@@ -98,11 +212,69 @@ export function createContentEditableDemoDocument() {
   );
 }
 
+export function createContentEditableDemoProjection(
+  document: ContentEditableDemoDocument,
+  selection: SelectionSnap | null,
+  composing = false,
+): RichProjection {
+  return createRichProjection(document, selection, {
+    composing,
+    revealBlockSyntax: "selected",
+    revealInlineSyntax: "selected",
+  });
+}
+
+export function contentEditableDemoTextProjection(
+  projection: RichProjection | null,
+  path: string,
+): JsonContentEditableTextProjection<ContentEditableDemoDocument> | null {
+  if (projection === null) {
+    return null;
+  }
+  const block = richProjectionBlockForTextPath(projection, path);
+  if (block === null) {
+    return null;
+  }
+  return {
+    editableTextToDocumentText(editableText) {
+      return richProjectionTextToModelText(block, editableText);
+    },
+    editableOffsetToDocumentOffset(offset) {
+      return richProjectionOffsetToModelOffset(block, offset);
+    },
+    documentOffsetToEditableOffset(offset) {
+      return richModelOffsetToProjectionOffset(block, offset);
+    },
+    applyTextChange({ document, editableText, selection }) {
+      const result = applyRichProjectionTextChange(
+        document.value,
+        projection,
+        path,
+        editableText,
+        selection,
+      );
+      if (!result.ok) {
+        return {
+          ok: false,
+          code: "invalid_projection",
+          reason: result.reason,
+        };
+      }
+      return {
+        ok: true,
+        kind: result.kind,
+        patch: result.patch,
+        selection: result.selectionAfter,
+      };
+    },
+  };
+}
+
 export function createMentionFragment(): JsonContentEditableFragment {
   const id = `mention-${Date.now().toString(36)}`;
   return {
     schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
-    text: JSON_ATOM_REPLACEMENT,
+    text: RICH_TEXT_ATOM_REPLACEMENT,
     atoms: {
       [id]: {
         type: "mention",
@@ -114,52 +286,18 @@ export function createMentionFragment(): JsonContentEditableFragment {
   };
 }
 
-let markId = 0;
-
-export function toggleContentEditableDemoBlock(
+export function toggleContentEditableDemoHeading(
   document: JSONDocument<ContentEditableDemoDocument>,
-  type: ContentEditableDemoBlock["type"],
   selection: SelectionSnap | null,
 ): void {
-  const target = blockRangeFromSelection(selection);
-  if (target === null) {
-    return;
-  }
-
-  if (target.collapsed) {
-    const block = document.value.blocks[target.start.block];
-    if (block === undefined) {
-      return;
-    }
-    const next = block.type === type ? "paragraph" : type;
-    document.commit(
-      [
-        {
-          op: "replace",
-          path: `/blocks/${target.start.block}/type`,
-          value: next,
-        },
-      ],
-      {
-        label: "toggle block",
-        origin: "contenteditable-demo",
-        selectionAfter: selection ?? undefined,
-      },
-    );
-    return;
-  }
-
-  const { blocks, selectionAfter } = splitBlocksForRange(
-    document.value.blocks,
-    target,
-    type,
+  commitDemoPlan(
+    document,
+    toggleRichBlockStyleForSelection(document.value, selection, {
+      type: "heading",
+      level: 1,
+    }),
+    "toggle heading",
   );
-
-  document.commit([{ op: "replace", path: "/blocks", value: blocks }], {
-    label: "toggle block",
-    origin: "contenteditable-demo",
-    selectionAfter,
-  });
 }
 
 export function toggleContentEditableDemoMark(
@@ -167,95 +305,39 @@ export function toggleContentEditableDemoMark(
   type: RichTextMarkType,
   selection: SelectionSnap | null,
 ): void {
-  const range = blockRangeFromSelection(selection);
-  if (range === null || range.collapsed) {
-    return;
-  }
-
-  const patch: JSONPatchOperation[] = [];
-  let removed = false;
-  forEachSelectedBlockRange(
-    document.value.blocks,
-    range,
-    (block, blockIndex, part) => {
-      for (const [id, mark] of Object.entries(block.marks)) {
-        if (
-          mark.type !== type ||
-          mark.end <= part.start ||
-          mark.start >= part.end
-        ) {
-          continue;
-        }
-        removed = true;
-        patch.push({
-          op: "remove",
-          path: `/blocks/${blockIndex}/marks/${escapePointerSegment(id)}`,
-        });
-        if (mark.start < part.start) {
-          patch.push({
-            op: "add",
-            path: `/blocks/${blockIndex}/marks/${escapePointerSegment(`${id}-left`)}`,
-            value: { ...mark, end: part.start },
-          });
-        }
-        if (mark.end > part.end) {
-          patch.push({
-            op: "add",
-            path: `/blocks/${blockIndex}/marks/${escapePointerSegment(`${id}-right`)}`,
-            value: { ...mark, start: part.end },
-          });
-        }
-      }
-    },
+  commitDemoPlan(
+    document,
+    toggleRichInlineRangeForSelection(document.value, selection, { type }),
+    `toggle ${type}`,
   );
-
-  if (!removed) {
-    forEachSelectedBlockRange(
-      document.value.blocks,
-      range,
-      (_block, blockIndex, part) => {
-        markId += 1;
-        patch.push({
-          op: "add",
-          path: `/blocks/${blockIndex}/marks/mark-${type}-${markId.toString(36)}`,
-          value: {
-            type,
-            start: part.start,
-            end: part.end,
-          },
-        });
-      },
-    );
-  }
-
-  if (patch.length === 0) {
-    return;
-  }
-
-  document.commit(patch, {
-    label: `toggle ${type}`,
-    origin: "contenteditable-demo",
-    selectionAfter: selection ?? undefined,
-  });
 }
 
-export function contentEditableDemoBlockActive(
+export function toggleContentEditableDemoTaskMarker(
+  document: JSONDocument<ContentEditableDemoDocument>,
+  atomId: string,
+  selection: SelectionSnap | null,
+): void {
+  const block = document.value.blocks.find((candidate) =>
+    Object.hasOwn(candidate.atoms, atomId),
+  );
+  if (block === undefined) {
+    return;
+  }
+  commitDemoPlan(
+    document,
+    toggleRichTaskListItem(document.value, block.id, selection),
+    "toggle task",
+  );
+}
+
+export function contentEditableDemoHeadingActive(
   document: ContentEditableDemoDocument,
   selection: SelectionSnap | null,
-  type: ContentEditableDemoBlock["type"],
 ): boolean {
-  const range = blockRangeFromSelection(selection);
-  if (range === null) {
-    return false;
-  }
-  const start = range.start.block;
-  const end = range.collapsed ? start : range.end.block;
-  for (let index = start; index <= end; index += 1) {
-    if (document.blocks[index]?.type === type) {
-      return true;
-    }
-  }
-  return false;
+  return richBlockStyleActive(document, selection, {
+    type: "heading",
+    level: 1,
+  });
 }
 
 export function contentEditableDemoMarkActive(
@@ -263,72 +345,184 @@ export function contentEditableDemoMarkActive(
   selection: SelectionSnap | null,
   type: RichTextMarkType,
 ): boolean {
-  const range = blockRangeFromSelection(selection);
-  if (range === null || range.collapsed) {
-    return false;
-  }
-  let active = false;
-  forEachSelectedBlockRange(
-    document.blocks,
-    range,
-    (block, _blockIndex, part) => {
-      if (
-        Object.values(block.marks).some(
-          (mark) =>
-            mark.type === type &&
-            mark.start < part.end &&
-            mark.end > part.start,
-        )
-      ) {
-        active = true;
-      }
-    },
-  );
-  return active;
+  return richInlineRangeActive(document, selection, type);
 }
 
 export function renderContentEditableDemoContent(
   root: HTMLElement,
   document: ContentEditableDemoDocument,
+  projection: RichProjection = createContentEditableDemoProjection(
+    document,
+    null,
+  ),
 ): void {
   root.replaceChildren();
   document.blocks.forEach((block, blockIndex) => {
-    const element = root.ownerDocument.createElement("div");
+    const projectedBlock = projection.blocks[blockIndex];
+    if (projectedBlock === undefined) {
+      return;
+    }
+    const element = root.ownerDocument.createElement(blockElementName(block));
     element.className = "contenteditable-block";
-    element.dataset.blockType = block.type;
+    element.dataset.blockType = blockDatasetType(block);
     element.classList.toggle(
       "contenteditable-block-heading",
-      block.type === "heading1",
+      block.type === "heading",
     );
-    element.setAttribute(
-      "data-json-text",
-      contentEditableDemoTextPath(blockIndex),
+    element.classList.toggle(
+      "contenteditable-block-list-item",
+      block.type === "listItem",
     );
-    renderBlockContent(element, block);
+    element.classList.toggle(
+      "contenteditable-block-quote",
+      block.type === "quote",
+    );
+    element.classList.toggle(
+      "contenteditable-block-code",
+      block.type === "code",
+    );
+    if (block.type === "listItem") {
+      element.dataset.listKind = block.listKind;
+      element.dataset.checked = block.checked === true ? "true" : "false";
+    }
+    if (block.type === "code" && block.language !== undefined) {
+      element.dataset.language = block.language;
+    }
+    const attributes = canonicalEditableBlockAttributes(block, blockIndex);
+    for (const [attribute, value] of Object.entries(attributes)) {
+      if (attribute !== EDITABLE_TEXT_ATTRIBUTE) {
+        element.setAttribute(attribute, value);
+      }
+    }
+    renderBlockContent(element, block, projectedBlock);
     root.append(element);
   });
 }
 
-type TextRange = { start: number; end: number };
-type BlockPoint = { block: number; offset: number };
-type BlockRange = {
-  collapsed: boolean;
-  start: BlockPoint;
-  end: BlockPoint;
+export function summarizeContentEditableDemoModel(
+  document: ContentEditableDemoDocument,
+) {
+  return document.blocks.map((block, blockIndex) => ({
+    id: block.id,
+    type: blockDatasetType(block),
+    surface: richTextSurfaceForBlock(blockIndex),
+    textLength: block.text.length,
+    atoms: Object.fromEntries(
+      Object.entries(block.atoms).map(([id, atom]) => [id, atom.offset]),
+    ),
+    ranges: Object.fromEntries(
+      Object.entries(block.ranges).map(([id, range]) => [
+        id,
+        {
+          type: range.type,
+          start: range.start,
+          end: range.end,
+        },
+      ]),
+    ),
+  }));
+}
+
+export function summarizeContentEditableDemoDOM(root: HTMLElement | null) {
+  if (root === null) {
+    return [];
+  }
+  return Array.from(root.querySelectorAll(`[${EDITABLE_BLOCK_ATTRIBUTE}]`)).map(
+    (block) => ({
+      id: block.getAttribute(EDITABLE_BLOCK_ATTRIBUTE),
+      type: block.getAttribute(EDITABLE_BLOCK_TYPE_ATTRIBUTE),
+      headingLevel: block.getAttribute(EDITABLE_HEADING_LEVEL_ATTRIBUTE),
+      textPath: block
+        .querySelector(`[${EDITABLE_TEXT_ATTRIBUTE}]`)
+        ?.getAttribute(EDITABLE_TEXT_ATTRIBUTE),
+      atoms: Array.from(
+        block.querySelectorAll(`[${EDITABLE_ATOM_ATTRIBUTE}]`),
+      ).map((atom) => ({
+        id: atom.getAttribute(EDITABLE_ATOM_ATTRIBUTE),
+        type: atom.getAttribute(EDITABLE_ATOM_TYPE_ATTRIBUTE),
+        text: atom.textContent,
+      })),
+      marks: Array.from(
+        block.querySelectorAll(`[${EDITABLE_MARK_ATTRIBUTE}]`),
+      ).map((mark) => ({
+        type: mark.getAttribute(EDITABLE_MARK_ATTRIBUTE),
+        text: mark.textContent,
+      })),
+    }),
+  );
+}
+
+type ActiveMarks = {
+  bold: boolean;
+  code: boolean;
+  highlight: boolean;
+  italic: boolean;
+  linkHref: string | null;
+  strike: boolean;
+  underline: boolean;
 };
-type ActiveMarks = { bold: boolean; underline: boolean };
+
+function commitDemoPlan(
+  document: JSONDocument<ContentEditableDemoDocument>,
+  plan: RichDocumentPlan,
+  label: string,
+): void {
+  if (!plan.ok) {
+    return;
+  }
+  document.commit(plan.patch, {
+    label,
+    origin: "contenteditable-demo",
+    selectionAfter: plan.selectionAfter ?? undefined,
+  });
+}
 
 function renderBlockContent(
   root: HTMLElement,
-  block: ContentEditableDemoBlock,
+  block: RichBlock,
+  projection: RichProjectionBlock,
 ): void {
-  const byOffset = new Map<number, [string, MentionAtom]>();
-  for (const entry of Object.entries(block.atoms)) {
-    byOffset.set(entry[1].offset, entry);
+  const textSurface = root.ownerDocument.createElement("span");
+  textSurface.className = "contenteditable-text-surface";
+  textSurface.setAttribute(EDITABLE_TEXT_ATTRIBUTE, projection.textPath);
+  root.append(textSurface);
+
+  for (const span of projection.spans) {
+    if (span.kind === "syntax") {
+      appendSyntaxMarker(textSurface, span);
+      continue;
+    }
+    if (span.kind === "atom") {
+      appendAtom(textSurface, block.atoms[span.atomId], span.atomId);
+      continue;
+    }
+    appendModelText(textSurface, block, span.modelStart, span.modelEnd);
   }
 
+  if (textSurface.childNodes.length === 0) {
+    textSurface.append(root.ownerDocument.createTextNode(""));
+  }
+}
+
+function appendSyntaxMarker(root: HTMLElement, span: RichProjectionSpan): void {
+  if (span.kind !== "syntax") {
+    return;
+  }
+  const element = root.ownerDocument.createElement("span");
+  element.className = "editable-syntax-marker";
+  element.dataset.editableSyntax = span.role;
+  element.textContent = span.marker;
+  root.append(element);
+}
+
+function appendModelText(
+  root: HTMLElement,
+  block: RichBlock,
+  start: number,
+  end: number,
+): void {
   let buffer = "";
-  let bufferMarks: ActiveMarks = { bold: false, underline: false };
+  let bufferMarks = emptyActiveMarks();
   const flushText = () => {
     if (buffer.length === 0) {
       return;
@@ -337,240 +531,87 @@ function renderBlockContent(
     buffer = "";
   };
 
-  for (let offset = 0; offset < block.text.length; offset += 1) {
-    const atomEntry = byOffset.get(offset);
-    const activeMarks = marksAt(block.marks, offset);
+  for (let offset = start; offset < end; offset += 1) {
+    const activeMarks = marksAt(block.ranges, offset);
     if (!sameActiveMarks(activeMarks, bufferMarks)) {
       flushText();
       bufferMarks = activeMarks;
     }
-    if (
-      block.text[offset] !== JSON_ATOM_REPLACEMENT ||
-      atomEntry === undefined
-    ) {
-      buffer += block.text[offset] ?? "";
-      continue;
-    }
-
-    flushText();
-    const [id, atom] = atomEntry;
-    const element = root.ownerDocument.createElement("span");
-    element.className = "mention-chip";
-    element.contentEditable = "false";
-    element.setAttribute(JSON_ATOM_ATTRIBUTE, id);
-    element.textContent = atom.label;
-    appendMarkedNode(root, element, activeMarks);
+    buffer += block.text[offset] ?? "";
   }
 
   flushText();
-  if (root.childNodes.length === 0) {
-    root.append(root.ownerDocument.createTextNode(""));
-  }
 }
 
-function splitBlocksForRange(
-  blocks: ReadonlyArray<ContentEditableDemoBlock>,
-  range: BlockRange,
-  type: ContentEditableDemoBlock["type"],
-): { blocks: ContentEditableDemoBlock[]; selectionAfter: SelectionSnap } {
-  const next: ContentEditableDemoBlock[] = [];
-  let selectionStart: BlockPoint | null = null;
-  let selectionEnd: BlockPoint | null = null;
-
-  blocks.forEach((block, blockIndex) => {
-    if (blockIndex < range.start.block || blockIndex > range.end.block) {
-      next.push(cloneBlock(block));
-      return;
-    }
-
-    const selectedStart =
-      blockIndex === range.start.block ? range.start.offset : 0;
-    const selectedEnd =
-      blockIndex === range.end.block ? range.end.offset : block.text.length;
-
-    if (selectedStart > 0) {
-      next.push(sliceBlock(block, 0, selectedStart, block.type));
-    }
-    if (selectedEnd > selectedStart) {
-      const selectedIndex = next.length;
-      const selected = sliceBlock(block, selectedStart, selectedEnd, type);
-      next.push(selected);
-      selectionStart ??= { block: selectedIndex, offset: 0 };
-      selectionEnd = { block: selectedIndex, offset: selected.text.length };
-    }
-    if (selectedEnd < block.text.length) {
-      next.push(sliceBlock(block, selectedEnd, block.text.length, block.type));
-    }
-  });
-
-  return {
-    blocks: next,
-    selectionAfter:
-      selectionStart === null || selectionEnd === null
-        ? selectionFromRange(range.start, range.end)
-        : selectionFromRange(selectionStart, selectionEnd),
-  };
-}
-
-function forEachSelectedBlockRange(
-  blocks: ReadonlyArray<ContentEditableDemoBlock>,
-  range: BlockRange,
-  callback: (
-    block: ContentEditableDemoBlock,
-    blockIndex: number,
-    part: TextRange,
-  ) => void,
+function appendAtom(
+  root: HTMLElement,
+  atom: RichInlineAtom | undefined,
+  id: string,
 ): void {
-  for (
-    let blockIndex = range.start.block;
-    blockIndex <= range.end.block;
-    blockIndex += 1
-  ) {
-    const block = blocks[blockIndex];
-    if (block === undefined) {
-      continue;
-    }
-    const start = blockIndex === range.start.block ? range.start.offset : 0;
-    const end =
-      blockIndex === range.end.block ? range.end.offset : block.text.length;
-    if (start < end) {
-      callback(block, blockIndex, { start, end });
-    }
+  if (atom === undefined) {
+    root.append(root.ownerDocument.createTextNode(RICH_TEXT_ATOM_REPLACEMENT));
+    return;
   }
+  const element = createAtomElement(root, id, atom);
+  for (const [attribute, value] of Object.entries(
+    canonicalEditableAtomAttributes(id, atom),
+  )) {
+    element.setAttribute(attribute, value);
+  }
+  appendMarkedNode(root, element, emptyActiveMarks());
 }
 
-function sliceBlock(
-  block: ContentEditableDemoBlock,
-  start: number,
-  end: number,
-  type: ContentEditableDemoBlock["type"],
-): ContentEditableDemoBlock {
-  const atoms: Record<string, MentionAtom> = {};
-  for (const [id, atom] of Object.entries(block.atoms)) {
-    if (start <= atom.offset && atom.offset < end) {
-      atoms[id] = { ...atom, offset: atom.offset - start };
-    }
-  }
-
-  const marks: Record<string, RichTextMark> = {};
-  for (const [id, mark] of Object.entries(block.marks)) {
-    const markStart = Math.max(mark.start, start);
-    const markEnd = Math.min(mark.end, end);
-    if (markStart < markEnd) {
-      marks[id] = {
-        ...mark,
-        start: markStart - start,
-        end: markEnd - start,
-      };
-    }
-  }
-
-  return {
-    type,
-    text: block.text.slice(start, end),
-    atoms,
-    marks,
-  };
+function blockElementName(block: RichBlock): keyof HTMLElementTagNameMap {
+  return block.type === "heading" ? `h${block.level}` : "div";
 }
 
-function cloneBlock(block: ContentEditableDemoBlock): ContentEditableDemoBlock {
-  return {
-    type: block.type,
-    text: block.text,
-    atoms: Object.fromEntries(
-      Object.entries(block.atoms).map(([id, atom]) => [id, { ...atom }]),
-    ),
-    marks: Object.fromEntries(
-      Object.entries(block.marks).map(([id, mark]) => [id, { ...mark }]),
-    ),
-  };
-}
-
-function blockRangeFromSelection(
-  selection: SelectionSnap | null,
-): BlockRange | null {
-  const range =
-    selection === null
-      ? undefined
-      : selection.selectionRanges[selection.primaryIndex];
-  if (
-    range === undefined ||
-    typeof range.anchor === "string" ||
-    typeof range.focus === "string" ||
-    typeof range.anchor.offset !== "number" ||
-    typeof range.focus.offset !== "number"
-  ) {
-    return null;
-  }
-  const anchorBlock = blockIndexFromTextPath(range.anchor.path);
-  const focusBlock = blockIndexFromTextPath(range.focus.path);
-  if (anchorBlock === null || focusBlock === null) {
-    return null;
-  }
-  const anchor = { block: anchorBlock, offset: range.anchor.offset };
-  const focus = { block: focusBlock, offset: range.focus.offset };
-  const [start, end] = orderBlockPoints(anchor, focus);
-  return {
-    collapsed: start.block === end.block && start.offset === end.offset,
-    start,
-    end,
-  };
-}
-
-function orderBlockPoints(
-  left: BlockPoint,
-  right: BlockPoint,
-): [BlockPoint, BlockPoint] {
-  if (
-    left.block < right.block ||
-    (left.block === right.block && left.offset <= right.offset)
-  ) {
-    return [left, right];
-  }
-  return [right, left];
-}
-
-function selectionFromRange(
-  anchor: BlockPoint,
-  focus: BlockPoint,
-): SelectionSnap {
-  const anchorPoint = {
-    path: contentEditableDemoTextPath(anchor.block),
-    offset: anchor.offset,
-  };
-  const focusPoint = {
-    path: contentEditableDemoTextPath(focus.block),
-    offset: focus.offset,
-  };
-  return {
-    selectedPointers: [],
-    selectionRanges: [{ anchor: anchorPoint, focus: focusPoint }],
-    primaryIndex: 0,
-    anchor: anchorPoint,
-    focus: focusPoint,
-  };
-}
-
-function blockIndexFromTextPath(path: Pointer): number | null {
-  const match = /^\/blocks\/(\d+)\/text$/.exec(path);
-  return match === null ? null : Number(match[1]);
+function blockDatasetType(block: RichBlock): string {
+  return block.type === "heading" ? `heading${block.level}` : block.type;
 }
 
 function marksAt(
-  marks: Record<string, RichTextMark>,
+  ranges: Record<string, RichInlineRange>,
   offset: number,
 ): ActiveMarks {
-  const active: ActiveMarks = { bold: false, underline: false };
-  for (const mark of Object.values(marks)) {
-    if (mark.start <= offset && offset < mark.end) {
-      active[mark.type] = true;
+  const active = emptyActiveMarks();
+  for (const range of Object.values(ranges)) {
+    if (range.start <= offset && offset < range.end) {
+      if (range.type === "bold") {
+        active.bold = true;
+      }
+      if (range.type === "underline") {
+        active.underline = true;
+      }
+      if (range.type === "italic") {
+        active.italic = true;
+      }
+      if (range.type === "strike") {
+        active.strike = true;
+      }
+      if (range.type === "code") {
+        active.code = true;
+      }
+      if (range.type === "highlight") {
+        active.highlight = true;
+      }
+      if (range.type === "link") {
+        active.linkHref = range.href ?? "";
+      }
     }
   }
   return active;
 }
 
 function sameActiveMarks(left: ActiveMarks, right: ActiveMarks): boolean {
-  return left.bold === right.bold && left.underline === right.underline;
+  return (
+    left.bold === right.bold &&
+    left.code === right.code &&
+    left.highlight === right.highlight &&
+    left.italic === right.italic &&
+    left.linkHref === right.linkHref &&
+    left.strike === right.strike &&
+    left.underline === right.underline
+  );
 }
 
 function appendMarkedText(
@@ -587,19 +628,142 @@ function appendMarkedNode(
   marks: ActiveMarks,
 ): void {
   let next = node;
+  if (marks.linkHref !== null) {
+    next = wrapMark(root, next, "span", "link", {
+      className: "inline-link",
+      data: { href: marks.linkHref },
+    });
+  }
+  if (marks.highlight) {
+    next = wrapMark(root, next, "mark", "highlight", {
+      className: "inline-highlight",
+    });
+  }
+  if (marks.code) {
+    next = wrapMark(root, next, "code", "code", {
+      className: "inline-code",
+    });
+  }
+  if (marks.strike) {
+    next = wrapMark(root, next, "s", "strike");
+  }
   if (marks.underline) {
-    const element = root.ownerDocument.createElement("u");
-    element.append(next);
-    next = element;
+    next = wrapMark(root, next, "u", "underline");
+  }
+  if (marks.italic) {
+    next = wrapMark(root, next, "em", "italic");
   }
   if (marks.bold) {
-    const element = root.ownerDocument.createElement("strong");
-    element.append(next);
-    next = element;
+    next = wrapMark(root, next, "strong", "bold");
   }
   root.append(next);
 }
 
-function escapePointerSegment(segment: string): string {
-  return segment.replaceAll("~", "~0").replaceAll("/", "~1");
+function rangeForText(
+  text: string,
+  needle: string,
+  type: RichInlineRange["type"],
+  rest: Omit<RichInlineRange, "type" | "start" | "end"> = {},
+): RichInlineRange {
+  const start = text.indexOf(needle);
+  if (start < 0) {
+    throw new Error(`Missing range text: ${needle}`);
+  }
+  return {
+    type,
+    start,
+    end: start + needle.length,
+    ...rest,
+  };
+}
+
+function nthIndexOf(text: string, needle: string, occurrence: number): number {
+  let start = -1;
+  for (let count = 0; count < occurrence; count += 1) {
+    start = text.indexOf(needle, start + 1);
+    if (start < 0) {
+      throw new Error(`Missing occurrence ${occurrence} for ${needle}`);
+    }
+  }
+  return start;
+}
+
+function emptyActiveMarks(): ActiveMarks {
+  return {
+    bold: false,
+    code: false,
+    highlight: false,
+    italic: false,
+    linkHref: null,
+    strike: false,
+    underline: false,
+  };
+}
+
+function createAtomElement(
+  root: HTMLElement,
+  id: string,
+  atom: RichInlineAtom,
+): HTMLElement {
+  const element = root.ownerDocument.createElement("span");
+  element.className = atomClassName(atom);
+  if (atom.type === "taskMarker") {
+    const checked = atom.checked === true;
+    element.dataset.taskMarkerId = id;
+    element.dataset.checked = checked ? "true" : "false";
+    element.setAttribute("aria-checked", checked ? "true" : "false");
+    element.setAttribute("aria-label", checked ? "Completed" : "Incomplete");
+    element.setAttribute("role", "checkbox");
+    element.textContent = checked ? "✓" : "";
+    return element;
+  }
+
+  element.textContent =
+    atom.label ?? atom.text ?? atom.target ?? atom.href ?? atom.type;
+  return element;
+}
+
+function atomClassName(atom: RichInlineAtom): string {
+  if (atom.type === "mention") {
+    return "atom-chip mention-chip";
+  }
+  if (atom.type === "tag") {
+    return "atom-chip tag-chip";
+  }
+  if (atom.type === "wikiLink") {
+    return "atom-chip wiki-chip";
+  }
+  if (atom.type === "attachment") {
+    return "atom-chip attachment-chip";
+  }
+  if (atom.type === "taskMarker") {
+    return "contenteditable-block-marker";
+  }
+  return "atom-chip";
+}
+
+function wrapMark<K extends keyof HTMLElementTagNameMap>(
+  root: HTMLElement,
+  node: Node,
+  tagName: K,
+  type: RichInlineRange["type"],
+  options: {
+    className?: string;
+    data?: Record<string, string>;
+  } = {},
+): HTMLElementTagNameMap[K] {
+  const element = root.ownerDocument.createElement(tagName);
+  if (options.className !== undefined) {
+    element.className = options.className;
+  }
+  for (const [key, value] of Object.entries(options.data ?? {})) {
+    element.dataset[key] = value;
+  }
+  for (const [attribute, value] of Object.entries(
+    canonicalEditableMarkAttributes({ type, start: 0, end: 0 }),
+  )) {
+    element.setAttribute(attribute, value);
+  }
+  element.append(node);
+  return element;
 }

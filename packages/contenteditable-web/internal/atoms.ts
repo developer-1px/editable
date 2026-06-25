@@ -85,6 +85,7 @@ export function atomSyncPatchesFromDOM<T>(
   atomsPath: Pointer | null,
   element: Element,
   atomAttribute: string,
+  offsetMapper: ((offset: number) => number) | null = null,
 ): JSONPatchOperation[] {
   if (atomsPath === null) {
     return [];
@@ -101,11 +102,12 @@ export function atomSyncPatchesFromDOM<T>(
       });
       continue;
     }
-    if (offset !== atom.offset) {
+    const documentOffset = offsetMapper?.(offset) ?? offset;
+    if (documentOffset !== atom.offset) {
       patch.push({
         op: "replace",
         path: `${atomsPath}/${escapePointerSegment(id)}/offset`,
-        value: offset,
+        value: documentOffset,
       });
     }
   }

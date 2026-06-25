@@ -11,12 +11,27 @@ export type {
   JsonContentEditable,
   JsonContentEditableAtomRecord,
   JsonContentEditableFragment,
+  JsonContentEditableFlow,
   JsonContentEditableOptions,
+  JsonContentEditableProjectionProvider,
   JsonContentEditableRelatedPath,
   JsonContentEditableRangeRecord,
+  JsonContentEditableTextChange,
+  JsonContentEditableTextProjection,
   JsonContentEditableUpdate,
+  JsonContentEditableVisualBox,
+  JsonContentEditableVisualCaret,
+  JsonContentEditableVisualLayout,
+  JsonContentEditableVisualLayoutProvider,
+  JsonContentEditableVisualLayoutOptions,
+  JsonContentEditableVisualLayoutStore,
+  JsonContentEditableVisualLine,
+  JsonContentEditableVisualLineKind,
+  JsonContentEditableVisualLineSeed,
 } from "./contract";
 export {
   createJsonContentEditable,
   isJsonContentEditableFragment,
 } from "./createJsonContentEditable";
+export { measureJsonContentEditableVisualLayout } from "./internal/visualLayout";
+export { createVisualLayoutStore as createJsonContentEditableVisualLayoutStore } from "./internal/visualLayoutStore";

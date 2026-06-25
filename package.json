@@ -7,7 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:core": "vitest run packages/contenteditable-web/index.test.ts",
+    "test:core": "vitest run packages/contenteditable-web/index.test.ts packages/rich-document/index.test.ts",
     "verify:internal": "pnpm exec tsc --noEmit && pnpm test && pnpm run check && pnpm build",
     "verify:browser": "playwright test",
     "format": "biome format --write",
