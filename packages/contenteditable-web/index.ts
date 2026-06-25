@@ -13,6 +13,7 @@ export type {
   JsonContentEditableFragment,
   JsonContentEditableFlow,
   JsonContentEditableOptions,
+  JsonContentEditableModelCommand,
   JsonContentEditableProjectionProvider,
   JsonContentEditableRelatedPath,
   JsonContentEditableRangeRecord,

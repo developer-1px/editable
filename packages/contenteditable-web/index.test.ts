@@ -735,11 +735,30 @@ describe("contenteditable-web json-document bridge", () => {
     });
   });
 
-  it("does not own arrow up and down during native IME composition", () => {
-    const { core, document, textNode } = setup("Plain");
+  it("hands off native IME text before vertical model commands", () => {
+    const { document, root, textNode } = setup("top\nbottom");
+    let visualLayout: JsonContentEditableVisualLayout = {
+      lines: [],
+    };
+    const core = createJsonContentEditable({
+      root,
+      document,
+      visualLayout: () => visualLayout,
+    });
 
-    setDOMRange(textNode, 1, textNode, 1);
+    setDOMRange(textNode, 0, textNode, 0);
     core.handle(new CompositionEvent("compositionstart", { bubbles: true }));
+    textNode.textContent = `반${textNode.textContent ?? ""}`;
+    setDOMRange(textNode, 1, textNode, 1);
+    core.handle(
+      new InputEvent("input", {
+        bubbles: true,
+        data: "반",
+        inputType: "insertCompositionText",
+        isComposing: true,
+      }),
+    );
+
     const event = new KeyboardEvent("keydown", {
       bubbles: true,
       cancelable: true,
@@ -747,20 +766,83 @@ describe("contenteditable-web json-document bridge", () => {
     });
     const result = core.handle(event);
 
-    expect(event.defaultPrevented).toBe(false);
-    expect(result.ok).toBe(true);
-    if (!result.ok || !("kind" in result)) {
-      throw new Error("Expected a contenteditable update.");
+    expect(event.defaultPrevented).toBe(true);
+    expect(result).toMatchObject({
+      flow: "native-handoff",
+      kind: "text",
+      render: true,
+      command: {
+        direction: "down",
+        extend: false,
+        type: "moveVertical",
+      },
+    });
+    expect(document.value.text).toBe("반top\nbottom");
+    if (!result.ok || !("flow" in result) || result.flow !== "native-handoff") {
+      throw new Error("Expected native handoff.");
     }
-    expect(result.kind).toBe("no-change");
-    expect(document.selection?.focus ?? null).toBe(null);
+
+    visualLayout = {
+      lines: [
+        visualLine({
+          bottom: 10,
+          endOffset: 4,
+          index: 0,
+          startOffset: 0,
+          top: 0,
+          xs: [0, 10, 20, 30, 40],
+        }),
+        visualLine({
+          bottom: 20,
+          endOffset: 10,
+          index: 1,
+          startOffset: 5,
+          top: 10,
+          xs: [0, 10, 20, 30, 40, 50],
+        }),
+      ],
+    };
+    expect(core.runCommand(result.command)).toMatchObject({
+      flow: "model-command",
+      kind: "selection",
+    });
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 6,
+    });
+
+    textNode.textContent = `반${textNode.textContent ?? ""}`;
+    const duplicateFinalInput = core.handle(
+      new InputEvent("input", {
+        bubbles: true,
+        data: "반",
+        inputType: "insertFromComposition",
+      }),
+    );
+    expect(duplicateFinalInput).toMatchObject({
+      flow: "native-text",
+      kind: "no-change",
+      render: true,
+    });
+    expect(document.value.text).toBe("반top\nbottom");
   });
 
-  it("does not own command-arrow movement during native IME composition", () => {
+  it("hands off native IME text before command-arrow movement", () => {
     const { core, document, textNode } = setup("Plain");
 
     setDOMRange(textNode, 1, textNode, 1);
     core.handle(new CompositionEvent("compositionstart", { bubbles: true }));
+    textNode.textContent = `P반lain`;
+    setDOMRange(textNode, 2, textNode, 2);
+    core.handle(
+      new InputEvent("input", {
+        bubbles: true,
+        data: "반",
+        inputType: "insertCompositionText",
+        isComposing: true,
+      }),
+    );
+
     const event = new KeyboardEvent("keydown", {
       bubbles: true,
       cancelable: true,
@@ -769,13 +851,30 @@ describe("contenteditable-web json-document bridge", () => {
     });
     const result = core.handle(event);
 
-    expect(event.defaultPrevented).toBe(false);
-    expect(result.ok).toBe(true);
-    if (!result.ok || !("kind" in result)) {
-      throw new Error("Expected a contenteditable update.");
+    expect(event.defaultPrevented).toBe(true);
+    expect(result).toMatchObject({
+      flow: "native-handoff",
+      kind: "text",
+      render: true,
+      command: {
+        boundary: "line-end",
+        extend: false,
+        type: "moveLineBoundary",
+      },
+    });
+    expect(document.value.text).toBe("P반lain");
+    if (!result.ok || !("flow" in result) || result.flow !== "native-handoff") {
+      throw new Error("Expected native handoff.");
     }
-    expect(result.kind).toBe("no-change");
-    expect(document.selection?.focus ?? null).toBe(null);
+
+    expect(core.runCommand(result.command)).toMatchObject({
+      flow: "model-command",
+      kind: "selection",
+    });
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: "P반lain".length,
+    });
   });
 
   it("copies selected atoms as a structured fragment with plain text fallback", () => {

@@ -140,17 +140,40 @@ export type FlushOptions = {
   mergeKey?: string;
 };
 
-export type JsonContentEditableFlow = "native-text" | "model-command";
+export type JsonContentEditableModelCommand =
+  | {
+      type: "moveVertical";
+      direction: "up" | "down";
+      extend: boolean;
+    }
+  | {
+      type: "moveLineBoundary";
+      boundary: "line-start" | "line-end";
+      extend: boolean;
+    };
+
+export type JsonContentEditableFlow =
+  | "native-text"
+  | "model-command"
+  | "native-handoff";
+
+type JsonContentEditableUpdateBase = {
+  ok: true;
+  kind: "no-change" | "selection" | "text";
+  render: boolean;
+  selection: SelectionSnap | null;
+  patch: ReadonlyArray<JSONPatchOperation>;
+};
 
 export type JsonContentEditableUpdate =
-  | {
-      ok: true;
-      kind: "no-change" | "selection" | "text";
-      flow: JsonContentEditableFlow;
-      render: boolean;
-      selection: SelectionSnap | null;
-      patch: ReadonlyArray<JSONPatchOperation>;
-    }
+  | (JsonContentEditableUpdateBase & {
+      flow: "native-text" | "model-command";
+      command?: never;
+    })
+  | (JsonContentEditableUpdateBase & {
+      flow: "native-handoff";
+      command: JsonContentEditableModelCommand;
+    })
   | {
       ok: false;
       code: "missing_root" | "missing_text_path" | "not_string" | "commit_failed";
@@ -172,6 +195,7 @@ export type JsonContentEditable<T> = {
   handle(event: Event): JsonContentEditableUpdate | ClipboardUpdate<T>;
   commitNativeText(options?: FlushOptions): JsonContentEditableUpdate;
   prepareModelCommand(options?: FlushOptions): JsonContentEditableUpdate;
+  runCommand(command: JsonContentEditableModelCommand): JsonContentEditableUpdate;
   syncSelectionFromDOM(): SelectionSnap | null;
   restoreSelectionToDOM(selection?: SelectionSnap): boolean;
   copy(event?: ClipboardEvent): ClipboardUpdate<T>;

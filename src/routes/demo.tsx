@@ -162,8 +162,23 @@ function ContentEditableDemo() {
 
   const run = useCallback(
     (event: Event) => {
-      const result = coreRef.current?.handle(event);
+      const core = coreRef.current;
+      const result = core?.handle(event);
       if (result !== undefined && shouldRefreshDemo(result)) {
+        if ("flow" in result && result.flow === "native-handoff") {
+          composingRef.current = false;
+          refresh({ renderText: true });
+          const commandResult = core?.runCommand(result.command);
+          if (shouldRefreshDemo(commandResult)) {
+            refresh({
+              renderText:
+                commandResult !== undefined &&
+                "render" in commandResult &&
+                commandResult.render,
+            });
+          }
+          return;
+        }
         if (
           "flow" in result &&
           result.flow === "native-text" &&
@@ -493,6 +508,9 @@ function shouldRefreshDemo(
 ): boolean {
   if (result === undefined || !result.ok) {
     return false;
+  }
+  if ("render" in result && result.render) {
+    return true;
   }
   return !("kind" in result) || result.kind !== "no-change";
 }

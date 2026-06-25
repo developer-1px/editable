@@ -10,6 +10,7 @@ import type {
   FlushOptions,
   JsonContentEditable,
   JsonContentEditableFragment,
+  JsonContentEditableModelCommand,
   JsonContentEditableOptions,
   JsonContentEditableRelatedPath,
   JsonContentEditableTextProjection,
@@ -34,6 +35,7 @@ import {
 import {
   isLineBreakInput,
   modelCommandUpdate,
+  nativeHandoffUpdate,
   nativeTextUpdate,
   type SelectionIntent,
 } from "./internal/editFlow";
@@ -79,6 +81,7 @@ export function createJsonContentEditable<T>({
   visualLayout = null,
 }: JsonContentEditableOptions<T>): JsonContentEditable<T> {
   let lease: BrowserLease | null = null;
+  let suppressNextCompositionCommit = false;
   let verticalGoalX: number | null = null;
 
   const textElementForPath = (path: Pointer): HTMLElement | null =>
@@ -314,6 +317,26 @@ export function createJsonContentEditable<T>({
 
   const prepareModelCommand = (options: FlushOptions = {}): JsonContentEditableUpdate =>
     commitTextFromDOM("range-command", options);
+
+  const handoffNativeText = (
+    command: JsonContentEditableModelCommand,
+  ): JsonContentEditableUpdate => {
+    const mergeKey = lease === null ? undefined : `native:${lease.path}`;
+    const committed = commitTextFromDOM("text-commit", {
+      label: "native handoff",
+      mergeKey,
+    });
+    if (!committed.ok) {
+      return committed;
+    }
+    suppressNextCompositionCommit = true;
+    return nativeHandoffUpdate({
+      command,
+      kind: committed.kind,
+      patch: committed.patch,
+      selection: committed.selection,
+    });
+  };
 
   const copy = (event?: ClipboardEvent): ClipboardUpdate<T> => {
     prepareModelCommand({ label: "copy selection" });
@@ -603,6 +626,17 @@ export function createJsonContentEditable<T>({
       if (event.type === "beforeinput" && event instanceof InputEvent) {
         verticalGoalX = null;
         if (
+          suppressNextCompositionCommit
+        ) {
+          event.preventDefault();
+          suppressNextCompositionCommit = false;
+          return nativeTextUpdate({
+            kind: "no-change",
+            render: true,
+            selection: document.selection?.snapshot() ?? null,
+          });
+        }
+        if (
           lease?.composing === true &&
           (event.inputType === "historyUndo" || event.inputType === "historyRedo")
         ) {
@@ -633,6 +667,7 @@ export function createJsonContentEditable<T>({
 
       if (event.type === "compositionstart") {
         verticalGoalX = null;
+        suppressNextCompositionCommit = false;
         beginLeaseFromDOM(true);
         return nativeTextUpdate({
           kind: "no-change",
@@ -653,7 +688,20 @@ export function createJsonContentEditable<T>({
 
       if (event.type === "input") {
         verticalGoalX = null;
+        if (
+          suppressNextCompositionCommit &&
+          event instanceof InputEvent
+        ) {
+          suppressNextCompositionCommit = false;
+          lease = null;
+          return nativeTextUpdate({
+            kind: "no-change",
+            render: true,
+            selection: document.selection?.snapshot() ?? null,
+          });
+        }
         if (event instanceof InputEvent && event.isComposing) {
+          suppressNextCompositionCommit = false;
           beginLeaseFromDOM(true);
           return nativeTextUpdate({
             kind: "no-change",
@@ -707,24 +755,12 @@ export function createJsonContentEditable<T>({
             });
           }
         }
-        const verticalMotionCommand = isComposing
-          ? null
-          : verticalMotionCommandFromKey(event);
-        if (verticalMotionCommand !== null) {
+        const modelCommand = modelCommandFromKey(event);
+        if (modelCommand !== null) {
           event.preventDefault();
-          return moveSelectionToVisualLine(
-            verticalMotionCommand,
-            event.shiftKey,
-          );
+          return isComposing ? handoffNativeText(modelCommand) : runCommand(modelCommand);
         }
         verticalGoalX = null;
-        const lineBoundaryCommand = isComposing
-          ? null
-          : lineBoundaryCommandFromKey(event);
-        if (lineBoundaryCommand !== null) {
-          event.preventDefault();
-          return moveSelectionToLineBoundary(lineBoundaryCommand, event.shiftKey);
-        }
         const command = historyCommandFromKey(event);
         if (command === "undo") {
           event.preventDefault();
@@ -744,6 +780,7 @@ export function createJsonContentEditable<T>({
     },
     commitNativeText,
     prepareModelCommand,
+    runCommand,
     syncSelectionFromDOM,
     restoreSelectionToDOM(selection = document.selection?.snapshot()) {
       return selection === undefined
@@ -765,6 +802,7 @@ export function createJsonContentEditable<T>({
     redo,
     reset() {
       lease = null;
+      suppressNextCompositionCommit = false;
       verticalGoalX = null;
     },
   };
@@ -890,6 +928,15 @@ export function createJsonContentEditable<T>({
       selection: moved.selection,
     });
   }
+
+  function runCommand(
+    command: JsonContentEditableModelCommand,
+  ): JsonContentEditableUpdate {
+    if (command.type === "moveVertical") {
+      return moveSelectionToVisualLine(command.direction, command.extend);
+    }
+    return moveSelectionToLineBoundary(command.boundary, command.extend);
+  }
 }
 
 function capabilityToUpdate(result: JSONCapabilityResult): JsonContentEditableUpdate {
@@ -933,6 +980,30 @@ function verticalMotionCommandFromKey(
   if (event.key === "ArrowDown") {
     return "down";
   }
+  return null;
+}
+
+function modelCommandFromKey(
+  event: KeyboardEvent,
+): JsonContentEditableModelCommand | null {
+  const verticalMotionCommand = verticalMotionCommandFromKey(event);
+  if (verticalMotionCommand !== null) {
+    return {
+      type: "moveVertical",
+      direction: verticalMotionCommand,
+      extend: event.shiftKey,
+    };
+  }
+
+  const lineBoundaryCommand = lineBoundaryCommandFromKey(event);
+  if (lineBoundaryCommand !== null) {
+    return {
+      type: "moveLineBoundary",
+      boundary: lineBoundaryCommand,
+      extend: event.shiftKey,
+    };
+  }
+
   return null;
 }
 

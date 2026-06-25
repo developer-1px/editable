@@ -3,7 +3,7 @@ import type {
   SelectionSnap,
 } from "@interactive-os/json-document";
 import type {
-  JsonContentEditableFlow,
+  JsonContentEditableModelCommand,
   JsonContentEditableUpdate,
 } from "../contract";
 
@@ -12,17 +12,19 @@ export type SelectionIntent = "text-commit" | "range-command";
 export function nativeTextUpdate({
   kind,
   patch = [],
+  render = false,
   selection,
 }: {
   kind: "no-change" | "selection" | "text";
   patch?: ReadonlyArray<JSONPatchOperation>;
+  render?: boolean;
   selection: SelectionSnap | null;
 }): JsonContentEditableUpdate {
   return editFlowUpdate({
     flow: "native-text",
     kind,
     patch,
-    render: false,
+    render,
     selection,
   });
 }
@@ -47,6 +49,28 @@ export function modelCommandUpdate({
   });
 }
 
+export function nativeHandoffUpdate({
+  command,
+  kind,
+  patch = [],
+  selection,
+}: {
+  command: JsonContentEditableModelCommand;
+  kind: "no-change" | "selection" | "text";
+  patch?: ReadonlyArray<JSONPatchOperation>;
+  selection: SelectionSnap | null;
+}): JsonContentEditableUpdate {
+  return {
+    ok: true,
+    command,
+    flow: "native-handoff",
+    kind,
+    patch,
+    render: true,
+    selection,
+  };
+}
+
 export function isLineBreakInput(event: InputEvent): boolean {
   return (
     event.inputType === "insertParagraph" ||
@@ -61,7 +85,7 @@ function editFlowUpdate({
   render,
   selection,
 }: {
-  flow: JsonContentEditableFlow;
+  flow: "native-text" | "model-command";
   kind: "no-change" | "selection" | "text";
   patch: ReadonlyArray<JSONPatchOperation>;
   render: boolean;

@@ -237,6 +237,121 @@ test("contenteditable demo keeps IME preedit DOM across keyup before commit", as
     .toBe(`가${INITIAL_MODEL}`);
 });
 
+test("contenteditable demo hands off IME preedit before vertical command", async ({
+  page,
+}) => {
+  await page.addStyleTag({
+    content: `
+      .contenteditable-editor {
+        max-width: 220px !important;
+        width: 220px !important;
+      }
+    `,
+  });
+
+  const result = await page.evaluate(async () => {
+    const editor = document.querySelector(".contenteditable-editor");
+    if (!(editor instanceof HTMLElement)) {
+      throw new Error("Missing contenteditable editor.");
+    }
+    const textSurface = editor.querySelector('[data-json-text="/blocks/0/text"]');
+    if (textSurface === null) {
+      throw new Error("Missing first text surface.");
+    }
+    const firstTextNode = Array.from(textSurface.childNodes).find(
+      (node) => node.nodeType === Node.TEXT_NODE,
+    );
+    if (firstTextNode === undefined) {
+      throw new Error("Missing first text node.");
+    }
+
+    const selection = document.getSelection();
+    if (selection === null) {
+      throw new Error("Missing DOM selection.");
+    }
+    const range = document.createRange();
+    range.setStart(firstTextNode, 0);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    editor.focus();
+
+    editor.dispatchEvent(
+      new CompositionEvent("compositionstart", { bubbles: true }),
+    );
+
+    firstTextNode.textContent = `반갑${firstTextNode.textContent ?? ""}`;
+    const composingRange = document.createRange();
+    composingRange.setStart(firstTextNode, 2);
+    composingRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(composingRange);
+    editor.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        data: "반갑",
+        inputType: "insertCompositionText",
+        isComposing: true,
+      }),
+    );
+
+    const arrow = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowDown",
+    });
+    const accepted = editor.dispatchEvent(arrow);
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+
+    const currentSurface = editor.querySelector(
+      '[data-json-text="/blocks/0/text"]',
+    );
+    const currentTextNode =
+      currentSurface === null
+        ? undefined
+        : Array.from(currentSurface.childNodes).find(
+            (node) => node.nodeType === Node.TEXT_NODE,
+          );
+    if (currentTextNode === undefined) {
+      throw new Error("Missing current text node.");
+    }
+    currentTextNode.textContent = `반갑${currentTextNode.textContent ?? ""}`;
+    editor.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "반갑" }),
+    );
+    editor.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        data: "반갑",
+        inputType: "insertFromComposition",
+      }),
+    );
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+
+    return {
+      accepted,
+      defaultPrevented: arrow.defaultPrevented,
+      visibleText: editor.textContent,
+    };
+  });
+
+  expect(result.accepted).toBe(false);
+  expect(result.defaultPrevented).toBe(true);
+  expect(result.visibleText).toContain(`반갑${INITIAL_VISIBLE}`);
+  expect(result.visibleText).not.toContain(`반갑반갑${INITIAL_VISIBLE}`);
+  await expectContentEditableFirstBlockText(page, `반갑${INITIAL_MODEL}`);
+  await expect
+    .poll(async () => {
+      const range = await getSelectionRange(page);
+      return `${range?.focus?.path ?? ""}:${range?.focus?.offset ?? ""}`;
+    })
+    .not.toBe("/blocks/0/text:2");
+});
+
 test("contenteditable demo handles Enter after Korean text without caret drift", async ({
   page,
 }) => {
