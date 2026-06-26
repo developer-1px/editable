@@ -417,7 +417,7 @@ test("contenteditable demo refreshes visual lines when line breaks are inserted 
     .poll(() => firstBlockVisualLines(page))
     .toEqual([
       { end: 5, kind: "text", start: 0 },
-      { end: INITIAL_MODEL.length, kind: "text", start: 6 },
+      { end: INITIAL_MODEL.length + 1, kind: "text", start: 6 },
     ]);
 
   await page.keyboard.press("ArrowUp");
@@ -464,6 +464,45 @@ test("contenteditable demo moves through a blank line created by Enter", async (
   await expectContentEditableSelectionOffset(page, 6);
   await page.keyboard.press("ArrowUp");
   await expectContentEditableSelectionOffset(page, 0);
+});
+
+test("contenteditable demo reflects a trailing blank line created at paragraph end", async ({
+  page,
+}) => {
+  await page.addStyleTag({
+    content: `
+      .contenteditable-editor {
+        max-width: 1200px !important;
+        width: 1200px !important;
+      }
+    `,
+  });
+
+  await selectEditorText(page, INITIAL_MODEL.length, INITIAL_MODEL.length);
+  await page.keyboard.press("Enter");
+
+  await expectContentEditableFirstBlockText(page, `${INITIAL_MODEL}\n`);
+  await expectContentEditableSelectionOffset(page, INITIAL_MODEL.length + 1);
+  await expect
+    .poll(() => firstBlockDOMFocusOffset(page))
+    .toBe(INITIAL_MODEL.length + 1);
+  await expect
+    .poll(() => firstBlockVisualLines(page))
+    .toEqual(
+      expect.arrayContaining([
+        { end: INITIAL_MODEL.length, kind: "text", start: 0 },
+        {
+          end: INITIAL_MODEL.length + 1,
+          kind: "empty",
+          start: INITIAL_MODEL.length + 1,
+        },
+      ]),
+    );
+
+  await page.keyboard.press("ArrowUp");
+  await expectContentEditableSelectionOffset(page, 0);
+  await page.keyboard.press("ArrowDown");
+  await expectContentEditableSelectionOffset(page, INITIAL_MODEL.length + 1);
 });
 
 test("contenteditable demo maps task marker line selection to the task text surface", async ({
@@ -1059,6 +1098,79 @@ async function firstBlockVisualLines(page: Page) {
         start: line.start,
       }),
     );
+}
+
+async function firstBlockDOMFocusOffset(page: Page) {
+  return page.evaluate(() => {
+    const textSurface = document.querySelector('[data-json-text="/blocks/0/text"]');
+    const selection = window.getSelection();
+    if (
+      textSurface === null ||
+      selection === null ||
+      selection.focusNode === null ||
+      !textSurface.contains(selection.focusNode)
+    ) {
+      return null;
+    }
+
+    const atomText = "\uFFFC";
+    const nodeLength = (node: Node): number => {
+      if (
+        node instanceof HTMLElement &&
+        node.hasAttribute("data-json-atom")
+      ) {
+        return atomText.length;
+      }
+      if (node.nodeType === Node.TEXT_NODE) {
+        return node.textContent?.length ?? 0;
+      }
+      return Array.from(node.childNodes).reduce(
+        (total, child) => total + nodeLength(child),
+        0,
+      );
+    };
+    const childOffset = (element: Element, offset: number) =>
+      Array.from(element.childNodes)
+        .slice(0, offset)
+        .reduce((total, child) => total + nodeLength(child), 0);
+
+    let total = 0;
+    let found = false;
+    const visit = (node: Node): boolean => {
+      if (node === selection.focusNode) {
+        found = true;
+        total +=
+          node instanceof Element
+            ? childOffset(node, selection.focusOffset)
+            : selection.focusOffset;
+        return false;
+      }
+      if (
+        node instanceof HTMLElement &&
+        node.hasAttribute("data-json-atom")
+      ) {
+        total += atomText.length;
+        return true;
+      }
+      if (node.nodeType === Node.TEXT_NODE) {
+        total += node.textContent?.length ?? 0;
+        return true;
+      }
+      for (const child of Array.from(node.childNodes)) {
+        if (!visit(child)) {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    for (const child of Array.from(textSurface.childNodes)) {
+      if (!visit(child)) {
+        break;
+      }
+    }
+    return found ? total : null;
+  });
 }
 
 async function getContentEditableDOMSelection(page: Page) {

@@ -755,7 +755,7 @@ export function createJsonContentEditable<T>({
       }
 
       if (event.type === "keydown" && event instanceof KeyboardEvent) {
-        const isComposing = lease?.composing === true;
+        const isComposing = lease?.composing === true || event.isComposing;
         if (isComposing) {
           const composingCommand = historyCommandFromKey(event);
           if (composingCommand !== null) {
@@ -765,6 +765,10 @@ export function createJsonContentEditable<T>({
               selection: document.selection?.snapshot() ?? null,
             });
           }
+        }
+        if (!isComposing && isLineBreakKey(event)) {
+          event.preventDefault();
+          return insertTextCommand("\n", "insert line break");
         }
         const modelCommand = modelCommandFromKey(event);
         if (modelCommand !== null) {
@@ -1015,6 +1019,15 @@ function verticalMotionCommandFromKey(
     return "down";
   }
   return null;
+}
+
+function isLineBreakKey(event: KeyboardEvent): boolean {
+  return (
+    event.key === "Enter" &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.ctrlKey
+  );
 }
 
 function modelCommandFromKey(

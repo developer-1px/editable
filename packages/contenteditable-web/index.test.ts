@@ -1278,6 +1278,58 @@ describe("contenteditable-web json-document bridge", () => {
     });
   });
 
+  it("moves the selection after a line break inserted after a trailing atom", () => {
+    const { core, document, textElement } = setupTrailingAtomDocument();
+
+    setDOMRange(
+      textElement,
+      textElement.childNodes.length,
+      textElement,
+      textElement.childNodes.length,
+    );
+    const event = new InputEvent("beforeinput", {
+      bubbles: true,
+      cancelable: true,
+      inputType: "insertParagraph",
+    });
+    const result = core.handle(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(result).toMatchObject({ flow: "model-command", render: true });
+    expect(document.value.text).toBe(`A${JSON_ATOM_REPLACEMENT}\n`);
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 3,
+    });
+  });
+
+  it("owns Enter on keydown before the browser creates a trailing native line break", () => {
+    const { core, document, textElement } = setupTrailingAtomDocument();
+
+    setDOMRange(
+      textElement,
+      textElement.childNodes.length,
+      textElement,
+      textElement.childNodes.length,
+    );
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Enter",
+    });
+    const result = core.handle(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(result).toMatchObject({ flow: "model-command", render: true });
+    expect(document.value.text).toBe(`A${JSON_ATOM_REPLACEMENT}\n`);
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 3,
+    });
+  });
+
   it("keeps character input on the native input path", () => {
     const { core, document, textNode } = setup("안녕하세요.");
 
