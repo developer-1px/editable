@@ -68,6 +68,7 @@ type BrowserLease = {
 };
 
 type CommitTextOptions = FlushOptions & {
+  resetVerticalGoal?: boolean;
   selectionIntent?: SelectionIntent;
 };
 
@@ -148,9 +149,11 @@ export function createJsonContentEditable<T>({
 
   const commitTextFromDOM = (
     selectionIntent: SelectionIntent,
-    options: FlushOptions = {},
+    options: CommitTextOptions = {},
   ): JsonContentEditableUpdate => {
-    verticalGoalX = null;
+    if (options.resetVerticalGoal !== false) {
+      verticalGoalX = null;
+    }
     const path =
       lease?.path ??
       textPointFromDOMSelection(
@@ -317,7 +320,10 @@ export function createJsonContentEditable<T>({
     commitTextFromDOM(options.selectionIntent ?? "text-commit", options);
 
   const prepareModelCommand = (options: FlushOptions = {}): JsonContentEditableUpdate =>
-    commitTextFromDOM("range-command", options);
+    commitTextFromDOM("range-command", {
+      ...options,
+      resetVerticalGoal: false,
+    });
 
   const handoffNativeText = (
     command: JsonContentEditableModelCommand,
@@ -337,6 +343,32 @@ export function createJsonContentEditable<T>({
       patch: committed.patch,
       selection: committed.selection,
     });
+  };
+
+  const flushNativeForModelTurn = (
+    label: string,
+  ): JsonContentEditableUpdate | null => {
+    const flushed = prepareModelCommand({ label });
+    return flushed.ok ? null : flushed;
+  };
+
+  const runModelCommandAfterNativeFlush = (
+    command: JsonContentEditableModelCommand,
+  ): JsonContentEditableUpdate => {
+    const flushed = prepareModelCommand({ label: "prepare model command" });
+    if (!flushed.ok) {
+      return flushed;
+    }
+    if (flushed.kind === "text") {
+      verticalGoalX = null;
+      return nativeHandoffUpdate({
+        command,
+        kind: flushed.kind,
+        patch: flushed.patch,
+        selection: flushed.selection,
+      });
+    }
+    return runCommand(command);
   };
 
   const copy = (event?: ClipboardEvent): ClipboardUpdate<T> => {
@@ -656,6 +688,10 @@ export function createJsonContentEditable<T>({
       }
 
       if (turn.type === "insert-line-break") {
+        const flushed = flushNativeForModelTurn("prepare line break");
+        if (flushed !== null) {
+          return flushed;
+        }
         return insertTextCommand("\n", "insert line break");
       }
 
@@ -740,7 +776,7 @@ export function createJsonContentEditable<T>({
       }
 
       if (turn.type === "run-command") {
-        return runCommand(turn.command);
+        return runModelCommandAfterNativeFlush(turn.command);
       }
 
       return modelCommandUpdate({

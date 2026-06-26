@@ -1330,6 +1330,28 @@ describe("contenteditable-web json-document bridge", () => {
     });
   });
 
+  it("flushes pending native DOM text before a model-owned line break", () => {
+    const { core, document, textNode } = setup("Plain");
+
+    textNode.textContent = "abcPlain";
+    setDOMRange(textNode, 3, textNode, 3);
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Enter",
+    });
+    const result = core.handle(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(result).toMatchObject({ flow: "model-command", render: true });
+    expect(document.value.text).toBe("abc\nPlain");
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 4,
+    });
+  });
+
   it("keeps character input on the native input path", () => {
     const { core, document, textNode } = setup("안녕하세요.");
 
