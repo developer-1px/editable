@@ -36,9 +36,9 @@ import {
   modelCommandUpdate,
   nativeHandoffUpdate,
   nativeTextUpdate,
-  resolveEditTurn,
   type SelectionIntent,
 } from "./internal/editFlow";
+import { resolveEditTurn } from "./internal/editTurn";
 import { readString } from "./internal/jsonDocument";
 import {
   rangeReplacementPatches,
