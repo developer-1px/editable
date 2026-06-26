@@ -7,7 +7,10 @@ import type {
   JsonContentEditableUpdate,
 } from "../contract";
 
-export type SelectionIntent = "text-commit" | "range-command";
+export type SelectionIntent =
+  | "composition-commit"
+  | "range-command"
+  | "text-commit";
 
 export function nativeTextUpdate({
   kind,

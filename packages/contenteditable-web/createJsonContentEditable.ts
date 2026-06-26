@@ -71,6 +71,10 @@ type BrowserLease = {
   composing: boolean;
 };
 
+type CommitTextOptions = FlushOptions & {
+  selectionIntent?: SelectionIntent;
+};
+
 export function createJsonContentEditable<T>({
   atomAttribute = JSON_ATOM_ATTRIBUTE,
   atomsPath = null,
@@ -313,8 +317,8 @@ export function createJsonContentEditable<T>({
     });
   };
 
-  const commitNativeText = (options: FlushOptions = {}): JsonContentEditableUpdate =>
-    commitTextFromDOM("text-commit", options);
+  const commitNativeText = (options: CommitTextOptions = {}): JsonContentEditableUpdate =>
+    commitTextFromDOM(options.selectionIntent ?? "text-commit", options);
 
   const prepareModelCommand = (options: FlushOptions = {}): JsonContentEditableUpdate =>
     commitTextFromDOM("range-command", options);
@@ -689,6 +693,8 @@ export function createJsonContentEditable<T>({
 
       if (event.type === "input") {
         verticalGoalX = null;
+        const inputType =
+          event instanceof InputEvent ? event.inputType : undefined;
         if (
           suppressNextCompositionCommit &&
           event instanceof InputEvent
@@ -713,6 +719,10 @@ export function createJsonContentEditable<T>({
         return commitNativeText({
           label: "native input",
           mergeKey: lease === null ? undefined : `native:${lease.path}`,
+          selectionIntent:
+            inputType === "insertFromComposition"
+              ? "composition-commit"
+              : "text-commit",
         });
       }
 

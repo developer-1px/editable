@@ -397,6 +397,75 @@ test("contenteditable demo handles Enter after Korean text without caret drift",
   await expectContentEditableSelectionOffset(page, 7);
 });
 
+test("contenteditable demo refreshes visual lines when line breaks are inserted and deleted", async ({
+  page,
+}) => {
+  await page.addStyleTag({
+    content: `
+      .contenteditable-editor {
+        max-width: 1200px !important;
+        width: 1200px !important;
+      }
+    `,
+  });
+
+  await selectEditorText(page, 5, 5);
+  await page.keyboard.press("Enter");
+
+  await expectContentEditableSelectionOffset(page, 6);
+  await expect
+    .poll(() => firstBlockVisualLines(page))
+    .toEqual([
+      { end: 5, kind: "text", start: 0 },
+      { end: INITIAL_MODEL.length, kind: "text", start: 6 },
+    ]);
+
+  await page.keyboard.press("ArrowUp");
+  await expectContentEditableSelectionOffset(page, 0);
+  await page.keyboard.press("ArrowDown");
+  await expectContentEditableSelectionOffset(page, 6);
+
+  await page.keyboard.press("Backspace");
+
+  await expectContentEditableFirstBlockText(page, INITIAL_MODEL);
+  await expectContentEditableSelectionOffset(page, 5);
+  await expect
+    .poll(() => firstBlockVisualLines(page))
+    .toEqual([{ end: INITIAL_MODEL.length, kind: "text", start: 0 }]);
+});
+
+test("contenteditable demo moves through a blank line created by Enter", async ({
+  page,
+}) => {
+  await page.addStyleTag({
+    content: `
+      .contenteditable-editor {
+        max-width: 1200px !important;
+        width: 1200px !important;
+      }
+    `,
+  });
+
+  await selectEditorText(page, 5, 5);
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+
+  await expectContentEditableSelectionOffset(page, 7);
+  await expect
+    .poll(() => firstBlockVisualLines(page))
+    .toEqual(
+      expect.arrayContaining([
+        { end: 5, kind: "text", start: 0 },
+        { end: 6, kind: "empty", start: 6 },
+      ]),
+    );
+
+  await page.keyboard.press("ArrowUp");
+  await expectContentEditableSelectionOffset(page, 6);
+  await page.keyboard.press("ArrowUp");
+  await expectContentEditableSelectionOffset(page, 0);
+});
+
 test("contenteditable demo maps task marker line selection to the task text surface", async ({
   page,
 }) => {
@@ -973,6 +1042,23 @@ async function getStateValue(page: Page, label: string) {
 async function getSelectionRange(page: Page) {
   const selection = await getStateValue(page, "selection");
   return selection?.selectionRanges?.[0] ?? null;
+}
+
+async function firstBlockVisualLines(page: Page) {
+  const lines = await getStateValue(page, "visual layout");
+  return lines
+    .filter((line: { path: string }) => line.path === "/blocks/0/text")
+    .map(
+      (line: {
+        end: number;
+        kind: string;
+        start: number;
+      }) => ({
+        end: line.end,
+        kind: line.kind,
+        start: line.start,
+      }),
+    );
 }
 
 async function getContentEditableDOMSelection(page: Page) {

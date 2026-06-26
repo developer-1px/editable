@@ -9,6 +9,7 @@ import {
   textDOMPositionForOffset,
   textOffsetInElement,
 } from "./domText";
+import type { SelectionIntent } from "./editFlow";
 
 export type TextOffsetMapper = {
   editableOffsetToDocumentOffset(path: Pointer, offset: number): number;
@@ -16,7 +17,7 @@ export type TextOffsetMapper = {
 };
 
 export function chooseSelection(
-  intent: "text-commit" | "range-command",
+  intent: SelectionIntent,
   mappedSelection: SelectionSnap | null,
   derivedCaret: SelectionSnap,
   previousSelection: SelectionSnap | null,
@@ -37,11 +38,7 @@ export function chooseSelection(
     return derivedCaret;
   }
 
-  if (
-    intent === "text-commit" &&
-    mappedSelection !== null &&
-    !selectionIsCollapsed(mappedSelection)
-  ) {
+  if (intent === "text-commit" && mappedSelection !== null) {
     return mappedSelection;
   }
 

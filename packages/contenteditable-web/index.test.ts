@@ -466,7 +466,7 @@ describe("contenteditable-web json-document bridge", () => {
     expect(document.value.text).toBe(`${JSON_ATOM_REPLACEMENT}New Task text`);
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
-      offset: 5,
+      offset: 4,
     });
   });
 
@@ -491,6 +491,24 @@ describe("contenteditable-web json-document bridge", () => {
     expect(document.value.text).toBe("Plain");
     expect(core.redo().ok).toBe(true);
     expect(document.value.text).toBe("가Plain");
+  });
+
+  it("trusts the collapsed DOM caret when native text changes line structure", () => {
+    const { core, document, textNode } = setup("abcdef");
+
+    textNode.textContent = "abc\ndef";
+    setDOMRange(textNode, 2, textNode, 2);
+    const result = core.handle(
+      new InputEvent("input", { bubbles: true, inputType: "insertText" }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result).toMatchObject({ flow: "native-text", render: false });
+    expect(document.value.text).toBe("abc\ndef");
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 2,
+    });
   });
 
   it("preserves a native DOM range while copying flushed text", () => {
