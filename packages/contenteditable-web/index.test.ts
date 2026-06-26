@@ -462,7 +462,7 @@ describe("contenteditable-web json-document bridge", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(result).toMatchObject({ flow: "native-text", render: false });
+    expect(result).toMatchObject({ flow: "dom-to-model", render: false });
     expect(document.value.text).toBe(`${JSON_ATOM_REPLACEMENT}New Task text`);
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
@@ -480,7 +480,7 @@ describe("contenteditable-web json-document bridge", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(result).toMatchObject({ flow: "native-text", render: false });
+    expect(result).toMatchObject({ flow: "dom-to-model", render: false });
     expect(document.value.text).toBe("가Plain");
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
@@ -503,7 +503,7 @@ describe("contenteditable-web json-document bridge", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(result).toMatchObject({ flow: "native-text", render: false });
+    expect(result).toMatchObject({ flow: "dom-to-model", render: false });
     expect(document.value.text).toBe("abc\ndef");
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
@@ -731,7 +731,7 @@ describe("contenteditable-web json-document bridge", () => {
     });
 
     expect(core.handle(down)).toMatchObject({
-      flow: "model-command",
+      flow: "model-to-dom",
       kind: "selection",
       render: true,
     });
@@ -747,7 +747,7 @@ describe("contenteditable-web json-document bridge", () => {
       key: "ArrowUp",
     });
     expect(core.handle(up)).toMatchObject({
-      flow: "model-command",
+      flow: "model-to-dom",
       kind: "selection",
       render: true,
     });
@@ -833,7 +833,7 @@ describe("contenteditable-web json-document bridge", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(result).toMatchObject({
-      flow: "model-command",
+      flow: "model-to-dom",
       kind: "no-change",
       render: false,
     });
@@ -876,7 +876,7 @@ describe("contenteditable-web json-document bridge", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(result).toMatchObject({
-      flow: "native-handoff",
+      flow: "dom-to-model",
       kind: "text",
       render: true,
       command: {
@@ -886,8 +886,13 @@ describe("contenteditable-web json-document bridge", () => {
       },
     });
     expect(document.value.text).toBe("반top\nbottom");
-    if (!result.ok || !("flow" in result) || result.flow !== "native-handoff") {
-      throw new Error("Expected native handoff.");
+    if (
+      !result.ok ||
+      !("flow" in result) ||
+      result.flow !== "dom-to-model" ||
+      result.command === undefined
+    ) {
+      throw new Error("Expected dom-to-model command flush.");
     }
 
     visualLayout = {
@@ -911,7 +916,7 @@ describe("contenteditable-web json-document bridge", () => {
       ],
     };
     expect(core.runCommand(result.command)).toMatchObject({
-      flow: "model-command",
+      flow: "model-to-dom",
       kind: "selection",
     });
     expect(document.selection?.focus).toMatchObject({
@@ -928,7 +933,7 @@ describe("contenteditable-web json-document bridge", () => {
       }),
     );
     expect(duplicateFinalInput).toMatchObject({
-      flow: "native-text",
+      flow: "dom-to-model",
       kind: "no-change",
       render: true,
     });
@@ -961,7 +966,7 @@ describe("contenteditable-web json-document bridge", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(result).toMatchObject({
-      flow: "native-handoff",
+      flow: "dom-to-model",
       kind: "text",
       render: true,
       command: {
@@ -971,12 +976,17 @@ describe("contenteditable-web json-document bridge", () => {
       },
     });
     expect(document.value.text).toBe("P반lain");
-    if (!result.ok || !("flow" in result) || result.flow !== "native-handoff") {
-      throw new Error("Expected native handoff.");
+    if (
+      !result.ok ||
+      !("flow" in result) ||
+      result.flow !== "dom-to-model" ||
+      result.command === undefined
+    ) {
+      throw new Error("Expected dom-to-model command flush.");
     }
 
     expect(core.runCommand(result.command)).toMatchObject({
-      flow: "model-command",
+      flow: "model-to-dom",
       kind: "selection",
     });
     expect(document.selection?.focus).toMatchObject({
@@ -1270,7 +1280,7 @@ describe("contenteditable-web json-document bridge", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(result.ok).toBe(true);
-    expect(result).toMatchObject({ flow: "model-command", render: true });
+    expect(result).toMatchObject({ flow: "model-to-dom", render: true });
     expect(document.value.text).toBe("안녕하세요.\n");
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
@@ -1296,7 +1306,7 @@ describe("contenteditable-web json-document bridge", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(result.ok).toBe(true);
-    expect(result).toMatchObject({ flow: "model-command", render: true });
+    expect(result).toMatchObject({ flow: "model-to-dom", render: true });
     expect(document.value.text).toBe(`A${JSON_ATOM_REPLACEMENT}\n`);
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
@@ -1322,7 +1332,7 @@ describe("contenteditable-web json-document bridge", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(result.ok).toBe(true);
-    expect(result).toMatchObject({ flow: "model-command", render: true });
+    expect(result).toMatchObject({ flow: "model-to-dom", render: true });
     expect(document.value.text).toBe(`A${JSON_ATOM_REPLACEMENT}\n`);
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
@@ -1344,7 +1354,7 @@ describe("contenteditable-web json-document bridge", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(result.ok).toBe(true);
-    expect(result).toMatchObject({ flow: "model-command", render: true });
+    expect(result).toMatchObject({ flow: "model-to-dom", render: true });
     expect(document.value.text).toBe("abc\nPlain");
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
@@ -1365,7 +1375,7 @@ describe("contenteditable-web json-document bridge", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(result).toMatchObject({ flow: "native-text", render: false });
+    expect(result).toMatchObject({ flow: "dom-to-model", render: false });
     expect(document.value.text).toBe("안녕하세요.a");
     expect(document.selection?.focus).toMatchObject({
       path: "/text",

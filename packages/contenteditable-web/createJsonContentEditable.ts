@@ -33,9 +33,8 @@ import {
   findElementByAttribute,
 } from "./internal/domText";
 import {
-  modelCommandUpdate,
-  nativeHandoffUpdate,
-  nativeTextUpdate,
+  domToModelUpdate,
+  modelToDomUpdate,
   type SelectionIntent,
 } from "./internal/editFlow";
 import { resolveEditTurn } from "./internal/editTurn";
@@ -165,7 +164,7 @@ export function createJsonContentEditable<T>({
       null;
     if (path === null) {
       const selection = syncSelectionFromDOM();
-      return nativeTextUpdate({
+      return domToModelUpdate({
         kind: selection === null ? "no-change" : "selection",
         selection,
       });
@@ -230,7 +229,7 @@ export function createJsonContentEditable<T>({
     ) {
       document.selection?.restore(selectionAfter);
       lease = null;
-      return nativeTextUpdate({
+      return domToModelUpdate({
         kind: "selection",
         selection: selectionAfter,
       });
@@ -262,7 +261,7 @@ export function createJsonContentEditable<T>({
           document.selection?.restore(projectionChange.selection);
         }
         lease = null;
-        return nativeTextUpdate({
+        return domToModelUpdate({
           kind: "selection",
           selection: projectionChange.selection,
         });
@@ -282,7 +281,7 @@ export function createJsonContentEditable<T>({
       }
 
       lease = null;
-      return nativeTextUpdate({
+      return domToModelUpdate({
         kind: "text",
         selection: projectionChange.selection,
         patch: projectionChange.patch,
@@ -309,7 +308,7 @@ export function createJsonContentEditable<T>({
     }
 
     lease = null;
-    return nativeTextUpdate({
+    return domToModelUpdate({
       kind: "text",
       selection: selectionAfter,
       patch,
@@ -325,22 +324,23 @@ export function createJsonContentEditable<T>({
       resetVerticalGoal: false,
     });
 
-  const handoffNativeText = (
+  const flushNativeTextForCommand = (
     command: JsonContentEditableModelCommand,
   ): JsonContentEditableUpdate => {
     const mergeKey = lease === null ? undefined : `native:${lease.path}`;
     const committed = commitTextFromDOM("text-commit", {
-      label: "native handoff",
+      label: "flush before command",
       mergeKey,
     });
     if (!committed.ok) {
       return committed;
     }
     suppressNextCompositionCommit = true;
-    return nativeHandoffUpdate({
+    return domToModelUpdate({
       command,
       kind: committed.kind,
       patch: committed.patch,
+      render: true,
       selection: committed.selection,
     });
   };
@@ -361,10 +361,11 @@ export function createJsonContentEditable<T>({
     }
     if (flushed.kind === "text") {
       verticalGoalX = null;
-      return nativeHandoffUpdate({
+      return domToModelUpdate({
         command,
         kind: flushed.kind,
         patch: flushed.patch,
+        render: true,
         selection: flushed.selection,
       });
     }
@@ -599,7 +600,7 @@ export function createJsonContentEditable<T>({
     verticalGoalX = null;
     const selection = syncSelectionFromDOM();
     if (selection === null || document.selection === undefined) {
-      return modelCommandUpdate({
+      return modelToDomUpdate({
         kind: "no-change",
         render: false,
         selection: document.selection?.snapshot() ?? null,
@@ -646,7 +647,7 @@ export function createJsonContentEditable<T>({
         reason: commit.reason ?? commit.code,
       };
     }
-    return modelCommandUpdate({
+    return modelToDomUpdate({
       kind: "text",
       render: true,
       selection: textPatch.selection,
@@ -669,7 +670,7 @@ export function createJsonContentEditable<T>({
 
       if (turn.type === "suppress-beforeinput-composition-commit") {
         suppressNextCompositionCommit = false;
-        return nativeTextUpdate({
+        return domToModelUpdate({
           kind: "no-change",
           render: true,
           selection: document.selection?.snapshot() ?? null,
@@ -677,7 +678,7 @@ export function createJsonContentEditable<T>({
       }
 
       if (turn.type === "block-composing-history") {
-        return nativeTextUpdate({
+        return domToModelUpdate({
           kind: "no-change",
           selection: document.selection?.snapshot() ?? null,
         });
@@ -697,7 +698,7 @@ export function createJsonContentEditable<T>({
 
       if (turn.type === "begin-native-text") {
         beginLeaseFromDOM(false);
-        return nativeTextUpdate({
+        return domToModelUpdate({
           kind: "no-change",
           selection: document.selection?.snapshot() ?? null,
         });
@@ -706,7 +707,7 @@ export function createJsonContentEditable<T>({
       if (turn.type === "begin-composition") {
         suppressNextCompositionCommit = false;
         beginLeaseFromDOM(true);
-        return nativeTextUpdate({
+        return domToModelUpdate({
           kind: "no-change",
           selection: document.selection?.snapshot() ?? null,
         });
@@ -716,7 +717,7 @@ export function createJsonContentEditable<T>({
         if (lease !== null) {
           lease = { ...lease, composing: false };
         }
-        return nativeTextUpdate({
+        return domToModelUpdate({
           kind: "no-change",
           selection: document.selection?.snapshot() ?? null,
         });
@@ -725,7 +726,7 @@ export function createJsonContentEditable<T>({
       if (turn.type === "suppress-input-composition-commit") {
         suppressNextCompositionCommit = false;
         lease = null;
-        return nativeTextUpdate({
+        return domToModelUpdate({
           kind: "no-change",
           render: true,
           selection: document.selection?.snapshot() ?? null,
@@ -735,7 +736,7 @@ export function createJsonContentEditable<T>({
       if (turn.type === "composing-input") {
         suppressNextCompositionCommit = false;
         beginLeaseFromDOM(true);
-        return nativeTextUpdate({
+        return domToModelUpdate({
           kind: "no-change",
           selection: document.selection?.snapshot() ?? null,
         });
@@ -752,7 +753,7 @@ export function createJsonContentEditable<T>({
 
       if (turn.type === "sync-selection") {
         const selection = syncSelectionFromDOM();
-        return modelCommandUpdate({
+        return modelToDomUpdate({
           kind: selection === null ? "no-change" : "selection",
           render: false,
           selection,
@@ -771,15 +772,15 @@ export function createJsonContentEditable<T>({
         return paste(turn.event);
       }
 
-      if (turn.type === "handoff-command") {
-        return handoffNativeText(turn.command);
+      if (turn.type === "flush-before-command") {
+        return flushNativeTextForCommand(turn.command);
       }
 
       if (turn.type === "run-command") {
         return runModelCommandAfterNativeFlush(turn.command);
       }
 
-      return modelCommandUpdate({
+      return modelToDomUpdate({
         kind: "no-change",
         render: false,
         selection: document.selection?.snapshot() ?? null,
@@ -864,7 +865,7 @@ export function createJsonContentEditable<T>({
         offsetMapper,
       );
       lease = null;
-      return modelCommandUpdate({
+      return modelToDomUpdate({
         kind: "selection",
         render: true,
         selection: renderMoved.selection,
@@ -881,7 +882,7 @@ export function createJsonContentEditable<T>({
       offsetMapper,
     );
     if (focus === null) {
-      return modelCommandUpdate({
+      return modelToDomUpdate({
         kind: "no-change",
         render: false,
         selection: document.selection?.snapshot() ?? null,
@@ -912,7 +913,7 @@ export function createJsonContentEditable<T>({
       offsetMapper,
     );
     lease = null;
-    return modelCommandUpdate({
+    return modelToDomUpdate({
       kind: "selection",
       render: true,
       selection,
@@ -935,7 +936,7 @@ export function createJsonContentEditable<T>({
       selection: currentSelection,
     });
     if (moved === null) {
-      return modelCommandUpdate({
+      return modelToDomUpdate({
         kind: "no-change",
         render: false,
         selection: currentSelection,
@@ -952,7 +953,7 @@ export function createJsonContentEditable<T>({
       offsetMapper,
     );
     lease = null;
-    return modelCommandUpdate({
+    return modelToDomUpdate({
       kind: "selection",
       render: true,
       selection: moved.selection,
@@ -971,7 +972,7 @@ export function createJsonContentEditable<T>({
 
 function capabilityToUpdate(result: JSONCapabilityResult): JsonContentEditableUpdate {
   return result.ok
-    ? modelCommandUpdate({
+    ? modelToDomUpdate({
         kind: "text",
         render: true,
         selection: null,

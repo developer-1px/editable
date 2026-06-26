@@ -165,7 +165,11 @@ function ContentEditableDemo() {
       const core = coreRef.current;
       const result = core?.handle(event);
       if (result !== undefined && shouldRefreshDemo(result)) {
-        if ("flow" in result && result.flow === "native-handoff") {
+        if (
+          "flow" in result &&
+          result.flow === "dom-to-model" &&
+          result.command !== undefined
+        ) {
           composingRef.current = false;
           refresh({ renderText: true });
           const commandResult = core?.runCommand(result.command);
@@ -181,7 +185,7 @@ function ContentEditableDemo() {
         }
         if (
           "flow" in result &&
-          result.flow === "native-text" &&
+          result.flow === "dom-to-model" &&
           result.kind === "text"
         ) {
           measureEditorVisualLayout();

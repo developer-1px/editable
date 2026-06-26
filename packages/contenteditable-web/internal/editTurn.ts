@@ -4,96 +4,81 @@ import type { SelectionIntent } from "./editFlow";
 export type EditTurn =
   | {
       type: "block-composing-history";
-      owner: "native";
       preventDefault: true;
       resetVerticalGoal: false;
     }
   | {
       type: "begin-composition";
-      owner: "native";
       preventDefault: false;
       resetVerticalGoal: true;
     }
   | {
       type: "begin-native-text";
-      owner: "native";
       preventDefault: false;
       resetVerticalGoal: true;
     }
   | {
       type: "commit-native-text";
-      owner: "native";
       preventDefault: false;
       resetVerticalGoal: true;
       selectionIntent: SelectionIntent;
     }
   | {
       type: "composing-input";
-      owner: "native";
       preventDefault: false;
       resetVerticalGoal: true;
     }
   | {
       type: "copy" | "cut" | "paste";
-      owner: "model";
       preventDefault: true;
       resetVerticalGoal: true;
       event: ClipboardEvent;
     }
   | {
       type: "end-composition";
-      owner: "native";
       preventDefault: false;
       resetVerticalGoal: true;
     }
   | {
-      type: "handoff-command";
-      owner: "handoff";
+      type: "flush-before-command";
       preventDefault: true;
       resetVerticalGoal: false;
       command: JsonContentEditableModelCommand;
     }
   | {
       type: "history";
-      owner: "model";
       preventDefault: true;
       resetVerticalGoal: true;
       command: "redo" | "undo";
     }
   | {
       type: "insert-line-break";
-      owner: "model";
       preventDefault: true;
       resetVerticalGoal: true;
     }
   | {
       type: "no-change";
-      owner: "none";
       preventDefault: false;
       resetVerticalGoal: true;
     }
   | {
       type: "run-command";
-      owner: "model";
       preventDefault: true;
       resetVerticalGoal: false;
       command: JsonContentEditableModelCommand;
     }
   | {
       type: "suppress-beforeinput-composition-commit";
-      owner: "native";
       preventDefault: true;
       resetVerticalGoal: true;
     }
   | {
       type: "suppress-input-composition-commit";
-      owner: "native";
       preventDefault: false;
       resetVerticalGoal: true;
     }
   | {
       type: "sync-selection";
-      owner: "native";
       preventDefault: false;
       resetVerticalGoal: true;
     };
@@ -144,7 +129,6 @@ export function resolveEditTurn(
     }
     return {
       type: "commit-native-text",
-      owner: "native",
       preventDefault: false,
       resetVerticalGoal: true,
       selectionIntent:
@@ -183,7 +167,7 @@ export function resolveEditTurn(
     const command = modelCommandFromKey(event);
     if (command !== null) {
       return isComposing
-        ? handoffCommandEditTurn(command)
+        ? flushBeforeCommandEditTurn(command)
         : runCommandEditTurn(command);
     }
 
@@ -203,7 +187,6 @@ function clipboardEditTurn(
   return {
     type,
     event,
-    owner: "model",
     preventDefault: true,
     resetVerticalGoal: true,
   };
@@ -226,48 +209,42 @@ function editTurn(
     case "block-composing-history":
       return {
         type,
-        owner: "native",
         preventDefault: true,
         resetVerticalGoal: false,
       };
     case "insert-line-break":
       return {
         type,
-        owner: "model",
         preventDefault: true,
         resetVerticalGoal: true,
       };
     case "no-change":
       return {
         type,
-        owner: "none",
         preventDefault: false,
         resetVerticalGoal: true,
       };
     case "suppress-beforeinput-composition-commit":
       return {
         type,
-        owner: "native",
         preventDefault: true,
         resetVerticalGoal: true,
       };
     default:
       return {
         type,
-        owner: "native",
         preventDefault: false,
         resetVerticalGoal: true,
       };
   }
 }
 
-function handoffCommandEditTurn(
+function flushBeforeCommandEditTurn(
   command: JsonContentEditableModelCommand,
 ): EditTurn {
   return {
-    type: "handoff-command",
+    type: "flush-before-command",
     command,
-    owner: "handoff",
     preventDefault: true,
     resetVerticalGoal: false,
   };
@@ -295,7 +272,6 @@ function historyEditTurn(command: "redo" | "undo"): EditTurn {
   return {
     type: "history",
     command,
-    owner: "model",
     preventDefault: true,
     resetVerticalGoal: true,
   };
@@ -360,7 +336,6 @@ function runCommandEditTurn(command: JsonContentEditableModelCommand): EditTurn 
   return {
     type: "run-command",
     command,
-    owner: "model",
     preventDefault: true,
     resetVerticalGoal: false,
   };

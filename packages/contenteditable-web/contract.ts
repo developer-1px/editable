@@ -195,10 +195,7 @@ export type JsonContentEditableModelCommand =
       extend: boolean;
     };
 
-export type JsonContentEditableFlow =
-  | "native-text"
-  | "model-command"
-  | "native-handoff";
+export type JsonContentEditableFlow = "dom-to-model" | "model-to-dom";
 
 type JsonContentEditableUpdateBase = {
   ok: true;
@@ -210,12 +207,12 @@ type JsonContentEditableUpdateBase = {
 
 export type JsonContentEditableUpdate =
   | (JsonContentEditableUpdateBase & {
-      flow: "native-text" | "model-command";
-      command?: never;
+      flow: "dom-to-model";
+      command?: JsonContentEditableModelCommand;
     })
   | (JsonContentEditableUpdateBase & {
-      flow: "native-handoff";
-      command: JsonContentEditableModelCommand;
+      flow: "model-to-dom";
+      command?: never;
     })
   | {
       ok: false;

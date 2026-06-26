@@ -12,27 +12,31 @@ export type SelectionIntent =
   | "range-command"
   | "text-commit";
 
-export function nativeTextUpdate({
+export function domToModelUpdate({
+  command,
   kind,
   patch = [],
   render = false,
   selection,
 }: {
+  command?: JsonContentEditableModelCommand;
   kind: "no-change" | "selection" | "text";
   patch?: ReadonlyArray<JSONPatchOperation>;
   render?: boolean;
   selection: SelectionSnap | null;
 }): JsonContentEditableUpdate {
-  return editFlowUpdate({
-    flow: "native-text",
+  const update = {
+    ok: true,
+    flow: "dom-to-model",
     kind,
     patch,
     render,
     selection,
-  });
+  } as const;
+  return command === undefined ? update : { ...update, command };
 }
 
-export function modelCommandUpdate({
+export function modelToDomUpdate({
   kind,
   patch = [],
   render,
@@ -43,53 +47,9 @@ export function modelCommandUpdate({
   render: boolean;
   selection: SelectionSnap | null;
 }): JsonContentEditableUpdate {
-  return editFlowUpdate({
-    flow: "model-command",
-    kind,
-    patch,
-    render,
-    selection,
-  });
-}
-
-export function nativeHandoffUpdate({
-  command,
-  kind,
-  patch = [],
-  selection,
-}: {
-  command: JsonContentEditableModelCommand;
-  kind: "no-change" | "selection" | "text";
-  patch?: ReadonlyArray<JSONPatchOperation>;
-  selection: SelectionSnap | null;
-}): JsonContentEditableUpdate {
   return {
     ok: true,
-    command,
-    flow: "native-handoff",
-    kind,
-    patch,
-    render: true,
-    selection,
-  };
-}
-
-function editFlowUpdate({
-  flow,
-  kind,
-  patch,
-  render,
-  selection,
-}: {
-  flow: "native-text" | "model-command";
-  kind: "no-change" | "selection" | "text";
-  patch: ReadonlyArray<JSONPatchOperation>;
-  render: boolean;
-  selection: SelectionSnap | null;
-}): JsonContentEditableUpdate {
-  return {
-    ok: true,
-    flow,
+    flow: "model-to-dom",
     kind,
     patch,
     render,
