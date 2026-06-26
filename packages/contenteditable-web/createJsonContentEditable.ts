@@ -33,17 +33,13 @@ import {
   findElementByAttribute,
 } from "./internal/domText";
 import {
-  isLineBreakInput,
   modelCommandUpdate,
   nativeHandoffUpdate,
   nativeTextUpdate,
+  resolveEditTurn,
   type SelectionIntent,
 } from "./internal/editFlow";
 import { readString } from "./internal/jsonDocument";
-import {
-  historyCommandFromKey,
-  lineBoundaryCommandFromKey,
-} from "./internal/keyboard";
 import {
   rangeReplacementPatches,
   rangeSyncPatchesFromTextChange,
@@ -628,41 +624,42 @@ export function createJsonContentEditable<T>({
 
   return {
     handle(event) {
-      if (event.type === "beforeinput" && event instanceof InputEvent) {
+      const turn = resolveEditTurn(event, {
+        composing: lease?.composing === true,
+        suppressNextCompositionCommit,
+      });
+      if (turn.preventDefault) {
+        event.preventDefault();
+      }
+      if (turn.resetVerticalGoal) {
         verticalGoalX = null;
-        if (
-          suppressNextCompositionCommit
-        ) {
-          event.preventDefault();
-          suppressNextCompositionCommit = false;
-          return nativeTextUpdate({
-            kind: "no-change",
-            render: true,
-            selection: document.selection?.snapshot() ?? null,
-          });
-        }
-        if (
-          lease?.composing === true &&
-          (event.inputType === "historyUndo" || event.inputType === "historyRedo")
-        ) {
-          event.preventDefault();
-          return nativeTextUpdate({
-            kind: "no-change",
-            selection: document.selection?.snapshot() ?? null,
-          });
-        }
-        if (event.inputType === "historyUndo") {
-          event.preventDefault();
-          return capabilityToUpdate(undo());
-        }
-        if (event.inputType === "historyRedo") {
-          event.preventDefault();
-          return capabilityToUpdate(redo());
-        }
-        if (isLineBreakInput(event) && !event.isComposing) {
-          event.preventDefault();
-          return insertTextCommand("\n", "insert line break");
-        }
+      }
+
+      if (turn.type === "suppress-beforeinput-composition-commit") {
+        suppressNextCompositionCommit = false;
+        return nativeTextUpdate({
+          kind: "no-change",
+          render: true,
+          selection: document.selection?.snapshot() ?? null,
+        });
+      }
+
+      if (turn.type === "block-composing-history") {
+        return nativeTextUpdate({
+          kind: "no-change",
+          selection: document.selection?.snapshot() ?? null,
+        });
+      }
+
+      if (turn.type === "history") {
+        return capabilityToUpdate(turn.command === "undo" ? undo() : redo());
+      }
+
+      if (turn.type === "insert-line-break") {
+        return insertTextCommand("\n", "insert line break");
+      }
+
+      if (turn.type === "begin-native-text") {
         beginLeaseFromDOM(false);
         return nativeTextUpdate({
           kind: "no-change",
@@ -670,8 +667,7 @@ export function createJsonContentEditable<T>({
         });
       }
 
-      if (event.type === "compositionstart") {
-        verticalGoalX = null;
+      if (turn.type === "begin-composition") {
         suppressNextCompositionCommit = false;
         beginLeaseFromDOM(true);
         return nativeTextUpdate({
@@ -680,8 +676,7 @@ export function createJsonContentEditable<T>({
         });
       }
 
-      if (event.type === "compositionend") {
-        verticalGoalX = null;
+      if (turn.type === "end-composition") {
         if (lease !== null) {
           lease = { ...lease, composing: false };
         }
@@ -691,43 +686,35 @@ export function createJsonContentEditable<T>({
         });
       }
 
-      if (event.type === "input") {
-        verticalGoalX = null;
-        const inputType =
-          event instanceof InputEvent ? event.inputType : undefined;
-        if (
-          suppressNextCompositionCommit &&
-          event instanceof InputEvent
-        ) {
-          suppressNextCompositionCommit = false;
-          lease = null;
-          return nativeTextUpdate({
-            kind: "no-change",
-            render: true,
-            selection: document.selection?.snapshot() ?? null,
-          });
-        }
-        if (event instanceof InputEvent && event.isComposing) {
-          suppressNextCompositionCommit = false;
-          beginLeaseFromDOM(true);
-          return nativeTextUpdate({
-            kind: "no-change",
-            selection: document.selection?.snapshot() ?? null,
-          });
-        }
+      if (turn.type === "suppress-input-composition-commit") {
+        suppressNextCompositionCommit = false;
+        lease = null;
+        return nativeTextUpdate({
+          kind: "no-change",
+          render: true,
+          selection: document.selection?.snapshot() ?? null,
+        });
+      }
+
+      if (turn.type === "composing-input") {
+        suppressNextCompositionCommit = false;
+        beginLeaseFromDOM(true);
+        return nativeTextUpdate({
+          kind: "no-change",
+          selection: document.selection?.snapshot() ?? null,
+        });
+      }
+
+      if (turn.type === "commit-native-text") {
         beginLeaseFromDOM(false);
         return commitNativeText({
           label: "native input",
           mergeKey: lease === null ? undefined : `native:${lease.path}`,
-          selectionIntent:
-            inputType === "insertFromComposition"
-              ? "composition-commit"
-              : "text-commit",
+          selectionIntent: turn.selectionIntent,
         });
       }
 
-      if (event.type === "selectionchange" || event.type === "select") {
-        verticalGoalX = null;
+      if (turn.type === "sync-selection") {
         const selection = syncSelectionFromDOM();
         return modelCommandUpdate({
           kind: selection === null ? "no-change" : "selection",
@@ -736,55 +723,24 @@ export function createJsonContentEditable<T>({
         });
       }
 
-      if (event.type === "copy" && event instanceof ClipboardEvent) {
-        verticalGoalX = null;
-        event.preventDefault();
-        return copy(event);
+      if (turn.type === "copy") {
+        return copy(turn.event);
       }
 
-      if (event.type === "cut" && event instanceof ClipboardEvent) {
-        verticalGoalX = null;
-        event.preventDefault();
-        return cut(event);
+      if (turn.type === "cut") {
+        return cut(turn.event);
       }
 
-      if (event.type === "paste" && event instanceof ClipboardEvent) {
-        verticalGoalX = null;
-        event.preventDefault();
-        return paste(event);
+      if (turn.type === "paste") {
+        return paste(turn.event);
       }
 
-      if (event.type === "keydown" && event instanceof KeyboardEvent) {
-        const isComposing = lease?.composing === true || event.isComposing;
-        if (isComposing) {
-          const composingCommand = historyCommandFromKey(event);
-          if (composingCommand !== null) {
-            event.preventDefault();
-            return nativeTextUpdate({
-              kind: "no-change",
-              selection: document.selection?.snapshot() ?? null,
-            });
-          }
-        }
-        if (!isComposing && isLineBreakKey(event)) {
-          event.preventDefault();
-          return insertTextCommand("\n", "insert line break");
-        }
-        const modelCommand = modelCommandFromKey(event);
-        if (modelCommand !== null) {
-          event.preventDefault();
-          return isComposing ? handoffNativeText(modelCommand) : runCommand(modelCommand);
-        }
-        verticalGoalX = null;
-        const command = historyCommandFromKey(event);
-        if (command === "undo") {
-          event.preventDefault();
-          return capabilityToUpdate(undo());
-        }
-        if (command === "redo") {
-          event.preventDefault();
-          return capabilityToUpdate(redo());
-        }
+      if (turn.type === "handoff-command") {
+        return handoffNativeText(turn.command);
+      }
+
+      if (turn.type === "run-command") {
+        return runCommand(turn.command);
       }
 
       return modelCommandUpdate({
@@ -1004,54 +960,6 @@ function lineBoundaryOffset(
   }
   const nextBreak = text.indexOf("\n", current);
   return nextBreak === -1 ? text.length : nextBreak;
-}
-
-function verticalMotionCommandFromKey(
-  event: KeyboardEvent,
-): "up" | "down" | null {
-  if (event.metaKey || event.altKey || event.ctrlKey) {
-    return null;
-  }
-  if (event.key === "ArrowUp") {
-    return "up";
-  }
-  if (event.key === "ArrowDown") {
-    return "down";
-  }
-  return null;
-}
-
-function isLineBreakKey(event: KeyboardEvent): boolean {
-  return (
-    event.key === "Enter" &&
-    !event.metaKey &&
-    !event.altKey &&
-    !event.ctrlKey
-  );
-}
-
-function modelCommandFromKey(
-  event: KeyboardEvent,
-): JsonContentEditableModelCommand | null {
-  const verticalMotionCommand = verticalMotionCommandFromKey(event);
-  if (verticalMotionCommand !== null) {
-    return {
-      type: "moveVertical",
-      direction: verticalMotionCommand,
-      extend: event.shiftKey,
-    };
-  }
-
-  const lineBoundaryCommand = lineBoundaryCommandFromKey(event);
-  if (lineBoundaryCommand !== null) {
-    return {
-      type: "moveLineBoundary",
-      boundary: lineBoundaryCommand,
-      extend: event.shiftKey,
-    };
-  }
-
-  return null;
 }
 
 function relatedPath(
