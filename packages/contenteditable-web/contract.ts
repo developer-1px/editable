@@ -118,6 +118,49 @@ export type JsonContentEditableVisualLayout = {
   lines: ReadonlyArray<JsonContentEditableVisualLine>;
 };
 
+export type JsonContentEditableRenderBoundaryUnit =
+  | "text"
+  | "atom"
+  | "syntax"
+  | "line-start"
+  | "line-end";
+
+export type JsonContentEditableRenderBoundary = {
+  id: string;
+  lineId: string;
+  path: Pointer;
+  offset: number;
+  x: number;
+  top: number;
+  bottom: number;
+  affinity: "before" | "after";
+  unit: JsonContentEditableRenderBoundaryUnit;
+};
+
+export type JsonContentEditableRenderLine = JsonContentEditableVisualLine & {
+  boundaries: ReadonlyArray<JsonContentEditableRenderBoundary>;
+};
+
+export type JsonContentEditableRenderFrame = {
+  lines: ReadonlyArray<JsonContentEditableRenderLine>;
+  boundaries: ReadonlyArray<JsonContentEditableRenderBoundary>;
+};
+
+export type JsonContentEditableSelectionFrameEndpoint = {
+  boundary: JsonContentEditableRenderBoundary;
+};
+
+export type JsonContentEditableSelectionFrameMode = "caret" | "range";
+
+export type JsonContentEditableSelectionFrame = {
+  renderFrame: JsonContentEditableRenderFrame;
+  selection: SelectionSnap;
+  anchor: JsonContentEditableSelectionFrameEndpoint;
+  focus: JsonContentEditableSelectionFrameEndpoint;
+  mode: JsonContentEditableSelectionFrameMode;
+  goalX: number | null;
+};
+
 export type JsonContentEditableVisualLayoutProvider =
   () => JsonContentEditableVisualLayout | null;
 

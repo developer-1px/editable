@@ -1,15 +1,24 @@
-import type { SelectionPoint, SelectionSnap } from "@interactive-os/json-document";
+import type { SelectionSnap } from "@interactive-os/json-document";
 import type {
-  JsonContentEditableVisualCaret,
   JsonContentEditableVisualLayout,
-  JsonContentEditableVisualLine,
+  JsonContentEditableRenderFrame,
+  JsonContentEditableSelectionFrame,
 } from "../contract";
-import { isTextPoint, selectionFromPoints } from "./selection";
+import { renderFrameFromVisualLayout } from "./renderFrame";
+import {
+  moveSelectionFrameToLineBoundary,
+  moveSelectionFrameVertically,
+  selectionFrameFromSelection,
+} from "./selectionFrame";
 
 export type VerticalMotion = "up" | "down";
 
 export type VerticalMoveResult = {
   goalX: number;
+  selection: SelectionSnap;
+};
+
+export type LineBoundaryMoveResult = {
   selection: SelectionSnap;
 };
 
@@ -26,91 +35,49 @@ export function moveSelectionVertically({
   layout: JsonContentEditableVisualLayout | null;
   selection: SelectionSnap | null;
 }): VerticalMoveResult | null {
-  const range =
-    selection?.selectionRanges[selection.primaryIndex] ?? null;
-  if (range === null || !isTextPoint(range.focus) || layout === null) {
-    return null;
-  }
-
-  const current = findCaret(layout, range.focus);
-  if (current === null) {
-    return null;
-  }
-
-  const targetGoalX = goalX ?? current.caret.x;
-  const targetLine = layout.lines[current.lineIndex + verticalDelta(direction)];
-  if (targetLine === undefined) {
-    return null;
-  }
-
-  const target = closestCaretToX(targetLine, targetGoalX);
-  if (target === null) {
-    return null;
-  }
-
-  const focus = {
-    path: target.path,
-    offset: target.offset,
-  };
-  const anchor = extend && isTextPoint(range.anchor) ? range.anchor : focus;
-  return {
-    goalX: targetGoalX,
-    selection: selectionFromPoints(anchor, focus),
-  };
-}
-
-function findCaret(
-  layout: JsonContentEditableVisualLayout,
-  point: SelectionPoint,
-): { caret: JsonContentEditableVisualCaret; lineIndex: number } | null {
-  if (!isTextPoint(point)) {
-    return null;
-  }
-
-  let best:
-    | { caret: JsonContentEditableVisualCaret; distance: number; lineIndex: number }
-    | null = null;
-  layout.lines.forEach((line, lineIndex) => {
-    if (
-      line.path !== point.path ||
-      point.offset < line.startOffset ||
-      line.endOffset < point.offset
-    ) {
-      return;
-    }
-    for (const caret of line.carets) {
-      const distance = Math.abs(caret.offset - point.offset);
-      if (
-        best === null ||
-        distance < best.distance ||
-        (distance === best.distance && caret.x < best.caret.x)
-      ) {
-        best = { caret, distance, lineIndex };
-      }
-    }
+  const frame = selectionFrameFromSelection({
+    goalX,
+    renderFrame: renderFrameFromVisualLayout(layout),
+    selection,
   });
-  return best;
-}
-
-function closestCaretToX(
-  line: JsonContentEditableVisualLine,
-  x: number,
-): JsonContentEditableVisualCaret | null {
-  let best: { caret: JsonContentEditableVisualCaret; distance: number } | null =
-    null;
-  for (const caret of line.carets) {
-    const distance = Math.abs(caret.x - x);
-    if (
-      best === null ||
-      distance < best.distance ||
-      (distance === best.distance && caret.offset > best.caret.offset)
-    ) {
-      best = { caret, distance };
-    }
+  if (frame === null) {
+    return null;
   }
-  return best?.caret ?? null;
+
+  const moved = moveSelectionFrameVertically(frame, direction, extend);
+  if (moved === null || moved.goalX === null) {
+    return null;
+  }
+
+  return {
+    goalX: moved.goalX,
+    selection: moved.selection,
+  };
 }
 
-function verticalDelta(direction: VerticalMotion): number {
-  return direction === "up" ? -1 : 1;
+export function moveSelectionToRenderLineBoundary({
+  boundary,
+  extend,
+  layout,
+  selection,
+}: {
+  boundary: "line-start" | "line-end";
+  extend: boolean;
+  layout: JsonContentEditableVisualLayout | null;
+  selection: SelectionSnap | null;
+}): LineBoundaryMoveResult | null {
+  const frame = selectionFrameFromSelection({
+    goalX: null,
+    renderFrame: renderFrameFromVisualLayout(layout),
+    selection,
+  });
+  if (frame === null) {
+    return null;
+  }
+
+  const moved = moveSelectionFrameToLineBoundary(frame, boundary, extend);
+  return moved === null ? null : { selection: moved.selection };
 }
+
+export { renderFrameFromVisualLayout };
+export type { JsonContentEditableRenderFrame, JsonContentEditableSelectionFrame };

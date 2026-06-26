@@ -5,12 +5,16 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import * as PublicCore from "./index";
 import {
+  createJsonContentEditableRenderFrame,
+  createJsonContentEditableSelectionFrame,
   createJsonContentEditable,
   JSON_ATOM_ATTRIBUTE,
   JSON_ATOM_REPLACEMENT,
   JSON_CONTENT_EDITABLE_MIME,
   JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
   JSON_TEXT_ATTRIBUTE,
+  moveJsonContentEditableSelectionFrameToLineBoundary,
+  moveJsonContentEditableSelectionFrameVertically,
   type JsonContentEditableVisualLayout,
 } from "./index";
 
@@ -262,6 +266,18 @@ function visualLine({
   };
 }
 
+function selectionSnap(start: number, end: number) {
+  const anchor = { path: "/text", offset: start };
+  const focus = { path: "/text", offset: end };
+  return {
+    selectedPointers: [],
+    selectionRanges: [{ anchor, focus }],
+    primaryIndex: 0,
+    anchor,
+    focus,
+  };
+}
+
 describe("contenteditable-web json-document bridge", () => {
   it("locks the runtime public API surface", () => {
     expect(Object.keys(PublicCore).sort()).toEqual([
@@ -271,9 +287,13 @@ describe("contenteditable-web json-document bridge", () => {
       "JSON_CONTENT_EDITABLE_MIME",
       "JSON_TEXT_ATTRIBUTE",
       "createJsonContentEditable",
+      "createJsonContentEditableRenderFrame",
+      "createJsonContentEditableSelectionFrame",
       "createJsonContentEditableVisualLayoutStore",
       "isJsonContentEditableFragment",
       "measureJsonContentEditableVisualLayout",
+      "moveJsonContentEditableSelectionFrameToLineBoundary",
+      "moveJsonContentEditableSelectionFrameVertically",
     ]);
   });
 
@@ -290,6 +310,76 @@ describe("contenteditable-web json-document bridge", () => {
     expect(document.selection?.snapshot().selectionRanges[0]).toMatchObject({
       anchor: { path: "/text", offset: 1 },
       focus: { path: "/text", offset: 4 },
+    });
+  });
+
+  it("moves selection through render frame lines and boundaries without DOM", () => {
+    const renderFrame = createJsonContentEditableRenderFrame({
+      lines: [
+        visualLine({
+          bottom: 10,
+          endOffset: 3,
+          index: 0,
+          startOffset: 0,
+          top: 0,
+          xs: [0, 10, 20, 30],
+        }),
+        visualLine({
+          bottom: 20,
+          endOffset: 8,
+          index: 1,
+          startOffset: 5,
+          top: 10,
+          xs: [0, 9, 18, 27],
+        }),
+      ],
+    });
+    const frame = createJsonContentEditableSelectionFrame({
+      goalX: null,
+      renderFrame,
+      selection: selectionSnap(2, 2),
+    });
+
+    expect(renderFrame?.lines[0]?.boundaries[0]).toMatchObject({
+      lineId: "/text:line:0:0-3",
+      offset: 0,
+      unit: "line-start",
+    });
+    expect(frame?.focus.boundary).toMatchObject({
+      lineId: "/text:line:0:0-3",
+      offset: 2,
+    });
+
+    if (frame === null) {
+      throw new Error("Expected a selection frame.");
+    }
+    const moved = moveJsonContentEditableSelectionFrameVertically(
+      frame,
+      "down",
+      false,
+    );
+    expect(moved?.selection.focus).toMatchObject({
+      path: "/text",
+      offset: 7,
+    });
+
+    const nextFrame = createJsonContentEditableSelectionFrame({
+      goalX: moved?.goalX ?? null,
+      renderFrame,
+      selection: moved?.selection ?? null,
+    });
+    if (nextFrame === null) {
+      throw new Error("Expected a moved selection frame.");
+    }
+    expect(
+      moveJsonContentEditableSelectionFrameToLineBoundary(
+        nextFrame,
+        "line-start",
+        false,
+      )?.selection.focus,
+    ).toMatchObject({
+      path: "/text",
+      offset: 5,
     });
   });
 

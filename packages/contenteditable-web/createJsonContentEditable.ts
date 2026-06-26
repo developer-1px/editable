@@ -59,6 +59,7 @@ import {
 } from "./internal/selection";
 import { changedRegionEnd } from "./internal/textDiff";
 import {
+  moveSelectionToRenderLineBoundary,
   moveSelectionVertically,
   type VerticalMotion,
 } from "./internal/visualSelection";
@@ -841,6 +842,29 @@ export function createJsonContentEditable<T>({
       atomAttribute,
       offsetMapper,
     );
+    const renderMoved = moveSelectionToRenderLineBoundary({
+      boundary: command,
+      extend,
+      layout: readVisualLayout(),
+      selection: currentSelection ?? document.selection?.snapshot() ?? null,
+    });
+    if (renderMoved !== null) {
+      document.selection?.restore(renderMoved.selection);
+      restoreDOMSelection(
+        root,
+        renderMoved.selection,
+        textAttribute,
+        atomAttribute,
+        offsetMapper,
+      );
+      lease = null;
+      return modelCommandUpdate({
+        kind: "selection",
+        render: true,
+        selection: renderMoved.selection,
+      });
+    }
+
     const range =
       currentSelection?.selectionRanges[currentSelection.primaryIndex] ??
       null;
