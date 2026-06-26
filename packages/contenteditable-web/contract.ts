@@ -233,8 +233,7 @@ export type ClipboardUpdate<T> =
 
 export type JsonContentEditable<T> = {
   handle(event: Event): JsonContentEditableUpdate | ClipboardUpdate<T>;
-  commitNativeText(options?: FlushOptions): JsonContentEditableUpdate;
-  prepareModelCommand(options?: FlushOptions): JsonContentEditableUpdate;
+  flushDOMToModel(options?: FlushOptions): JsonContentEditableUpdate;
   runCommand(command: JsonContentEditableModelCommand): JsonContentEditableUpdate;
   syncSelectionFromDOM(): SelectionSnap | null;
   restoreSelectionToDOM(selection?: SelectionSnap): boolean;

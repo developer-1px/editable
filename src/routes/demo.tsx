@@ -260,7 +260,7 @@ function ContentEditableDemo() {
       }
 
       event.preventDefault();
-      coreRef.current?.prepareModelCommand({ label: "toggle task" });
+      coreRef.current?.flushDOMToModel({ label: "toggle task" });
       toggleContentEditableDemoTaskMarker(
         document,
         atomId,
@@ -304,13 +304,13 @@ function ContentEditableDemo() {
       } else if (name === "mention") {
         core.pasteFragment(createMentionFragment(), commandSelection);
       } else if (name === "h1") {
-        core.prepareModelCommand({ label: "format heading" });
+        core.flushDOMToModel({ label: "format heading" });
         if (commandSelection !== null) {
           document.selection?.restore(commandSelection);
         }
         toggleContentEditableDemoHeading(document, commandSelection);
       } else if (name === "bold" || name === "underline") {
-        core.prepareModelCommand({ label: `format ${name}` });
+        core.flushDOMToModel({ label: `format ${name}` });
         if (commandSelection !== null) {
           document.selection?.restore(commandSelection);
         }

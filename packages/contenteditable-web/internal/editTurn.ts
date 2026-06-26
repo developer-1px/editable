@@ -4,84 +4,82 @@ import type { SelectionIntent } from "./editFlow";
 export type EditTurn =
   | {
       type: "block-composing-history";
-      preventDefault: true;
-      resetVerticalGoal: false;
     }
   | {
       type: "begin-composition";
-      preventDefault: false;
-      resetVerticalGoal: true;
     }
   | {
       type: "begin-native-text";
-      preventDefault: false;
-      resetVerticalGoal: true;
     }
   | {
       type: "commit-native-text";
-      preventDefault: false;
-      resetVerticalGoal: true;
       selectionIntent: SelectionIntent;
     }
   | {
       type: "composing-input";
-      preventDefault: false;
-      resetVerticalGoal: true;
     }
   | {
       type: "copy" | "cut" | "paste";
-      preventDefault: true;
-      resetVerticalGoal: true;
       event: ClipboardEvent;
     }
   | {
       type: "end-composition";
-      preventDefault: false;
-      resetVerticalGoal: true;
     }
   | {
       type: "flush-before-command";
-      preventDefault: true;
-      resetVerticalGoal: false;
       command: JsonContentEditableModelCommand;
     }
   | {
       type: "history";
-      preventDefault: true;
-      resetVerticalGoal: true;
       command: "redo" | "undo";
     }
   | {
       type: "insert-line-break";
-      preventDefault: true;
-      resetVerticalGoal: true;
     }
   | {
       type: "no-change";
-      preventDefault: false;
-      resetVerticalGoal: true;
     }
   | {
       type: "run-command";
-      preventDefault: true;
-      resetVerticalGoal: false;
       command: JsonContentEditableModelCommand;
     }
   | {
       type: "suppress-beforeinput-composition-commit";
-      preventDefault: true;
-      resetVerticalGoal: true;
     }
   | {
       type: "suppress-input-composition-commit";
-      preventDefault: false;
-      resetVerticalGoal: true;
     }
   | {
       type: "sync-selection";
-      preventDefault: false;
-      resetVerticalGoal: true;
     };
+
+export function editTurnPreventsDefault(turn: EditTurn): boolean {
+  switch (turn.type) {
+    case "block-composing-history":
+    case "copy":
+    case "cut":
+    case "flush-before-command":
+    case "history":
+    case "insert-line-break":
+    case "paste":
+    case "run-command":
+    case "suppress-beforeinput-composition-commit":
+      return true;
+    default:
+      return false;
+  }
+}
+
+export function editTurnResetsVerticalGoal(turn: EditTurn): boolean {
+  switch (turn.type) {
+    case "block-composing-history":
+    case "flush-before-command":
+    case "run-command":
+      return false;
+    default:
+      return true;
+  }
+}
 
 export function resolveEditTurn(
   event: Event,
@@ -129,8 +127,6 @@ export function resolveEditTurn(
     }
     return {
       type: "commit-native-text",
-      preventDefault: false,
-      resetVerticalGoal: true,
       selectionIntent:
         event instanceof InputEvent &&
         event.inputType === "insertFromComposition"
@@ -187,8 +183,6 @@ function clipboardEditTurn(
   return {
     type,
     event,
-    preventDefault: true,
-    resetVerticalGoal: true,
   };
 }
 
@@ -206,36 +200,26 @@ function editTurn(
     | "sync-selection",
 ): EditTurn {
   switch (type) {
+    case "begin-composition":
+      return { type };
+    case "begin-native-text":
+      return { type };
     case "block-composing-history":
-      return {
-        type,
-        preventDefault: true,
-        resetVerticalGoal: false,
-      };
+      return { type };
+    case "composing-input":
+      return { type };
+    case "end-composition":
+      return { type };
     case "insert-line-break":
-      return {
-        type,
-        preventDefault: true,
-        resetVerticalGoal: true,
-      };
+      return { type };
     case "no-change":
-      return {
-        type,
-        preventDefault: false,
-        resetVerticalGoal: true,
-      };
+      return { type };
     case "suppress-beforeinput-composition-commit":
-      return {
-        type,
-        preventDefault: true,
-        resetVerticalGoal: true,
-      };
-    default:
-      return {
-        type,
-        preventDefault: false,
-        resetVerticalGoal: true,
-      };
+      return { type };
+    case "suppress-input-composition-commit":
+      return { type };
+    case "sync-selection":
+      return { type };
   }
 }
 
@@ -245,8 +229,6 @@ function flushBeforeCommandEditTurn(
   return {
     type: "flush-before-command",
     command,
-    preventDefault: true,
-    resetVerticalGoal: false,
   };
 }
 
@@ -272,8 +254,6 @@ function historyEditTurn(command: "redo" | "undo"): EditTurn {
   return {
     type: "history",
     command,
-    preventDefault: true,
-    resetVerticalGoal: true,
   };
 }
 
@@ -336,8 +316,6 @@ function runCommandEditTurn(command: JsonContentEditableModelCommand): EditTurn 
   return {
     type: "run-command",
     command,
-    preventDefault: true,
-    resetVerticalGoal: false,
   };
 }
 

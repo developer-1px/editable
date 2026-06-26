@@ -37,7 +37,11 @@ import {
   modelToDomUpdate,
   type SelectionIntent,
 } from "./internal/editFlow";
-import { resolveEditTurn } from "./internal/editTurn";
+import {
+  editTurnPreventsDefault,
+  editTurnResetsVerticalGoal,
+  resolveEditTurn,
+} from "./internal/editTurn";
 import { readString } from "./internal/jsonDocument";
 import {
   rangeReplacementPatches,
@@ -68,7 +72,6 @@ type BrowserLease = {
 
 type CommitTextOptions = FlushOptions & {
   resetVerticalGoal?: boolean;
-  selectionIntent?: SelectionIntent;
 };
 
 export function createJsonContentEditable<T>({
@@ -315,10 +318,7 @@ export function createJsonContentEditable<T>({
     });
   };
 
-  const commitNativeText = (options: CommitTextOptions = {}): JsonContentEditableUpdate =>
-    commitTextFromDOM(options.selectionIntent ?? "text-commit", options);
-
-  const prepareModelCommand = (options: FlushOptions = {}): JsonContentEditableUpdate =>
+  const flushDOMToModel = (options: FlushOptions = {}): JsonContentEditableUpdate =>
     commitTextFromDOM("range-command", {
       ...options,
       resetVerticalGoal: false,
@@ -345,17 +345,10 @@ export function createJsonContentEditable<T>({
     });
   };
 
-  const flushNativeForModelTurn = (
-    label: string,
-  ): JsonContentEditableUpdate | null => {
-    const flushed = prepareModelCommand({ label });
-    return flushed.ok ? null : flushed;
-  };
-
   const runModelCommandAfterNativeFlush = (
     command: JsonContentEditableModelCommand,
   ): JsonContentEditableUpdate => {
-    const flushed = prepareModelCommand({ label: "prepare model command" });
+    const flushed = flushDOMToModel({ label: "prepare model command" });
     if (!flushed.ok) {
       return flushed;
     }
@@ -373,7 +366,7 @@ export function createJsonContentEditable<T>({
   };
 
   const copy = (event?: ClipboardEvent): ClipboardUpdate<T> => {
-    prepareModelCommand({ label: "copy selection" });
+    flushDOMToModel({ label: "copy selection" });
     const selection = document.selection?.snapshot() ?? null;
     const selectionPath = textPathFromSelection(selection);
     const fragment =
@@ -475,7 +468,7 @@ export function createJsonContentEditable<T>({
     document.history.transaction(
       { label: "paste", origin: "contenteditable" },
       () => {
-        prepareModelCommand({ label: "prepare paste" });
+        flushDOMToModel({ label: "prepare paste" });
         if (selection !== undefined && selection !== null) {
           document.selection?.restore(selection);
         }
@@ -661,10 +654,10 @@ export function createJsonContentEditable<T>({
         composing: lease?.composing === true,
         suppressNextCompositionCommit,
       });
-      if (turn.preventDefault) {
+      if (editTurnPreventsDefault(turn)) {
         event.preventDefault();
       }
-      if (turn.resetVerticalGoal) {
+      if (editTurnResetsVerticalGoal(turn)) {
         verticalGoalX = null;
       }
 
@@ -689,8 +682,8 @@ export function createJsonContentEditable<T>({
       }
 
       if (turn.type === "insert-line-break") {
-        const flushed = flushNativeForModelTurn("prepare line break");
-        if (flushed !== null) {
+        const flushed = flushDOMToModel({ label: "prepare line break" });
+        if (!flushed.ok) {
           return flushed;
         }
         return insertTextCommand("\n", "insert line break");
@@ -744,10 +737,9 @@ export function createJsonContentEditable<T>({
 
       if (turn.type === "commit-native-text") {
         beginLeaseFromDOM(false);
-        return commitNativeText({
+        return commitTextFromDOM(turn.selectionIntent, {
           label: "native input",
           mergeKey: lease === null ? undefined : `native:${lease.path}`,
-          selectionIntent: turn.selectionIntent,
         });
       }
 
@@ -786,8 +778,7 @@ export function createJsonContentEditable<T>({
         selection: document.selection?.snapshot() ?? null,
       });
     },
-    commitNativeText,
-    prepareModelCommand,
+    flushDOMToModel,
     runCommand,
     syncSelectionFromDOM,
     restoreSelectionToDOM(selection = document.selection?.snapshot()) {
