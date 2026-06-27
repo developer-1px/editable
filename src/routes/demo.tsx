@@ -25,32 +25,52 @@ import {
 } from "react";
 import {
   createJsonContentEditable,
+  createJsonContentEditableVisualLayoutStore,
   isJsonContentEditableFragment,
   type JsonContentEditable,
+  type JsonContentEditableModelCommand,
+  type JsonContentEditableUpdate,
+  measureJsonContentEditableVisualLayout,
 } from "../../packages/contenteditable-web";
+import {
+  createRichVisualLineSeeds,
+  type RichProjection,
+} from "../../packages/rich-document";
 import {
   type ContentEditableDemoDocument,
   contentEditableDemoAtomsPathForTextPath,
-  contentEditableDemoBlockActive,
+  contentEditableDemoHeadingActive,
   contentEditableDemoMarkActive,
   contentEditableDemoRangesPathForTextPath,
+  contentEditableDemoTextProjection,
   createContentEditableDemoDocument,
+  createContentEditableDemoProjection,
   createContentEditableDemoValue,
   createMentionFragment,
   renderContentEditableDemoContent,
-  toggleContentEditableDemoBlock,
+  summarizeContentEditableDemoDOM,
+  summarizeContentEditableDemoModel,
+  toggleContentEditableDemoHeading,
   toggleContentEditableDemoMark,
+  toggleContentEditableDemoTaskMarker,
 } from "../contenteditable-demo/document";
 
-export const Route = createFileRoute("/codex")({
+export const Route = createFileRoute("/demo")({
   component: ContentEditableDemo,
 });
 
 function ContentEditableDemo() {
   const document = useMemo(() => createContentEditableDemoDocument(), []);
+  const visualLayoutStore = useMemo(
+    () => createJsonContentEditableVisualLayoutStore(),
+    [],
+  );
   const rootRef = useRef<HTMLDivElement | null>(null);
   const coreRef =
     useRef<JsonContentEditable<ContentEditableDemoDocument> | null>(null);
+  const projectionRef = useRef<RichProjection | null>(null);
+  const composingRef = useRef(false);
+  const visualMeasureFrameRef = useRef<number | null>(null);
   const [, refreshState] = useState(0);
   const [isReady, setIsReady] = useState(false);
 
@@ -59,9 +79,24 @@ function ContentEditableDemo() {
     if (root === null) {
       return;
     }
-    renderContentEditableDemoContent(root, document.value);
+    visualLayoutStore.invalidate("Editor content is rendering.");
+    const projection = createContentEditableDemoProjection(
+      document.value,
+      document.selection?.snapshot() ?? null,
+      composingRef.current,
+    );
+    projectionRef.current = projection;
+    renderContentEditableDemoContent(root, document.value, projection);
+    visualLayoutStore.write(
+      measureJsonContentEditableVisualLayout({
+        lineSeeds: createRichVisualLineSeeds(document.value),
+        root,
+        projection: (path) =>
+          contentEditableDemoTextProjection(projection, path),
+      }),
+    );
     coreRef.current?.restoreSelectionToDOM();
-  }, [document]);
+  }, [document, visualLayoutStore]);
 
   const refresh = useCallback(
     (options: { renderText?: boolean } = {}) => {
@@ -73,7 +108,61 @@ function ContentEditableDemo() {
     [renderEditorContent],
   );
 
-  useEffect(() => document.subscribe(() => refresh()), [document, refresh]);
+  const commitMeasuredVisualLayoutFromDOM = useCallback(() => {
+    const root = rootRef.current;
+    if (root === null) {
+      return;
+    }
+    visualLayoutStore.write(
+      measureJsonContentEditableVisualLayout({
+        lineSeeds: createRichVisualLineSeeds(document.value),
+        root,
+        projection: (path) =>
+          contentEditableDemoTextProjection(projectionRef.current, path),
+      }),
+    );
+  }, [document, visualLayoutStore]);
+
+  const scheduleVisualLayoutMeasure = useCallback(
+    (reason: string) => {
+      visualLayoutStore.invalidate(reason);
+      if (visualMeasureFrameRef.current !== null) {
+        return;
+      }
+      visualMeasureFrameRef.current = window.requestAnimationFrame(() => {
+        visualMeasureFrameRef.current = null;
+        commitMeasuredVisualLayoutFromDOM();
+        refresh();
+      });
+    },
+    [commitMeasuredVisualLayoutFromDOM, refresh, visualLayoutStore],
+  );
+
+  const replayCommandAfterVisualRefresh = useCallback(
+    (command: JsonContentEditableModelCommand) => {
+      const core = coreRef.current;
+      if (core === null) {
+        return;
+      }
+      refresh({ renderText: true });
+      const commandResult = core.runCommand(command);
+      if (shouldRefreshDemo(commandResult)) {
+        refresh({
+          renderText: "render" in commandResult ? commandResult.render : false,
+        });
+      }
+    },
+    [refresh],
+  );
+
+  useEffect(
+    () =>
+      document.subscribe(() => {
+        visualLayoutStore.invalidate("Document model changed.");
+        refresh();
+      }),
+    [document, refresh, visualLayoutStore],
+  );
 
   useEffect(() => {
     const root = rootRef.current;
@@ -84,24 +173,88 @@ function ContentEditableDemo() {
       root,
       document,
       atomsPath: contentEditableDemoAtomsPathForTextPath,
+      projection: (path) =>
+        contentEditableDemoTextProjection(projectionRef.current, path),
       rangesPath: contentEditableDemoRangesPathForTextPath,
+      visualLayout: visualLayoutStore.read,
     });
     renderEditorContent();
     setIsReady(true);
+    const syncNativeSelection = (event: Event) => {
+      if (
+        event instanceof KeyboardEvent &&
+        !shouldSyncSelectionAfterKeyUp(event)
+      ) {
+        return;
+      }
+      window.requestAnimationFrame(() => {
+        coreRef.current?.syncSelectionFromDOM();
+        refresh({ renderText: true });
+      });
+    };
+    root.addEventListener("keyup", syncNativeSelection);
+    root.addEventListener("mouseup", syncNativeSelection);
+    const resizeObserver = new ResizeObserver(() => {
+      scheduleVisualLayoutMeasure("Editor geometry changed.");
+    });
+    resizeObserver.observe(root);
     return () => {
+      resizeObserver.disconnect();
+      if (visualMeasureFrameRef.current !== null) {
+        window.cancelAnimationFrame(visualMeasureFrameRef.current);
+        visualMeasureFrameRef.current = null;
+      }
+      root.removeEventListener("keyup", syncNativeSelection);
+      root.removeEventListener("mouseup", syncNativeSelection);
       coreRef.current = null;
+      visualLayoutStore.reset();
       setIsReady(false);
     };
-  }, [document, renderEditorContent]);
+  }, [
+    document,
+    refresh,
+    renderEditorContent,
+    scheduleVisualLayoutMeasure,
+    visualLayoutStore,
+  ]);
 
   const run = useCallback(
     (event: Event) => {
-      const result = coreRef.current?.handle(event);
-      if (shouldRefreshDemo(result)) {
-        refresh({ renderText: shouldRenderEditorText(event) });
+      const core = coreRef.current;
+      const result = core?.handle(event);
+      if (isVisualLayoutStaleCommand(result)) {
+        replayCommandAfterVisualRefresh(result.command);
+        return;
+      }
+      if (result !== undefined && shouldRefreshDemo(result)) {
+        if (
+          "flow" in result &&
+          result.flow === "dom-to-model" &&
+          result.command !== undefined
+        ) {
+          composingRef.current = false;
+          replayCommandAfterVisualRefresh(result.command);
+          return;
+        }
+        if (
+          "flow" in result &&
+          result.flow === "dom-to-model" &&
+          result.kind === "text" &&
+          !result.render
+        ) {
+          commitMeasuredVisualLayoutFromDOM();
+        }
+        refresh({
+          renderText:
+            "render" in result ? result.render : shouldRenderEditorText(event),
+        });
       }
     },
-    [refresh],
+    [
+      commitMeasuredVisualLayoutFromDOM,
+      refresh,
+      replayCommandAfterVisualRefresh,
+    ],
   );
 
   const handleInput = useCallback(
@@ -121,11 +274,17 @@ function ContentEditableDemo() {
     [run],
   );
   const handleCompositionStart = useCallback(
-    (event: ReactCompositionEvent<HTMLDivElement>) => run(event.nativeEvent),
+    (event: ReactCompositionEvent<HTMLDivElement>) => {
+      composingRef.current = true;
+      run(event.nativeEvent);
+    },
     [run],
   );
   const handleCompositionEnd = useCallback(
-    (event: ReactCompositionEvent<HTMLDivElement>) => run(event.nativeEvent),
+    (event: ReactCompositionEvent<HTMLDivElement>) => {
+      composingRef.current = false;
+      run(event.nativeEvent);
+    },
     [run],
   );
   const handleCopy = useCallback(
@@ -139,6 +298,35 @@ function ContentEditableDemo() {
   const handlePaste = useCallback(
     (event: ReactClipboardEvent<HTMLDivElement>) => run(event.nativeEvent),
     [run],
+  );
+  const handleEditorPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const root = rootRef.current;
+      const target = event.target;
+      if (root === null || !(target instanceof Element)) {
+        return;
+      }
+      const atom = target.closest(
+        "[data-json-atom][data-editable-atom-type='taskMarker']",
+      );
+      if (!(atom instanceof HTMLElement) || !root.contains(atom)) {
+        return;
+      }
+      const atomId = atom.getAttribute("data-json-atom");
+      if (atomId === null) {
+        return;
+      }
+
+      event.preventDefault();
+      coreRef.current?.flushDOMToModel({ label: "toggle task" });
+      toggleContentEditableDemoTaskMarker(
+        document,
+        atomId,
+        document.selection?.snapshot() ?? null,
+      );
+      refresh({ renderText: true });
+    },
+    [document, refresh],
   );
   const handleToolbarPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -174,13 +362,13 @@ function ContentEditableDemo() {
       } else if (name === "mention") {
         core.pasteFragment(createMentionFragment(), commandSelection);
       } else if (name === "h1") {
-        core.flush({ intent: "range-command", label: "format heading" });
+        core.flushDOMToModel({ label: "format heading" });
         if (commandSelection !== null) {
           document.selection?.restore(commandSelection);
         }
-        toggleContentEditableDemoBlock(document, "heading1", commandSelection);
+        toggleContentEditableDemoHeading(document, commandSelection);
       } else if (name === "bold" || name === "underline") {
-        core.flush({ intent: "range-command", label: `format ${name}` });
+        core.flushDOMToModel({ label: `format ${name}` });
         if (commandSelection !== null) {
           document.selection?.restore(commandSelection);
         }
@@ -215,11 +403,7 @@ function ContentEditableDemo() {
 
   const selection = document.selection?.snapshot() ?? null;
   const clipboard = document.clipboard.read();
-  const isHeading = contentEditableDemoBlockActive(
-    document.value,
-    selection,
-    "heading1",
-  );
+  const isHeading = contentEditableDemoHeadingActive(document.value, selection);
   const isBold = contentEditableDemoMarkActive(
     document.value,
     selection,
@@ -230,6 +414,7 @@ function ContentEditableDemo() {
     selection,
     "underline",
   );
+  const visualLayout = visualLayoutStore.read();
 
   return (
     <main className="contenteditable-shell">
@@ -312,6 +497,7 @@ function ContentEditableDemo() {
             onInput={handleInput}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
+            onPointerDown={handleEditorPointerDown}
             onSelect={handleSelect}
             ref={rootRef}
             role="textbox"
@@ -329,6 +515,31 @@ function ContentEditableDemo() {
           <StateBlock
             label="clipboard"
             value={clipboard.ok ? clipboard.payload : clipboard.code}
+          />
+          <StateBlock
+            label="text surfaces"
+            value={summarizeContentEditableDemoModel(document.value)}
+          />
+          <StateBlock
+            label="canonical dom"
+            value={summarizeContentEditableDemoDOM(rootRef.current)}
+          />
+          <StateBlock
+            label="visual layout"
+            value={{
+              ok: visualLayout.ok,
+              revision: visualLayout.revision,
+              reason: visualLayout.ok ? null : visualLayout.reason,
+              lines:
+                visualLayout.layout?.lines.map((line) => ({
+                  id: line.id,
+                  kind: line.kind,
+                  path: line.path,
+                  start: line.startOffset,
+                  end: line.endOffset,
+                  box: line.box,
+                })) ?? [],
+            }}
           />
           <StateBlock
             label="history"
@@ -364,10 +575,33 @@ function shouldRefreshDemo(
   if (result === undefined || !result.ok) {
     return false;
   }
+  if ("render" in result && result.render) {
+    return true;
+  }
   return !("kind" in result) || result.kind !== "no-change";
 }
 
+function isVisualLayoutStaleCommand(
+  result: unknown,
+): result is Extract<
+  JsonContentEditableUpdate,
+  { ok: false; code: "visual_layout_stale" }
+> {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    "ok" in result &&
+    result.ok === false &&
+    "code" in result &&
+    result.code === "visual_layout_stale" &&
+    "command" in result
+  );
+}
+
 function shouldRenderEditorText(event: Event): boolean {
+  if (event.type === "beforeinput" && event instanceof InputEvent) {
+    return isLineBreakInput(event) && !event.isComposing;
+  }
   if (event.type === "input" || event.type === "compositionend") {
     return false;
   }
@@ -379,6 +613,30 @@ function shouldRenderEditorText(event: Event): boolean {
     return (event.metaKey || event.ctrlKey) && (key === "z" || key === "y");
   }
   return false;
+}
+
+function shouldSyncSelectionAfterKeyUp(event: KeyboardEvent): boolean {
+  if (event.isComposing) {
+    return false;
+  }
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
+    return true;
+  }
+  return (
+    event.key === "ArrowLeft" ||
+    event.key === "ArrowRight" ||
+    event.key === "Home" ||
+    event.key === "End" ||
+    event.key === "PageUp" ||
+    event.key === "PageDown"
+  );
+}
+
+function isLineBreakInput(event: InputEvent): boolean {
+  return (
+    event.inputType === "insertParagraph" ||
+    event.inputType === "insertLineBreak"
+  );
 }
 
 function IconButton({

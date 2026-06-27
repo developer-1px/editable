@@ -115,6 +115,20 @@ export function findElementByAttribute(
   return null;
 }
 
+function editableTextLength(node: Node, atomAttribute: string): number {
+  if (isAtomElement(node, atomAttribute)) {
+    return 1;
+  }
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent?.length ?? 0;
+  }
+  let length = 0;
+  for (const child of Array.from(node.childNodes)) {
+    length += editableTextLength(child, atomAttribute);
+  }
+  return length;
+}
+
 function textOffsetForNode(
   element: Element,
   target: Node,
@@ -203,20 +217,6 @@ function textDOMPositionInChildren(
     }
   }
   return { node: element, offset: children.length };
-}
-
-function editableTextLength(node: Node, atomAttribute: string): number {
-  if (isAtomElement(node, atomAttribute)) {
-    return 1;
-  }
-  if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent?.length ?? 0;
-  }
-  let length = 0;
-  for (const child of Array.from(node.childNodes)) {
-    length += editableTextLength(child, atomAttribute);
-  }
-  return length;
 }
 
 function isAtomElement(

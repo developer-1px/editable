@@ -21,6 +21,8 @@ export type JsonContentEditableOptions<T> = {
   rangesPath?: JsonContentEditableRelatedPath | null;
   atomAttribute?: string;
   textAttribute?: string;
+  projection?: JsonContentEditableProjectionProvider<T> | null;
+  visualLayout?: JsonContentEditableVisualLayoutProvider | null;
 };
 
 export type JsonContentEditableRelatedPath =
@@ -45,23 +47,199 @@ export type JsonContentEditableRangeRecord = {
   [key: string]: unknown;
 };
 
+export type JsonContentEditableTextChange =
+  | {
+      ok: true;
+      kind: "no-change" | "text";
+      patch: ReadonlyArray<JSONPatchOperation>;
+      selection: SelectionSnap | null;
+    }
+  | {
+      ok: false;
+      code: "commit_failed" | "invalid_projection";
+      reason: string;
+    };
+
+export type JsonContentEditableTextProjection<T> = {
+  editableTextToDocumentText(editableText: string): string;
+  editableOffsetToDocumentOffset(offset: number): number;
+  documentOffsetToEditableOffset(offset: number): number;
+  applyTextChange?: (input: {
+    document: JSONDocument<T>;
+    editableText: string;
+    path: Pointer;
+    selection: SelectionSnap | null;
+  }) => JsonContentEditableTextChange;
+};
+
+export type JsonContentEditableProjectionProvider<T> = (
+  path: Pointer,
+) => JsonContentEditableTextProjection<T> | null;
+
+export type JsonContentEditableVisualCaret = {
+  path: Pointer;
+  offset: number;
+  x: number;
+  top: number;
+  bottom: number;
+};
+
+export type JsonContentEditableVisualLineKind = "text" | "empty" | "atom-only";
+
+export type JsonContentEditableVisualBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type JsonContentEditableVisualLineSeed = {
+  id: string;
+  path: Pointer;
+  startOffset: number;
+  endOffset: number;
+  kind: JsonContentEditableVisualLineKind;
+  blockId?: string;
+  lineIndex?: number;
+};
+
+export type JsonContentEditableVisualLine = JsonContentEditableVisualLineSeed & {
+  sourceId: string;
+  path: Pointer;
+  startOffset: number;
+  endOffset: number;
+  top: number;
+  bottom: number;
+  box: JsonContentEditableVisualBox;
+  carets: ReadonlyArray<JsonContentEditableVisualCaret>;
+};
+
+export type JsonContentEditableVisualLayout = {
+  lines: ReadonlyArray<JsonContentEditableVisualLine>;
+};
+
+export type JsonContentEditableVisualLayoutSnapshot =
+  | {
+      ok: true;
+      layout: JsonContentEditableVisualLayout | null;
+      revision: number;
+    }
+  | {
+      ok: false;
+      code: "visual_layout_stale";
+      reason: string;
+      layout: JsonContentEditableVisualLayout | null;
+      revision: number;
+    };
+
+export type JsonContentEditableRenderBoundaryUnit =
+  | "text"
+  | "atom"
+  | "syntax"
+  | "line-start"
+  | "line-end";
+
+export type JsonContentEditableRenderBoundary = {
+  id: string;
+  lineId: string;
+  path: Pointer;
+  offset: number;
+  x: number;
+  top: number;
+  bottom: number;
+  affinity: "before" | "after";
+  unit: JsonContentEditableRenderBoundaryUnit;
+};
+
+export type JsonContentEditableRenderLine = JsonContentEditableVisualLine & {
+  boundaries: ReadonlyArray<JsonContentEditableRenderBoundary>;
+};
+
+export type JsonContentEditableRenderFrame = {
+  lines: ReadonlyArray<JsonContentEditableRenderLine>;
+  boundaries: ReadonlyArray<JsonContentEditableRenderBoundary>;
+};
+
+export type JsonContentEditableSelectionFrameEndpoint = {
+  boundary: JsonContentEditableRenderBoundary;
+};
+
+export type JsonContentEditableSelectionFrameMode = "caret" | "range";
+
+export type JsonContentEditableSelectionFrame = {
+  renderFrame: JsonContentEditableRenderFrame;
+  selection: SelectionSnap;
+  anchor: JsonContentEditableSelectionFrameEndpoint;
+  focus: JsonContentEditableSelectionFrameEndpoint;
+  mode: JsonContentEditableSelectionFrameMode;
+  goalX: number | null;
+};
+
+export type JsonContentEditableVisualLayoutProvider =
+  () => JsonContentEditableVisualLayoutSnapshot;
+
+export type JsonContentEditableVisualLayoutStore = {
+  read(): JsonContentEditableVisualLayoutSnapshot;
+  invalidate(reason?: string): void;
+  write(layout: JsonContentEditableVisualLayout | null): void;
+  reset(): void;
+};
+
+export type JsonContentEditableVisualLayoutOptions<T> = {
+  root: HTMLElement;
+  atomAttribute?: string;
+  textAttribute?: string;
+  projection?: JsonContentEditableProjectionProvider<T> | null;
+  lineSeeds?: ReadonlyArray<JsonContentEditableVisualLineSeed> | null;
+};
+
 export type FlushOptions = {
-  intent?: "text-commit" | "range-command";
   label?: string;
   mergeKey?: string;
 };
 
-export type JsonContentEditableUpdate =
+export type JsonContentEditableModelCommand =
   | {
-      ok: true;
-      kind: "no-change" | "selection" | "text";
-      selection: SelectionSnap | null;
-      patch: ReadonlyArray<JSONPatchOperation>;
+      type: "moveVertical";
+      direction: "up" | "down";
+      extend: boolean;
     }
+  | {
+      type: "moveLineBoundary";
+      boundary: "line-start" | "line-end";
+      extend: boolean;
+    };
+
+export type JsonContentEditableFlow = "dom-to-model" | "model-to-dom";
+
+type JsonContentEditableUpdateBase = {
+  ok: true;
+  kind: "no-change" | "selection" | "text";
+  render: boolean;
+  selection: SelectionSnap | null;
+  patch: ReadonlyArray<JSONPatchOperation>;
+};
+
+export type JsonContentEditableUpdate =
+  | (JsonContentEditableUpdateBase & {
+      flow: "dom-to-model";
+      command?: JsonContentEditableModelCommand;
+    })
+  | (JsonContentEditableUpdateBase & {
+      flow: "model-to-dom";
+      command?: never;
+    })
   | {
       ok: false;
       code: "missing_root" | "missing_text_path" | "not_string" | "commit_failed";
       reason: string;
+    }
+  | {
+      ok: false;
+      code: "visual_layout_stale";
+      command: JsonContentEditableModelCommand;
+      reason: string;
+      selection: SelectionSnap | null;
     };
 
 export type ClipboardUpdate<T> =
@@ -77,7 +255,8 @@ export type ClipboardUpdate<T> =
 
 export type JsonContentEditable<T> = {
   handle(event: Event): JsonContentEditableUpdate | ClipboardUpdate<T>;
-  flush(options?: FlushOptions): JsonContentEditableUpdate;
+  flushDOMToModel(options?: FlushOptions): JsonContentEditableUpdate;
+  runCommand(command: JsonContentEditableModelCommand): JsonContentEditableUpdate;
   syncSelectionFromDOM(): SelectionSnap | null;
   restoreSelectionToDOM(selection?: SelectionSnap): boolean;
   copy(event?: ClipboardEvent): ClipboardUpdate<T>;

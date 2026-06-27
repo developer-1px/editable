@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as CodexRouteImport } from './routes/codex'
+import { Route as SelectionLabRouteImport } from './routes/selection-lab'
+import { Route as DemoRouteImport } from './routes/demo'
 import { Route as IndexRouteImport } from './routes/index'
 
-const CodexRoute = CodexRouteImport.update({
-  id: '/codex',
-  path: '/codex',
+const SelectionLabRoute = SelectionLabRouteImport.update({
+  id: '/selection-lab',
+  path: '/selection-lab',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoRoute = DemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -25,37 +31,48 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/codex': typeof CodexRoute
+  '/demo': typeof DemoRoute
+  '/selection-lab': typeof SelectionLabRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/codex': typeof CodexRoute
+  '/demo': typeof DemoRoute
+  '/selection-lab': typeof SelectionLabRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/codex': typeof CodexRoute
+  '/demo': typeof DemoRoute
+  '/selection-lab': typeof SelectionLabRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/codex'
+  fullPaths: '/' | '/demo' | '/selection-lab'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/codex'
-  id: '__root__' | '/' | '/codex'
+  to: '/' | '/demo' | '/selection-lab'
+  id: '__root__' | '/' | '/demo' | '/selection-lab'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  CodexRoute: typeof CodexRoute
+  DemoRoute: typeof DemoRoute
+  SelectionLabRoute: typeof SelectionLabRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/codex': {
-      id: '/codex'
-      path: '/codex'
-      fullPath: '/codex'
-      preLoaderRoute: typeof CodexRouteImport
+    '/selection-lab': {
+      id: '/selection-lab'
+      path: '/selection-lab'
+      fullPath: '/selection-lab'
+      preLoaderRoute: typeof SelectionLabRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo': {
+      id: '/demo'
+      path: '/demo'
+      fullPath: '/demo'
+      preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -70,7 +87,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  CodexRoute: CodexRoute,
+  DemoRoute: DemoRoute,
+  SelectionLabRoute: SelectionLabRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

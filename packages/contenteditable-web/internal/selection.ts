@@ -3,16 +3,21 @@ import type {
   SelectionPoint,
   SelectionSnap,
 } from "@interactive-os/json-document";
-import type { FlushOptions } from "../contract";
 import {
   closestAttributeElement,
   findElementByAttribute,
   textDOMPositionForOffset,
   textOffsetInElement,
 } from "./domText";
+import type { SelectionIntent } from "./editFlow";
+
+export type TextOffsetMapper = {
+  editableOffsetToDocumentOffset(path: Pointer, offset: number): number;
+  documentOffsetToEditableOffset(path: Pointer, offset: number): number;
+};
 
 export function chooseSelection(
-  intent: NonNullable<FlushOptions["intent"]>,
+  intent: SelectionIntent,
   mappedSelection: SelectionSnap | null,
   derivedCaret: SelectionSnap,
   previousSelection: SelectionSnap | null,
@@ -33,11 +38,7 @@ export function chooseSelection(
     return derivedCaret;
   }
 
-  if (
-    intent === "text-commit" &&
-    mappedSelection !== null &&
-    !selectionIsCollapsed(mappedSelection)
-  ) {
+  if (intent === "text-commit" && mappedSelection !== null) {
     return mappedSelection;
   }
 
@@ -48,6 +49,7 @@ export function selectionFromDOM(
   root: HTMLElement,
   textAttribute: string,
   atomAttribute: string,
+  mapper: TextOffsetMapper | null = null,
 ): SelectionSnap | null {
   const selection = root.ownerDocument.getSelection();
   if (
@@ -66,6 +68,7 @@ export function selectionFromDOM(
     atomAttribute,
     selection.anchorNode,
     selection.anchorOffset,
+    mapper,
   );
   const focus = textPointFromDOMPosition(
     root,
@@ -73,6 +76,7 @@ export function selectionFromDOM(
     atomAttribute,
     selection.focusNode,
     selection.focusOffset,
+    mapper,
   );
   if (anchor === null || focus === null) {
     return null;
@@ -102,6 +106,7 @@ export function textPointFromDOMSelection(
   root: HTMLElement,
   textAttribute: string,
   atomAttribute: string,
+  mapper: TextOffsetMapper | null = null,
 ): { path: Pointer; offset: number } | null {
   const selection = root.ownerDocument.getSelection();
   if (
@@ -117,6 +122,7 @@ export function textPointFromDOMSelection(
     atomAttribute,
     selection.focusNode,
     selection.focusOffset,
+    mapper,
   );
 }
 
@@ -125,6 +131,7 @@ export function restoreDOMSelection(
   selection: SelectionSnap | undefined,
   textAttribute: string,
   atomAttribute: string,
+  mapper: TextOffsetMapper | null = null,
 ): boolean {
   const range = selection?.selectionRanges[selection.primaryIndex];
   if (range === undefined) {
@@ -136,12 +143,14 @@ export function restoreDOMSelection(
     range.anchor,
     textAttribute,
     atomAttribute,
+    mapper,
   );
   const focus = domPositionFromSelectionPoint(
     root,
     range.focus,
     textAttribute,
     atomAttribute,
+    mapper,
   );
   if (anchor === null || focus === null) {
     return false;
@@ -180,6 +189,7 @@ function textPointFromDOMPosition(
   atomAttribute: string,
   node: Node,
   offset: number,
+  mapper: TextOffsetMapper | null,
 ): { path: Pointer; offset: number } | null {
   const element = closestAttributeElement(root, node, textAttribute);
   if (element === null) {
@@ -189,9 +199,17 @@ function textPointFromDOMPosition(
   if (path === null) {
     return null;
   }
+  const editableOffset = textOffsetInElement(
+    element,
+    node,
+    offset,
+    atomAttribute,
+  );
   return {
     path,
-    offset: textOffsetInElement(element, node, offset, atomAttribute),
+    offset:
+      mapper?.editableOffsetToDocumentOffset(path, editableOffset) ??
+      editableOffset,
   };
 }
 
@@ -200,12 +218,16 @@ function domPositionFromSelectionPoint(
   point: SelectionPoint,
   textAttribute: string,
   atomAttribute: string,
+  mapper: TextOffsetMapper | null,
 ): { node: Node; offset: number } | null {
   if (isTextPoint(point)) {
     const element = findElementByAttribute(root, textAttribute, point.path);
+    const editableOffset =
+      mapper?.documentOffsetToEditableOffset(point.path, point.offset) ??
+      point.offset;
     return element === null
       ? null
-      : textDOMPositionForOffset(element, point.offset, atomAttribute);
+      : textDOMPositionForOffset(element, editableOffset, atomAttribute);
   }
   return null;
 }
