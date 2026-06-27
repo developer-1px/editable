@@ -15,6 +15,8 @@ import type {
   JsonContentEditableRelatedPath,
   JsonContentEditableTextProjection,
   JsonContentEditableUpdate,
+  JsonContentEditableVisualLayout,
+  JsonContentEditableVisualLayoutSnapshot,
 } from "./contract";
 import {
   atomReplacementPatches,
@@ -37,10 +39,12 @@ import {
   modelToDomUpdate,
   type SelectionIntent,
 } from "./internal/editFlow";
+import type { NativeTextLease } from "./internal/editorContract";
 import {
   editTurnPreventsDefault,
   editTurnResetsVerticalGoal,
   resolveEditTurn,
+  type EditModelInstruction,
 } from "./internal/editTurn";
 import { readString } from "./internal/jsonDocument";
 import {
@@ -52,7 +56,6 @@ import {
   restoreDOMSelection,
   selectionFromDOM,
   selectionFromPoint,
-  selectionFromPoints,
   type TextOffsetMapper,
   textPointFromDOMSelection,
 } from "./internal/selection";
@@ -64,11 +67,6 @@ import {
 } from "./internal/visualSelection";
 
 export { isJsonContentEditableFragment } from "./internal/clipboard";
-
-type BrowserLease = {
-  path: Pointer;
-  composing: boolean;
-};
 
 type CommitTextOptions = FlushOptions & {
   resetVerticalGoal?: boolean;
@@ -84,7 +82,7 @@ export function createJsonContentEditable<T>({
   projection = null,
   visualLayout = null,
 }: JsonContentEditableOptions<T>): JsonContentEditable<T> {
-  let lease: BrowserLease | null = null;
+  let lease: NativeTextLease | null = null;
   let suppressNextCompositionCommit = false;
   let verticalGoalX: number | null = null;
 
@@ -111,7 +109,7 @@ export function createJsonContentEditable<T>({
     },
   };
 
-  const beginLeaseFromDOM = (composing = false): BrowserLease | null => {
+  const beginLeaseFromDOM = (composing = false): NativeTextLease | null => {
     const point = textPointFromDOMSelection(
       root,
       textAttribute,
@@ -128,7 +126,7 @@ export function createJsonContentEditable<T>({
     }
 
     lease = {
-      path: point.path,
+      surface: point.path,
       composing,
     };
     return lease;
@@ -147,7 +145,14 @@ export function createJsonContentEditable<T>({
     return selection;
   };
 
-  const readVisualLayout = () => visualLayout?.() ?? null;
+  const readVisualLayoutSnapshot = (): JsonContentEditableVisualLayoutSnapshot =>
+    visualLayout?.() ?? {
+      ok: false,
+      code: "visual_layout_stale",
+      layout: null,
+      reason: "Visual layout has not been measured.",
+      revision: 0,
+    };
 
   const commitTextFromDOM = (
     selectionIntent: SelectionIntent,
@@ -157,7 +162,7 @@ export function createJsonContentEditable<T>({
       verticalGoalX = null;
     }
     const path =
-      lease?.path ??
+      lease?.surface ??
       textPointFromDOMSelection(
         root,
         textAttribute,
@@ -324,20 +329,23 @@ export function createJsonContentEditable<T>({
       resetVerticalGoal: false,
     });
 
-  const flushNativeTextForCommand = (
-    command: JsonContentEditableModelCommand,
+  const flushNativeTextForModelInstruction = (
+    instruction: EditModelInstruction,
   ): JsonContentEditableUpdate => {
-    const mergeKey = lease === null ? undefined : `native:${lease.path}`;
-    const committed = commitTextFromDOM("text-commit", {
-      label: "flush before command",
+    const mergeKey = lease === null ? undefined : `native:${lease.surface}`;
+    const committed = commitTextFromDOM("composition-commit", {
+      label: `flush before ${modelInstructionLabel(instruction)}`,
       mergeKey,
     });
     if (!committed.ok) {
       return committed;
     }
     suppressNextCompositionCommit = true;
+    if (instruction.type === "insertText") {
+      return runModelInstructionAtCurrentSelection(instruction);
+    }
     return domToModelUpdate({
-      command,
+      command: instruction.command,
       kind: committed.kind,
       patch: committed.patch,
       render: true,
@@ -345,24 +353,26 @@ export function createJsonContentEditable<T>({
     });
   };
 
-  const runModelCommandAfterNativeFlush = (
-    command: JsonContentEditableModelCommand,
+  const runModelInstructionAfterDOMFlush = (
+    instruction: EditModelInstruction,
   ): JsonContentEditableUpdate => {
-    const flushed = flushDOMToModel({ label: "prepare model command" });
+    const flushed = flushDOMToModel({
+      label: `prepare ${modelInstructionLabel(instruction)}`,
+    });
     if (!flushed.ok) {
       return flushed;
     }
-    if (flushed.kind === "text") {
+    if (instruction.type === "command" && flushed.kind === "text") {
       verticalGoalX = null;
       return domToModelUpdate({
-        command,
+        command: instruction.command,
         kind: flushed.kind,
         patch: flushed.patch,
         render: true,
         selection: flushed.selection,
       });
     }
-    return runCommand(command);
+    return runModelInstructionAtCurrentSelection(instruction);
   };
 
   const copy = (event?: ClipboardEvent): ClipboardUpdate<T> => {
@@ -586,12 +596,25 @@ export function createJsonContentEditable<T>({
     return pastePayload({ clipboardText: text, jsonPayload: fragment, selection });
   };
 
-  const insertTextCommand = (
+  const runModelInstructionAtCurrentSelection = (
+    instruction: EditModelInstruction,
+  ): JsonContentEditableUpdate => {
+    if (instruction.type === "command") {
+      return runCommand(instruction.command);
+    }
+    return insertTextAtSelection(
+      instruction.text,
+      instruction.label,
+      document.selection?.snapshot() ?? null,
+    );
+  };
+
+  const insertTextAtSelection = (
     replacementText: string,
     label: string,
+    selection: SelectionSnap | null,
   ): JsonContentEditableUpdate => {
     verticalGoalX = null;
-    const selection = syncSelectionFromDOM();
     if (selection === null || document.selection === undefined) {
       return modelToDomUpdate({
         kind: "no-change",
@@ -600,6 +623,7 @@ export function createJsonContentEditable<T>({
       });
     }
 
+    document.selection.restore(selection);
     const selectionPath = textPathFromSelection(selection);
     const textPatch = document.selection.textPatch(replacementText);
     if (!textPatch.ok) {
@@ -681,12 +705,8 @@ export function createJsonContentEditable<T>({
         return capabilityToUpdate(turn.command === "undo" ? undo() : redo());
       }
 
-      if (turn.type === "insert-line-break") {
-        const flushed = flushDOMToModel({ label: "prepare line break" });
-        if (!flushed.ok) {
-          return flushed;
-        }
-        return insertTextCommand("\n", "insert line break");
+      if (turn.type === "run-model-instruction") {
+        return runModelInstructionAfterDOMFlush(turn.instruction);
       }
 
       if (turn.type === "begin-native-text") {
@@ -739,7 +759,7 @@ export function createJsonContentEditable<T>({
         beginLeaseFromDOM(false);
         return commitTextFromDOM(turn.selectionIntent, {
           label: "native input",
-          mergeKey: lease === null ? undefined : `native:${lease.path}`,
+          mergeKey: lease === null ? undefined : `native:${lease.surface}`,
         });
       }
 
@@ -764,12 +784,8 @@ export function createJsonContentEditable<T>({
         return paste(turn.event);
       }
 
-      if (turn.type === "flush-before-command") {
-        return flushNativeTextForCommand(turn.command);
-      }
-
-      if (turn.type === "run-command") {
-        return runModelCommandAfterNativeFlush(turn.command);
+      if (turn.type === "flush-before-model-instruction") {
+        return flushNativeTextForModelInstruction(turn.instruction);
       }
 
       return modelToDomUpdate({
@@ -833,18 +849,14 @@ export function createJsonContentEditable<T>({
   function moveSelectionToLineBoundary(
     command: "line-start" | "line-end",
     extend: boolean,
+    layout: JsonContentEditableVisualLayout | null,
   ): JsonContentEditableUpdate {
-    const currentSelection = selectionFromDOM(
-      root,
-      textAttribute,
-      atomAttribute,
-      offsetMapper,
-    );
+    const currentSelection = document.selection?.snapshot() ?? null;
     const renderMoved = moveSelectionToRenderLineBoundary({
       boundary: command,
       extend,
-      layout: readVisualLayout(),
-      selection: currentSelection ?? document.selection?.snapshot() ?? null,
+      layout,
+      selection: currentSelection,
     });
     if (renderMoved !== null) {
       document.selection?.restore(renderMoved.selection);
@@ -863,67 +875,24 @@ export function createJsonContentEditable<T>({
       });
     }
 
-    const range =
-      currentSelection?.selectionRanges[currentSelection.primaryIndex] ??
-      null;
-    const focus = textPointFromDOMSelection(
-      root,
-      textAttribute,
-      atomAttribute,
-      offsetMapper,
-    );
-    if (focus === null) {
-      return modelToDomUpdate({
-        kind: "no-change",
-        render: false,
-        selection: document.selection?.snapshot() ?? null,
-      });
-    }
-
-    const currentText = readString(document, focus.path);
-    if (!currentText.ok) {
-      return {
-        ok: false,
-        code: "missing_text_path",
-        reason: `No text value found for ${focus.path}.`,
-      };
-    }
-
-    const boundary = {
-      path: focus.path,
-      offset: lineBoundaryOffset(currentText.value, focus.offset, command),
-    };
-    const anchor = extend && range !== null ? range.anchor : boundary;
-    const selection = selectionFromPoints(anchor, boundary);
-    document.selection?.restore(selection);
-    restoreDOMSelection(
-      root,
-      selection,
-      textAttribute,
-      atomAttribute,
-      offsetMapper,
-    );
-    lease = null;
     return modelToDomUpdate({
-      kind: "selection",
-      render: true,
-      selection,
+      kind: "no-change",
+      render: false,
+      selection: currentSelection,
     });
   }
 
   function moveSelectionToVisualLine(
     direction: VerticalMotion,
     extend: boolean,
+    layout: JsonContentEditableVisualLayout | null,
   ): JsonContentEditableUpdate {
-    const currentSelection =
-      selectionFromDOM(root, textAttribute, atomAttribute, offsetMapper) ??
-      document.selection?.snapshot() ??
-      null;
+    const currentSelection = document.selection?.snapshot() ?? null;
     const moved = moveSelectionVertically({
       direction,
       extend,
       goalX: verticalGoalX,
-      layout: readVisualLayout(),
+      layout,
       selection: currentSelection,
     });
     if (moved === null) {
@@ -954,10 +923,26 @@ export function createJsonContentEditable<T>({
   function runCommand(
     command: JsonContentEditableModelCommand,
   ): JsonContentEditableUpdate {
-    if (command.type === "moveVertical") {
-      return moveSelectionToVisualLine(command.direction, command.extend);
+    const layout = readVisualLayoutSnapshot();
+    if (!layout.ok) {
+      return visualLayoutStaleUpdate(
+        command,
+        layout.reason,
+        document.selection?.snapshot() ?? null,
+      );
     }
-    return moveSelectionToLineBoundary(command.boundary, command.extend);
+    if (command.type === "moveVertical") {
+      return moveSelectionToVisualLine(
+        command.direction,
+        command.extend,
+        layout.layout,
+      );
+    }
+    return moveSelectionToLineBoundary(
+      command.boundary,
+      command.extend,
+      layout.layout,
+    );
   }
 }
 
@@ -976,18 +961,8 @@ function capabilityToUpdate(result: JSONCapabilityResult): JsonContentEditableUp
       };
 }
 
-function lineBoundaryOffset(
-  text: string,
-  offset: number,
-  command: "line-start" | "line-end",
-): number {
-  const current = Math.max(0, Math.min(offset, text.length));
-  if (command === "line-start") {
-    const previousBreak = text.lastIndexOf("\n", Math.max(0, current - 1));
-    return previousBreak === -1 ? 0 : previousBreak + 1;
-  }
-  const nextBreak = text.indexOf("\n", current);
-  return nextBreak === -1 ? text.length : nextBreak;
+function modelInstructionLabel(instruction: EditModelInstruction): string {
+  return instruction.type === "insertText" ? instruction.label : "model command";
 }
 
 function relatedPath(
@@ -998,6 +973,20 @@ function relatedPath(
     return null;
   }
   return typeof path === "function" ? path(textPath) : path;
+}
+
+function visualLayoutStaleUpdate(
+  command: JsonContentEditableModelCommand,
+  reason: string,
+  selection: SelectionSnap | null,
+): JsonContentEditableUpdate {
+  return {
+    ok: false,
+    code: "visual_layout_stale",
+    command,
+    reason,
+    selection,
+  };
 }
 
 function textPathFromSelection(selection: SelectionSnap | null): Pointer | null {

@@ -118,6 +118,20 @@ export type JsonContentEditableVisualLayout = {
   lines: ReadonlyArray<JsonContentEditableVisualLine>;
 };
 
+export type JsonContentEditableVisualLayoutSnapshot =
+  | {
+      ok: true;
+      layout: JsonContentEditableVisualLayout | null;
+      revision: number;
+    }
+  | {
+      ok: false;
+      code: "visual_layout_stale";
+      reason: string;
+      layout: JsonContentEditableVisualLayout | null;
+      revision: number;
+    };
+
 export type JsonContentEditableRenderBoundaryUnit =
   | "text"
   | "atom"
@@ -162,10 +176,11 @@ export type JsonContentEditableSelectionFrame = {
 };
 
 export type JsonContentEditableVisualLayoutProvider =
-  () => JsonContentEditableVisualLayout | null;
+  () => JsonContentEditableVisualLayoutSnapshot;
 
 export type JsonContentEditableVisualLayoutStore = {
-  read(): JsonContentEditableVisualLayout | null;
+  read(): JsonContentEditableVisualLayoutSnapshot;
+  invalidate(reason?: string): void;
   write(layout: JsonContentEditableVisualLayout | null): void;
   reset(): void;
 };
@@ -218,6 +233,13 @@ export type JsonContentEditableUpdate =
       ok: false;
       code: "missing_root" | "missing_text_path" | "not_string" | "commit_failed";
       reason: string;
+    }
+  | {
+      ok: false;
+      code: "visual_layout_stale";
+      command: JsonContentEditableModelCommand;
+      reason: string;
+      selection: SelectionSnap | null;
     };
 
 export type ClipboardUpdate<T> =

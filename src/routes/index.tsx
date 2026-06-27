@@ -8,6 +8,9 @@ function Home() {
       <a className="home-link" href="/demo">
         Open contenteditable demo
       </a>
+      <a className="home-link" href="/selection-lab">
+        Open headless cursor lab
+      </a>
     </main>
   );
 }

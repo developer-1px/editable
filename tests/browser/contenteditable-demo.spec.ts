@@ -352,6 +352,96 @@ test("contenteditable demo hands off IME preedit before vertical command", async
     .not.toBe("/blocks/0/text:2");
 });
 
+test("contenteditable demo derives stale IME caret before Enter", async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const editor = document.querySelector(".contenteditable-editor");
+    if (!(editor instanceof HTMLElement)) {
+      throw new Error("Missing contenteditable editor.");
+    }
+    const textSurface = editor.querySelector('[data-json-text="/blocks/0/text"]');
+    if (textSurface === null) {
+      throw new Error("Missing first text surface.");
+    }
+    const firstTextNode = Array.from(textSurface.childNodes).find(
+      (node) => node.nodeType === Node.TEXT_NODE,
+    );
+    if (firstTextNode === undefined) {
+      throw new Error("Missing first text node.");
+    }
+
+    const initialEditableText = firstTextNode.textContent ?? "";
+    const selection = document.getSelection();
+    if (selection === null) {
+      throw new Error("Missing DOM selection.");
+    }
+    const range = document.createRange();
+    range.setStart(firstTextNode, 0);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    editor.focus();
+
+    editor.dispatchEvent(
+      new CompositionEvent("compositionstart", { bubbles: true }),
+    );
+
+    firstTextNode.textContent = `안${initialEditableText}`;
+    const composingRange = document.createRange();
+    composingRange.setStart(firstTextNode, 1);
+    composingRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(composingRange);
+    editor.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        data: "안",
+        inputType: "insertCompositionText",
+        isComposing: true,
+      }),
+    );
+    editor.dispatchEvent(new Event("select", { bubbles: true }));
+
+    firstTextNode.textContent = `안녕${initialEditableText}`;
+    const staleRange = document.createRange();
+    staleRange.setStart(firstTextNode, 1);
+    staleRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(staleRange);
+    editor.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        data: "녕",
+        inputType: "insertCompositionText",
+        isComposing: true,
+      }),
+    );
+
+    const enter = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Enter",
+    });
+    const accepted = editor.dispatchEvent(enter);
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+
+    return {
+      accepted,
+      defaultPrevented: enter.defaultPrevented,
+      visibleText: editor.textContent,
+    };
+  });
+
+  expect(result.accepted).toBe(false);
+  expect(result.defaultPrevented).toBe(true);
+  expect(result.visibleText).toContain(`안녕\n${INITIAL_VISIBLE}`);
+  await expectContentEditableFirstBlockText(page, `안녕\n${INITIAL_MODEL}`);
+  await expectContentEditableSelectionOffset(page, 3);
+});
+
 test("contenteditable demo handles Enter after Korean text without caret drift", async ({
   page,
 }) => {
@@ -647,6 +737,75 @@ test("contenteditable demo command-arrow line boundaries include a trailing ment
       anchor: { offset: INITIAL_MODEL.length },
       focus: { offset: 0 },
   });
+});
+
+test("contenteditable demo command-arrow stops at the measured visual line end", async ({
+  page,
+}) => {
+  await page.addStyleTag({
+    content: `
+      .contenteditable-editor {
+        max-width: 220px !important;
+        width: 220px !important;
+      }
+    `,
+  });
+  await selectEditorText(page, 0, 0);
+
+  await expect
+    .poll(async () => (await firstBlockVisualLines(page)).length)
+    .toBeGreaterThan(1);
+  const measuredLines = await firstBlockVisualLines(page);
+  expect(measuredLines[0]?.end).toBeLessThan(INITIAL_MODEL.length);
+
+  await page.keyboard.press("Meta+ArrowRight");
+
+  await expectContentEditableSelectionOffset(
+    page,
+    measuredLines[0]?.end ?? -1,
+  );
+});
+
+test("contenteditable demo owns end key as a measured visual line boundary", async ({
+  page,
+}) => {
+  await page.addStyleTag({
+    content: `
+      .contenteditable-editor {
+        max-width: 220px !important;
+        width: 220px !important;
+      }
+    `,
+  });
+  await selectEditorText(page, 0, 0);
+
+  await expect
+    .poll(async () => (await firstBlockVisualLines(page)).length)
+    .toBeGreaterThan(1);
+  const measuredLines = await firstBlockVisualLines(page);
+  const dispatched = await page.evaluate(() => {
+    const editor = document.querySelector(".contenteditable-editor");
+    if (!(editor instanceof HTMLElement)) {
+      throw new Error("Missing editor.");
+    }
+    editor.focus();
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "End",
+    });
+    const accepted = editor.dispatchEvent(event);
+    return {
+      accepted,
+      defaultPrevented: event.defaultPrevented,
+    };
+  });
+
+  expect(dispatched).toEqual({ accepted: false, defaultPrevented: true });
+  await expectContentEditableSelectionOffset(
+    page,
+    measuredLines[0]?.end ?? -1,
+  );
 });
 
 test("contenteditable demo owns arrow-down from measured visual layout", async ({
@@ -1084,8 +1243,8 @@ async function getSelectionRange(page: Page) {
 }
 
 async function firstBlockVisualLines(page: Page) {
-  const lines = await getStateValue(page, "visual layout");
-  return lines
+  const snapshot = await getStateValue(page, "visual layout");
+  return (snapshot?.lines ?? [])
     .filter((line: { path: string }) => line.path === "/blocks/0/text")
     .map(
       (line: {

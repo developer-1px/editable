@@ -28,6 +28,8 @@ import {
   createJsonContentEditableVisualLayoutStore,
   isJsonContentEditableFragment,
   type JsonContentEditable,
+  type JsonContentEditableModelCommand,
+  type JsonContentEditableUpdate,
   measureJsonContentEditableVisualLayout,
 } from "../../packages/contenteditable-web";
 import {
@@ -68,6 +70,7 @@ function ContentEditableDemo() {
     useRef<JsonContentEditable<ContentEditableDemoDocument> | null>(null);
   const projectionRef = useRef<RichProjection | null>(null);
   const composingRef = useRef(false);
+  const visualMeasureFrameRef = useRef<number | null>(null);
   const [, refreshState] = useState(0);
   const [isReady, setIsReady] = useState(false);
 
@@ -76,6 +79,7 @@ function ContentEditableDemo() {
     if (root === null) {
       return;
     }
+    visualLayoutStore.invalidate("Editor content is rendering.");
     const projection = createContentEditableDemoProjection(
       document.value,
       document.selection?.snapshot() ?? null,
@@ -94,7 +98,17 @@ function ContentEditableDemo() {
     coreRef.current?.restoreSelectionToDOM();
   }, [document, visualLayoutStore]);
 
-  const measureEditorVisualLayout = useCallback(() => {
+  const refresh = useCallback(
+    (options: { renderText?: boolean } = {}) => {
+      refreshState((revision) => revision + 1);
+      if (options.renderText === true) {
+        renderEditorContent();
+      }
+    },
+    [renderEditorContent],
+  );
+
+  const commitMeasuredVisualLayoutFromDOM = useCallback(() => {
     const root = rootRef.current;
     if (root === null) {
       return;
@@ -109,17 +123,46 @@ function ContentEditableDemo() {
     );
   }, [document, visualLayoutStore]);
 
-  const refresh = useCallback(
-    (options: { renderText?: boolean } = {}) => {
-      refreshState((revision) => revision + 1);
-      if (options.renderText === true) {
-        renderEditorContent();
+  const scheduleVisualLayoutMeasure = useCallback(
+    (reason: string) => {
+      visualLayoutStore.invalidate(reason);
+      if (visualMeasureFrameRef.current !== null) {
+        return;
       }
+      visualMeasureFrameRef.current = window.requestAnimationFrame(() => {
+        visualMeasureFrameRef.current = null;
+        commitMeasuredVisualLayoutFromDOM();
+        refresh();
+      });
     },
-    [renderEditorContent],
+    [commitMeasuredVisualLayoutFromDOM, refresh, visualLayoutStore],
   );
 
-  useEffect(() => document.subscribe(() => refresh()), [document, refresh]);
+  const replayCommandAfterVisualRefresh = useCallback(
+    (command: JsonContentEditableModelCommand) => {
+      const core = coreRef.current;
+      if (core === null) {
+        return;
+      }
+      refresh({ renderText: true });
+      const commandResult = core.runCommand(command);
+      if (shouldRefreshDemo(commandResult)) {
+        refresh({
+          renderText: "render" in commandResult ? commandResult.render : false,
+        });
+      }
+    },
+    [refresh],
+  );
+
+  useEffect(
+    () =>
+      document.subscribe(() => {
+        visualLayoutStore.invalidate("Document model changed.");
+        refresh();
+      }),
+    [document, refresh, visualLayoutStore],
+  );
 
   useEffect(() => {
     const root = rootRef.current;
@@ -151,19 +194,38 @@ function ContentEditableDemo() {
     };
     root.addEventListener("keyup", syncNativeSelection);
     root.addEventListener("mouseup", syncNativeSelection);
+    const resizeObserver = new ResizeObserver(() => {
+      scheduleVisualLayoutMeasure("Editor geometry changed.");
+    });
+    resizeObserver.observe(root);
     return () => {
+      resizeObserver.disconnect();
+      if (visualMeasureFrameRef.current !== null) {
+        window.cancelAnimationFrame(visualMeasureFrameRef.current);
+        visualMeasureFrameRef.current = null;
+      }
       root.removeEventListener("keyup", syncNativeSelection);
       root.removeEventListener("mouseup", syncNativeSelection);
       coreRef.current = null;
       visualLayoutStore.reset();
       setIsReady(false);
     };
-  }, [document, refresh, renderEditorContent, visualLayoutStore]);
+  }, [
+    document,
+    refresh,
+    renderEditorContent,
+    scheduleVisualLayoutMeasure,
+    visualLayoutStore,
+  ]);
 
   const run = useCallback(
     (event: Event) => {
       const core = coreRef.current;
       const result = core?.handle(event);
+      if (isVisualLayoutStaleCommand(result)) {
+        replayCommandAfterVisualRefresh(result.command);
+        return;
+      }
       if (result !== undefined && shouldRefreshDemo(result)) {
         if (
           "flow" in result &&
@@ -171,24 +233,16 @@ function ContentEditableDemo() {
           result.command !== undefined
         ) {
           composingRef.current = false;
-          refresh({ renderText: true });
-          const commandResult = core?.runCommand(result.command);
-          if (shouldRefreshDemo(commandResult)) {
-            refresh({
-              renderText:
-                commandResult !== undefined &&
-                "render" in commandResult &&
-                commandResult.render,
-            });
-          }
+          replayCommandAfterVisualRefresh(result.command);
           return;
         }
         if (
           "flow" in result &&
           result.flow === "dom-to-model" &&
-          result.kind === "text"
+          result.kind === "text" &&
+          !result.render
         ) {
-          measureEditorVisualLayout();
+          commitMeasuredVisualLayoutFromDOM();
         }
         refresh({
           renderText:
@@ -196,7 +250,11 @@ function ContentEditableDemo() {
         });
       }
     },
-    [measureEditorVisualLayout, refresh],
+    [
+      commitMeasuredVisualLayoutFromDOM,
+      refresh,
+      replayCommandAfterVisualRefresh,
+    ],
   );
 
   const handleInput = useCallback(
@@ -468,16 +526,20 @@ function ContentEditableDemo() {
           />
           <StateBlock
             label="visual layout"
-            value={
-              visualLayout?.lines.map((line) => ({
-                id: line.id,
-                kind: line.kind,
-                path: line.path,
-                start: line.startOffset,
-                end: line.endOffset,
-                box: line.box,
-              })) ?? []
-            }
+            value={{
+              ok: visualLayout.ok,
+              revision: visualLayout.revision,
+              reason: visualLayout.ok ? null : visualLayout.reason,
+              lines:
+                visualLayout.layout?.lines.map((line) => ({
+                  id: line.id,
+                  kind: line.kind,
+                  path: line.path,
+                  start: line.startOffset,
+                  end: line.endOffset,
+                  box: line.box,
+                })) ?? [],
+            }}
           />
           <StateBlock
             label="history"
@@ -517,6 +579,23 @@ function shouldRefreshDemo(
     return true;
   }
   return !("kind" in result) || result.kind !== "no-change";
+}
+
+function isVisualLayoutStaleCommand(
+  result: unknown,
+): result is Extract<
+  JsonContentEditableUpdate,
+  { ok: false; code: "visual_layout_stale" }
+> {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    "ok" in result &&
+    result.ok === false &&
+    "code" in result &&
+    result.code === "visual_layout_stale" &&
+    "command" in result
+  );
 }
 
 function shouldRenderEditorText(event: Event): boolean {

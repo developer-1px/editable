@@ -249,6 +249,91 @@ export type RichVisualLineSeed = {
   lineIndex: number;
 };
 
+export type RichCursorAffinity = "before" | "after";
+export type RichCursorDirection = "backward" | "forward" | "up" | "down";
+export type RichCursorMoveUnit =
+  | "grapheme"
+  | "word"
+  | "lineBoundary"
+  | "visualLine"
+  | "documentBoundary";
+
+export type RichCursorMoveCommand = {
+  unit: RichCursorMoveUnit;
+  direction: RichCursorDirection;
+  extend?: boolean;
+};
+
+export type RichCursorPoint = {
+  blockId: string;
+  path: Pointer;
+  offset: number;
+  affinity: RichCursorAffinity;
+  order: number;
+};
+
+export type RichVirtualSelection = {
+  anchor: RichCursorPoint;
+  focus: RichCursorPoint;
+  goalX: number | null;
+};
+
+export type RichVirtualSelectionRange = {
+  anchor: RichCursorPoint;
+  focus: RichCursorPoint;
+  start: RichCursorPoint;
+  end: RichCursorPoint;
+  collapsed: boolean;
+  direction: "none" | "forward" | "backward";
+};
+
+export type RichCursorWord = {
+  blockId: string;
+  path: Pointer;
+  startOffset: number;
+  endOffset: number;
+};
+
+export type RichCursorBlockFrame = {
+  blockId: string;
+  blockIndex: number;
+  path: Pointer;
+  textLength: number;
+  caretOffsets: number[];
+  words: RichCursorWord[];
+};
+
+export type RichCursorLineFrame = {
+  id: string;
+  blockId: string;
+  blockIndex: number;
+  path: Pointer;
+  lineIndex: number;
+  order: number;
+  startOffset: number;
+  endOffset: number;
+  carets: RichCursorCaret[];
+};
+
+export type RichCursorCaret = RichCursorPoint & {
+  lineId: string;
+  lineIndex: number;
+  lineOrder: number;
+  column: number;
+  x: number;
+  y: number;
+  atomId: string | null;
+  isLineStart: boolean;
+  isLineEnd: boolean;
+};
+
+export type RichCursorFrame = {
+  documentId: string;
+  blocks: RichCursorBlockFrame[];
+  lines: RichCursorLineFrame[];
+  carets: RichCursorCaret[];
+};
+
 export type RichProjectionTextChange =
   | {
       ok: true;
@@ -605,6 +690,183 @@ function richVisualLineKind(text: string): RichVisualLineKind {
   return Array.from(text).every((character) => character === RICH_TEXT_ATOM_REPLACEMENT)
     ? "atom-only"
     : "text";
+}
+
+export function createRichCursorFrame(document: RichDocument): RichCursorFrame {
+  const blocks: RichCursorBlockFrame[] = [];
+  const lines: RichCursorLineFrame[] = [];
+  const carets: RichCursorCaret[] = [];
+  let lineOrder = 0;
+
+  document.blocks.forEach((block, blockIndex) => {
+    const path = richTextPathForBlock(blockIndex);
+    const caretOffsets = richGraphemeBoundaryOffsets(block.text);
+    const words = richWordSegments(block.text).map((word) => ({
+      blockId: block.id,
+      path,
+      startOffset: word.startOffset,
+      endOffset: word.endOffset,
+    }));
+    blocks.push({
+      blockId: block.id,
+      blockIndex,
+      path,
+      textLength: block.text.length,
+      caretOffsets,
+      words,
+    });
+
+    let lineIndex = 0;
+    let startOffset = 0;
+    for (let offset = 0; offset < block.text.length; offset += 1) {
+      if (block.text[offset] !== "\n") {
+        continue;
+      }
+      appendRichCursorLine({
+        block,
+        blockIndex,
+        path,
+        lineIndex,
+        lineOrder,
+        startOffset,
+        endOffset: offset,
+        caretOffsets,
+        carets,
+        lines,
+      });
+      lineIndex += 1;
+      lineOrder += 1;
+      startOffset = offset + 1;
+    }
+    appendRichCursorLine({
+      block,
+      blockIndex,
+      path,
+      lineIndex,
+      lineOrder,
+      startOffset,
+      endOffset: block.text.length,
+      caretOffsets,
+      carets,
+      lines,
+    });
+    lineOrder += 1;
+  });
+
+  return {
+    documentId: document.id,
+    blocks,
+    lines,
+    carets,
+  };
+}
+
+export function richCursorPointAt(
+  frame: RichCursorFrame,
+  path: Pointer,
+  offset: number,
+  affinity: RichCursorAffinity = "after",
+): RichCursorPoint | null {
+  const block = frame.blocks.find((candidate) => candidate.path === path);
+  if (block === undefined) {
+    return null;
+  }
+  const caret = closestRichCaretInBlock(frame, block, offset, affinity);
+  return caret === null ? null : richCursorPointFromCaret(caret, affinity);
+}
+
+export function richCursorSelectionAt(
+  frame: RichCursorFrame,
+  path: Pointer,
+  offset: number,
+  affinity: RichCursorAffinity = "after",
+): RichVirtualSelection | null {
+  const point = richCursorPointAt(frame, path, offset, affinity);
+  if (point === null) {
+    return null;
+  }
+  return {
+    anchor: point,
+    focus: point,
+    goalX: null,
+  };
+}
+
+export function recoverRichVirtualSelection(
+  frame: RichCursorFrame,
+  selection: RichVirtualSelection,
+): RichVirtualSelection {
+  return {
+    anchor: recoverRichCursorPoint(frame, selection.anchor),
+    focus: recoverRichCursorPoint(frame, selection.focus),
+    goalX: selection.goalX,
+  };
+}
+
+export function richVirtualSelectionRange(
+  frame: RichCursorFrame,
+  selection: RichVirtualSelection,
+): RichVirtualSelectionRange {
+  const recovered = recoverRichVirtualSelection(frame, selection);
+  const direction =
+    recovered.anchor.order === recovered.focus.order
+      ? "none"
+      : recovered.anchor.order < recovered.focus.order
+        ? "forward"
+        : "backward";
+  const [start, end] =
+    recovered.anchor.order <= recovered.focus.order
+      ? [recovered.anchor, recovered.focus]
+      : [recovered.focus, recovered.anchor];
+  return {
+    anchor: recovered.anchor,
+    focus: recovered.focus,
+    start,
+    end,
+    collapsed: start.order === end.order,
+    direction,
+  };
+}
+
+export function moveRichVirtualSelection(
+  frame: RichCursorFrame,
+  selection: RichVirtualSelection,
+  command: RichCursorMoveCommand,
+): RichVirtualSelection {
+  if (frame.carets.length === 0) {
+    return selection;
+  }
+
+  const recovered = recoverRichVirtualSelection(frame, selection);
+  const range = richVirtualSelectionRange(frame, recovered);
+  const focus = richCaretForPoint(frame, recovered.focus);
+  if (focus === null) {
+    return recovered;
+  }
+
+  const extend = command.extend === true;
+  const collapseTarget =
+    !extend && !range.collapsed && collapsesRangeBeforeMove(command)
+      ? command.direction === "backward"
+        ? richCaretForPoint(frame, range.start)
+        : richCaretForPoint(frame, range.end)
+      : null;
+  const target =
+    collapseTarget ??
+    richCursorMoveTarget(frame, focus, recovered.goalX, command);
+  if (target === null) {
+    return recovered;
+  }
+
+  const nextFocus = richCursorPointFromCaret(target);
+  return {
+    anchor: extend ? recovered.anchor : nextFocus,
+    focus: nextFocus,
+    goalX:
+      command.unit === "visualLine"
+        ? recovered.goalX ?? focus.x
+        : null,
+  };
 }
 
 export function applyRichProjectionTextChange(
@@ -1136,6 +1398,386 @@ export function mergeAdjacentRichBlocks(
     patch: [{ op: "replace", path: "/blocks", value: nextBlocks }],
     selectionAfter: selectionAt(richTextSurfaceForBlock(left.index).textPath, offset),
   };
+}
+
+type SegmenterGranularity = "grapheme" | "word";
+type SegmenterSegment = {
+  segment: string;
+  index: number;
+  isWordLike?: boolean;
+};
+type SegmenterLike = {
+  segment(input: string): Iterable<SegmenterSegment>;
+};
+type IntlWithSegmenter = typeof Intl & {
+  Segmenter?: new (
+    locale?: string | string[],
+    options?: { granularity: SegmenterGranularity },
+  ) => SegmenterLike;
+};
+
+function appendRichCursorLine({
+  block,
+  blockIndex,
+  path,
+  lineIndex,
+  lineOrder,
+  startOffset,
+  endOffset,
+  caretOffsets,
+  carets,
+  lines,
+}: {
+  block: RichBlock;
+  blockIndex: number;
+  path: Pointer;
+  lineIndex: number;
+  lineOrder: number;
+  startOffset: number;
+  endOffset: number;
+  caretOffsets: number[];
+  carets: RichCursorCaret[];
+  lines: RichCursorLineFrame[];
+}): void {
+  const lineCarets: RichCursorCaret[] = [];
+  const lineId = `${block.id}:cursor-line:${lineIndex}:${startOffset}-${endOffset}`;
+  const offsets = caretOffsets.filter(
+    (offset) => startOffset <= offset && offset <= endOffset,
+  );
+  offsets.forEach((offset, column) => {
+    const caret: RichCursorCaret = {
+      blockId: block.id,
+      path,
+      offset,
+      affinity: "after",
+      order: carets.length,
+      lineId,
+      lineIndex,
+      lineOrder,
+      column,
+      x: column,
+      y: lineOrder,
+      atomId: atomAtCaretOffset(block, offset),
+      isLineStart: offset === startOffset,
+      isLineEnd: offset === endOffset,
+    };
+    carets.push(caret);
+    lineCarets.push(caret);
+  });
+  lines.push({
+    id: lineId,
+    blockId: block.id,
+    blockIndex,
+    path,
+    lineIndex,
+    order: lineOrder,
+    startOffset,
+    endOffset,
+    carets: lineCarets,
+  });
+}
+
+function richGraphemeBoundaryOffsets(text: string): number[] {
+  const offsets = new Set([0, text.length]);
+  const segments = segmentRichText(text, "grapheme");
+  for (const segment of segments) {
+    offsets.add(segment.index);
+    offsets.add(segment.index + segment.segment.length);
+  }
+  return sortedOffsets(offsets);
+}
+
+function richWordSegments(
+  text: string,
+): Array<{ startOffset: number; endOffset: number }> {
+  const segments = segmentRichText(text, "word");
+  return Array.from(segments)
+    .filter((segment) => segment.isWordLike === true)
+    .map((segment) => ({
+      startOffset: segment.index,
+      endOffset: segment.index + segment.segment.length,
+    }));
+}
+
+function segmentRichText(
+  text: string,
+  granularity: SegmenterGranularity,
+): Iterable<SegmenterSegment> {
+  const Segmenter = (Intl as IntlWithSegmenter).Segmenter;
+  if (Segmenter === undefined) {
+    throw new Error("Intl.Segmenter is required for rich cursor navigation.");
+  }
+  return new Segmenter(undefined, { granularity }).segment(text);
+}
+
+function sortedOffsets(offsets: Set<number>): number[] {
+  return Array.from(offsets).sort((left, right) => left - right);
+}
+
+function atomAtCaretOffset(block: RichBlock, offset: number): string | null {
+  for (const [id, atom] of Object.entries(block.atoms)) {
+    if (offset === atom.offset || offset === atom.offset + 1) {
+      return id;
+    }
+  }
+  return null;
+}
+
+function richCursorPointFromCaret(
+  caret: RichCursorCaret,
+  affinity: RichCursorAffinity = caret.affinity,
+): RichCursorPoint {
+  return {
+    blockId: caret.blockId,
+    path: caret.path,
+    offset: caret.offset,
+    affinity,
+    order: caret.order,
+  };
+}
+
+function recoverRichCursorPoint(
+  frame: RichCursorFrame,
+  point: RichCursorPoint,
+): RichCursorPoint {
+  const block =
+    frame.blocks.find((candidate) => candidate.blockId === point.blockId) ??
+    frame.blocks.find((candidate) => candidate.path === point.path);
+  if (block !== undefined) {
+    const caret = closestRichCaretInBlock(
+      frame,
+      block,
+      point.offset,
+      point.affinity,
+    );
+    if (caret !== null) {
+      return richCursorPointFromCaret(caret, point.affinity);
+    }
+  }
+
+  const nearest = closestRichCaretByOrder(frame, point.order);
+  return nearest === null ? point : richCursorPointFromCaret(nearest, point.affinity);
+}
+
+function closestRichCaretInBlock(
+  frame: RichCursorFrame,
+  block: RichCursorBlockFrame,
+  offset: number,
+  affinity: RichCursorAffinity,
+): RichCursorCaret | null {
+  const clamped = clampOffset(offset, block.textLength);
+  const exact = frame.carets.find(
+    (caret) => caret.blockId === block.blockId && caret.offset === clamped,
+  );
+  if (exact !== undefined) {
+    return exact;
+  }
+
+  const blockCarets = frame.carets.filter(
+    (caret) => caret.blockId === block.blockId,
+  );
+  if (blockCarets.length === 0) {
+    return null;
+  }
+  return blockCarets.reduce((best, candidate) => {
+    const bestDistance = Math.abs(best.offset - clamped);
+    const candidateDistance = Math.abs(candidate.offset - clamped);
+    if (candidateDistance < bestDistance) {
+      return candidate;
+    }
+    if (candidateDistance > bestDistance) {
+      return best;
+    }
+    return affinity === "before"
+      ? candidate.offset < best.offset
+        ? candidate
+        : best
+      : candidate.offset > best.offset
+        ? candidate
+        : best;
+  });
+}
+
+function closestRichCaretByOrder(
+  frame: RichCursorFrame,
+  order: number,
+): RichCursorCaret | null {
+  if (frame.carets.length === 0) {
+    return null;
+  }
+  const clamped = clampOffset(order, frame.carets.length - 1);
+  return frame.carets[clamped] ?? null;
+}
+
+function richCaretForPoint(
+  frame: RichCursorFrame,
+  point: RichCursorPoint,
+): RichCursorCaret | null {
+  const exact = frame.carets.find(
+    (caret) =>
+      caret.blockId === point.blockId &&
+      caret.path === point.path &&
+      caret.offset === point.offset,
+  );
+  if (exact !== undefined) {
+    return exact;
+  }
+  const block =
+    frame.blocks.find((candidate) => candidate.blockId === point.blockId) ??
+    frame.blocks.find((candidate) => candidate.path === point.path);
+  return block === undefined
+    ? closestRichCaretByOrder(frame, point.order)
+    : closestRichCaretInBlock(frame, block, point.offset, point.affinity);
+}
+
+function collapsesRangeBeforeMove(command: RichCursorMoveCommand): boolean {
+  return (
+    (command.unit === "grapheme" || command.unit === "word") &&
+    (command.direction === "backward" || command.direction === "forward")
+  );
+}
+
+function richCursorMoveTarget(
+  frame: RichCursorFrame,
+  focus: RichCursorCaret,
+  goalX: number | null,
+  command: RichCursorMoveCommand,
+): RichCursorCaret | null {
+  if (command.unit === "grapheme") {
+    return moveRichCaretByOrder(frame, focus, command.direction);
+  }
+  if (command.unit === "word") {
+    return moveRichCaretByWord(frame, focus, command.direction);
+  }
+  if (command.unit === "lineBoundary") {
+    return moveRichCaretToLineBoundary(frame, focus, command.direction);
+  }
+  if (command.unit === "visualLine") {
+    return moveRichCaretByVisualLine(frame, focus, goalX, command.direction);
+  }
+  if (command.unit === "documentBoundary") {
+    return moveRichCaretToDocumentBoundary(frame, command.direction);
+  }
+  return null;
+}
+
+function moveRichCaretByOrder(
+  frame: RichCursorFrame,
+  caret: RichCursorCaret,
+  direction: RichCursorDirection,
+): RichCursorCaret | null {
+  if (direction === "backward") {
+    return frame.carets[Math.max(0, caret.order - 1)] ?? null;
+  }
+  if (direction === "forward") {
+    return frame.carets[Math.min(frame.carets.length - 1, caret.order + 1)] ?? null;
+  }
+  return caret;
+}
+
+function moveRichCaretByWord(
+  frame: RichCursorFrame,
+  caret: RichCursorCaret,
+  direction: RichCursorDirection,
+): RichCursorCaret | null {
+  if (direction !== "backward" && direction !== "forward") {
+    return caret;
+  }
+  const blockIndex = frame.blocks.findIndex(
+    (block) => block.blockId === caret.blockId,
+  );
+  if (blockIndex < 0) {
+    return caret;
+  }
+
+  if (direction === "forward") {
+    for (let index = blockIndex; index < frame.blocks.length; index += 1) {
+      const block = frame.blocks[index];
+      const offset = index === blockIndex ? caret.offset : 0;
+      const word = block?.words.find(
+        (candidate) => candidate.endOffset > offset,
+      );
+      if (block !== undefined && word !== undefined) {
+        return closestRichCaretInBlock(frame, block, word.endOffset, "after");
+      }
+    }
+    return frame.carets.at(-1) ?? null;
+  }
+
+  for (let index = blockIndex; index >= 0; index -= 1) {
+    const block = frame.blocks[index];
+    if (block === undefined) {
+      continue;
+    }
+    const offset = index === blockIndex ? caret.offset : block.textLength;
+    const word = [...block.words]
+      .reverse()
+      .find((candidate) => candidate.startOffset < offset);
+    if (word !== undefined) {
+      return closestRichCaretInBlock(frame, block, word.startOffset, "before");
+    }
+  }
+  return frame.carets[0] ?? null;
+}
+
+function moveRichCaretToLineBoundary(
+  frame: RichCursorFrame,
+  caret: RichCursorCaret,
+  direction: RichCursorDirection,
+): RichCursorCaret | null {
+  const line = frame.lines.find((candidate) => candidate.id === caret.lineId);
+  if (line === undefined || line.carets.length === 0) {
+    return caret;
+  }
+  if (direction === "backward") {
+    return line.carets[0] ?? null;
+  }
+  if (direction === "forward") {
+    return line.carets.at(-1) ?? null;
+  }
+  return caret;
+}
+
+function moveRichCaretByVisualLine(
+  frame: RichCursorFrame,
+  caret: RichCursorCaret,
+  goalX: number | null,
+  direction: RichCursorDirection,
+): RichCursorCaret | null {
+  if (direction !== "up" && direction !== "down") {
+    return caret;
+  }
+  const targetLine = frame.lines.find(
+    (line) => line.order === caret.lineOrder + (direction === "up" ? -1 : 1),
+  );
+  if (targetLine === undefined || targetLine.carets.length === 0) {
+    return caret;
+  }
+  const x = goalX ?? caret.x;
+  return targetLine.carets.reduce((best, candidate) => {
+    const bestDistance = Math.abs(best.x - x);
+    const candidateDistance = Math.abs(candidate.x - x);
+    if (candidateDistance < bestDistance) {
+      return candidate;
+    }
+    if (candidateDistance > bestDistance) {
+      return best;
+    }
+    return candidate.x < best.x ? candidate : best;
+  });
+}
+
+function moveRichCaretToDocumentBoundary(
+  frame: RichCursorFrame,
+  direction: RichCursorDirection,
+): RichCursorCaret | null {
+  if (direction === "backward") {
+    return frame.carets[0] ?? null;
+  }
+  if (direction === "forward") {
+    return frame.carets.at(-1) ?? null;
+  }
+  return null;
 }
 
 type ResolvedProjectionPolicy = Required<RichProjectionPolicy>;

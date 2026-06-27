@@ -1,6 +1,17 @@
 import type { JsonContentEditableModelCommand } from "../contract";
 import type { SelectionIntent } from "./editFlow";
 
+export type EditModelInstruction =
+  | {
+      type: "command";
+      command: JsonContentEditableModelCommand;
+    }
+  | {
+      type: "insertText";
+      text: string;
+      label: string;
+    };
+
 export type EditTurn =
   | {
       type: "block-composing-history";
@@ -26,22 +37,19 @@ export type EditTurn =
       type: "end-composition";
     }
   | {
-      type: "flush-before-command";
-      command: JsonContentEditableModelCommand;
+      type: "flush-before-model-instruction";
+      instruction: EditModelInstruction;
     }
   | {
       type: "history";
       command: "redo" | "undo";
     }
   | {
-      type: "insert-line-break";
-    }
-  | {
       type: "no-change";
     }
   | {
-      type: "run-command";
-      command: JsonContentEditableModelCommand;
+      type: "run-model-instruction";
+      instruction: EditModelInstruction;
     }
   | {
       type: "suppress-beforeinput-composition-commit";
@@ -58,11 +66,10 @@ export function editTurnPreventsDefault(turn: EditTurn): boolean {
     case "block-composing-history":
     case "copy":
     case "cut":
-    case "flush-before-command":
+    case "flush-before-model-instruction":
     case "history":
-    case "insert-line-break":
     case "paste":
-    case "run-command":
+    case "run-model-instruction":
     case "suppress-beforeinput-composition-commit":
       return true;
     default:
@@ -73,9 +80,10 @@ export function editTurnPreventsDefault(turn: EditTurn): boolean {
 export function editTurnResetsVerticalGoal(turn: EditTurn): boolean {
   switch (turn.type) {
     case "block-composing-history":
-    case "flush-before-command":
-    case "run-command":
+    case "flush-before-model-instruction":
       return false;
+    case "run-model-instruction":
+      return turn.instruction.type === "insertText";
     default:
       return true;
   }
@@ -105,7 +113,9 @@ export function resolveEditTurn(
       return historyEditTurn("redo");
     }
     if (isLineBreakInput(event) && !event.isComposing) {
-      return editTurn("insert-line-break");
+      return state.composing
+        ? flushBeforeModelInstructionEditTurn(lineBreakInstruction())
+        : runModelInstructionEditTurn(lineBreakInstruction());
     }
     return editTurn("begin-native-text");
   }
@@ -156,15 +166,17 @@ export function resolveEditTurn(
     if (isComposing && historyCommandFromKey(event) !== null) {
       return editTurn("block-composing-history");
     }
-    if (!isComposing && isLineBreakKey(event)) {
-      return editTurn("insert-line-break");
+    if (isLineBreakKey(event)) {
+      return isComposing
+        ? flushBeforeModelInstructionEditTurn(lineBreakInstruction())
+        : runModelInstructionEditTurn(lineBreakInstruction());
     }
 
     const command = modelCommandFromKey(event);
     if (command !== null) {
       return isComposing
-        ? flushBeforeCommandEditTurn(command)
-        : runCommandEditTurn(command);
+        ? flushBeforeModelInstructionEditTurn(commandInstruction(command))
+        : runModelInstructionEditTurn(commandInstruction(command));
     }
 
     const historyCommand = historyCommandFromKey(event);
@@ -193,7 +205,6 @@ function editTurn(
     | "block-composing-history"
     | "composing-input"
     | "end-composition"
-    | "insert-line-break"
     | "no-change"
     | "suppress-beforeinput-composition-commit"
     | "suppress-input-composition-commit"
@@ -210,8 +221,6 @@ function editTurn(
       return { type };
     case "end-composition":
       return { type };
-    case "insert-line-break":
-      return { type };
     case "no-change":
       return { type };
     case "suppress-beforeinput-composition-commit":
@@ -223,12 +232,12 @@ function editTurn(
   }
 }
 
-function flushBeforeCommandEditTurn(
-  command: JsonContentEditableModelCommand,
+function flushBeforeModelInstructionEditTurn(
+  instruction: EditModelInstruction,
 ): EditTurn {
   return {
-    type: "flush-before-command",
-    command,
+    type: "flush-before-model-instruction",
+    instruction,
   };
 }
 
@@ -276,7 +285,16 @@ function isLineBreakKey(event: KeyboardEvent): boolean {
 function lineBoundaryCommandFromKey(
   event: KeyboardEvent,
 ): "line-start" | "line-end" | null {
-  if (!event.metaKey || event.altKey || event.ctrlKey) {
+  if (event.altKey || event.ctrlKey) {
+    return null;
+  }
+  if (event.key === "Home") {
+    return "line-start";
+  }
+  if (event.key === "End") {
+    return "line-end";
+  }
+  if (!event.metaKey) {
     return null;
   }
   if (event.key === "ArrowLeft") {
@@ -312,10 +330,29 @@ function modelCommandFromKey(
   return null;
 }
 
-function runCommandEditTurn(command: JsonContentEditableModelCommand): EditTurn {
+function runModelInstructionEditTurn(
+  instruction: EditModelInstruction,
+): EditTurn {
   return {
-    type: "run-command",
+    type: "run-model-instruction",
+    instruction,
+  };
+}
+
+function commandInstruction(
+  command: JsonContentEditableModelCommand,
+): EditModelInstruction {
+  return {
+    type: "command",
     command,
+  };
+}
+
+function lineBreakInstruction(): EditModelInstruction {
+  return {
+    type: "insertText",
+    text: "\n",
+    label: "insert line break",
   };
 }
 

@@ -6,6 +6,7 @@ import {
   applyRichProjectionTextChange,
   createRichProjection,
   createRichBlock,
+  createRichCursorFrame,
   createRichDocument,
   createRichVisualLineSeeds,
   EDITABLE_ATOM_ATTRIBUTE,
@@ -16,8 +17,11 @@ import {
   EDITABLE_TEXT_ATTRIBUTE,
   insertRichAtom,
   mergeAdjacentRichBlocks,
+  moveRichVirtualSelection,
   replaceRichTextRange,
+  recoverRichVirtualSelection,
   richBlockStyleActive,
+  richCursorSelectionAt,
   richInlineRangeActive,
   richModelOffsetToProjectionOffset,
   richProjectionBlockForTextPath,
@@ -25,6 +29,7 @@ import {
   richProjectionTextToModelText,
   richTextFragmentFromRange,
   richTextSurfaceForBlock,
+  richVirtualSelectionRange,
   RICH_TEXT_ATOM_REPLACEMENT,
   splitRichBlock,
   toggleRichBlockStyleForSelection,
@@ -103,16 +108,21 @@ describe("rich-document core model", () => {
       "canonicalEditableDocumentAttributes",
       "canonicalEditableMarkAttributes",
       "createRichBlock",
+      "createRichCursorFrame",
       "createRichDocument",
       "createRichProjection",
       "createRichVisualLineSeeds",
       "insertRichAtom",
       "mergeAdjacentRichBlocks",
+      "moveRichVirtualSelection",
+      "recoverRichVirtualSelection",
       "replaceRichTextRange",
       "richAtomsPathForTextPath",
       "richBlockIndexFromTextPath",
       "richBlockRangeFromSelection",
       "richBlockStyleActive",
+      "richCursorPointAt",
+      "richCursorSelectionAt",
       "richInlineRangeActive",
       "richModelOffsetToProjectionOffset",
       "richProjectionBlockForTextPath",
@@ -122,6 +132,7 @@ describe("rich-document core model", () => {
       "richTextFragmentFromRange",
       "richTextPathForBlock",
       "richTextSurfaceForBlock",
+      "richVirtualSelectionRange",
       "setRichBlockType",
       "splitRichBlock",
       "toggleRichBlockStyleForSelection",
@@ -223,6 +234,153 @@ describe("rich-document core model", () => {
         endOffset: 4,
       },
     ]);
+  });
+
+  it("creates a headless cursor frame from rich model text", () => {
+    const document = createRichDocument({
+      id: "note-cursor",
+      blocks: [
+        {
+          ...createRichBlock({
+            id: "b1",
+            text: `안녕\n${RICH_TEXT_ATOM_REPLACEMENT}Ada`,
+          }),
+          atoms: {
+            tag: {
+              type: "tag",
+              label: "#core",
+              offset: 3,
+            },
+          },
+        },
+      ],
+    });
+
+    const frame = createRichCursorFrame(document);
+
+    expect(frame.lines.map((line) => ({
+      path: line.path,
+      startOffset: line.startOffset,
+      endOffset: line.endOffset,
+      offsets: line.carets.map((caret) => caret.offset),
+    }))).toEqual([
+      {
+        path: "/blocks/0/text",
+        startOffset: 0,
+        endOffset: 2,
+        offsets: [0, 1, 2],
+      },
+      {
+        path: "/blocks/0/text",
+        startOffset: 3,
+        endOffset: 7,
+        offsets: [3, 4, 5, 6, 7],
+      },
+    ]);
+    expect(
+      frame.carets
+        .filter((caret) => caret.atomId === "tag")
+        .map((caret) => caret.offset),
+    ).toEqual([3, 4]);
+  });
+
+  it("moves a virtual rich cursor by grapheme, word, line, and selection extension", () => {
+    const document = createRichDocument({
+      id: "note-cursor-move",
+      blocks: [
+        createRichBlock({
+          id: "b1",
+          text: "Hello world\nNext line",
+        }),
+      ],
+    });
+    const frame = createRichCursorFrame(document);
+    const initial = richCursorSelectionAt(frame, "/blocks/0/text", 0);
+
+    expect(initial).not.toBeNull();
+    if (initial === null) return;
+
+    const right = moveRichVirtualSelection(frame, initial, {
+      unit: "grapheme",
+      direction: "forward",
+    });
+    expect(right.focus.offset).toBe(1);
+
+    const word = moveRichVirtualSelection(frame, initial, {
+      unit: "word",
+      direction: "forward",
+    });
+    expect(word.focus.offset).toBe(5);
+
+    const lineEnd = moveRichVirtualSelection(frame, initial, {
+      unit: "lineBoundary",
+      direction: "forward",
+    });
+    expect(lineEnd.focus.offset).toBe(11);
+
+    const down = moveRichVirtualSelection(frame, lineEnd, {
+      unit: "visualLine",
+      direction: "down",
+    });
+    expect(down.focus.offset).toBe(21);
+
+    const extended = moveRichVirtualSelection(frame, initial, {
+      unit: "grapheme",
+      direction: "forward",
+      extend: true,
+    });
+    expect(richVirtualSelectionRange(frame, extended)).toMatchObject({
+      collapsed: false,
+      direction: "forward",
+      start: { offset: 0 },
+      end: { offset: 1 },
+    });
+  });
+
+  it("restores cursor location through model changes without DOM Range", () => {
+    const document = createRichDocument({
+      id: "note-cursor-restore",
+      blocks: [
+        createRichBlock({ id: "b1", text: "안녕" }),
+        createRichBlock({ id: "b2", text: "Second" }),
+      ],
+    });
+    const frame = createRichCursorFrame(document);
+    const koreanEnd = richCursorSelectionAt(frame, "/blocks/0/text", 2);
+
+    expect(koreanEnd).not.toBeNull();
+    if (koreanEnd === null) return;
+
+    const inserted = replaceRichTextRange(document, "b1", 2, 2, "\n");
+
+    expect(inserted.ok).toBe(true);
+    if (!inserted.ok) return;
+    const insertedFrame = createRichCursorFrame(inserted.value);
+    const afterEnter = richCursorSelectionAt(insertedFrame, "/blocks/0/text", 3);
+    expect(afterEnter?.focus).toMatchObject({
+      blockId: "b1",
+      path: "/blocks/0/text",
+      offset: 3,
+    });
+
+    const secondBlock = richCursorSelectionAt(frame, "/blocks/1/text", 3);
+    expect(secondBlock).not.toBeNull();
+    if (secondBlock === null) return;
+    const shiftedDocument = createRichDocument({
+      id: "note-cursor-restore",
+      blocks: [
+        createRichBlock({ id: "intro", text: "Intro" }),
+        ...document.blocks,
+      ],
+    });
+    const shiftedFrame = createRichCursorFrame(shiftedDocument);
+    const recovered = recoverRichVirtualSelection(shiftedFrame, secondBlock);
+
+    expect(recovered.focus).toMatchObject({
+      blockId: "b2",
+      path: "/blocks/2/text",
+      offset: 3,
+    });
   });
 
   it("applies projection marker edits back to the semantic document", () => {

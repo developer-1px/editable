@@ -32,6 +32,7 @@ export type {
   JsonContentEditableVisualLayout,
   JsonContentEditableVisualLayoutProvider,
   JsonContentEditableVisualLayoutOptions,
+  JsonContentEditableVisualLayoutSnapshot,
   JsonContentEditableVisualLayoutStore,
   JsonContentEditableVisualLine,
   JsonContentEditableVisualLineKind,
