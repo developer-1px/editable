@@ -1,16 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ContentEditableDemo } from "../contenteditable-demo/ContentEditableDemo";
+import { SelectionLab } from "../selection-lab/SelectionLab";
 
-export const Route = createFileRoute("/")({ component: Home });
+type RootSearch = {
+  surface: "demo" | "selection-lab";
+};
+
+export const Route = createFileRoute("/")({
+  component: Home,
+  validateSearch: (search): RootSearch => ({
+    surface: search.surface === "selection-lab" ? "selection-lab" : "demo",
+  }),
+});
 
 function Home() {
-  return (
-    <main className="contenteditable-shell">
-      <a className="home-link" href="/demo">
-        Open contenteditable demo
-      </a>
-      <a className="home-link" href="/selection-lab">
-        Open headless cursor lab
-      </a>
-    </main>
+  const { surface } = Route.useSearch();
+  return surface === "selection-lab" ? (
+    <SelectionLab />
+  ) : (
+    <ContentEditableDemo />
   );
 }

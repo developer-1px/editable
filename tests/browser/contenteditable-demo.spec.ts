@@ -7,7 +7,7 @@ const PASTE_VISIBLE = "Paste text. 한글과 日本語 IME. @Ada";
 const PASTE_MODEL = `Paste text. 한글과 日本語 IME. ${ATOM}`;
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/demo");
+  await page.goto("/");
   const editor = page.getByRole("textbox", { name: "JSON document text" });
   await expect(editor).toBeVisible();
   await expect(editor).toHaveAttribute("data-ready", "true", {

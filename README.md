@@ -15,7 +15,7 @@ Together they provide the thin editing layer that is hard to rebuild correctly:
 - range metadata rebasing for marks or other inline annotations
 - undo/redo through `json-document` history
 
-The demo route at `/demo` is only a smoke surface for the core protocol.
+The root route at `/` is only a smoke surface for the core protocol.
 Product editor concerns such as toolbar frameworks, markdown policy, app
 document schemas, overlays, debug recorders, and legacy editor history are not
 part of this repo.
@@ -31,7 +31,8 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:3000/demo`.
+Open `http://localhost:3000/`. The headless cursor lab is available at
+`http://localhost:3000/?surface=selection-lab`.
 
 ## Verify
 
@@ -42,7 +43,7 @@ pnpm run verify:internal
 ```
 
 `test:core` runs the jsdom contract tests for the package interface. `verify:browser`
-runs the `/demo` browser smoke tests. `verify:internal` runs TypeScript,
+runs the root browser smoke tests. `verify:internal` runs TypeScript,
 Vitest, Biome, and production build checks.
 
 ## Public Surface

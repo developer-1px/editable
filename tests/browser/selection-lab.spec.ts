@@ -326,7 +326,9 @@ test("headless cursor lab exposes key debug logs", async ({ page }) => {
 });
 
 async function openSelectionLab(page: Page, search = "") {
-  await page.goto(`/selection-lab${search}`);
+  const params = new URLSearchParams(search.replace(/^\?/, ""));
+  params.set("surface", "selection-lab");
+  await page.goto(`/?${params.toString()}`);
   const editor = page.getByTestId("selection-lab-editor");
   await expect(editor).toBeVisible();
   await expect(editor).toHaveAttribute("data-ready", "true", {
