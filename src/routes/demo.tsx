@@ -28,13 +28,13 @@ import {
   type RichProjection,
 } from "../../packages/editable";
 import {
-  createJsonContentEditable,
-  createJsonContentEditableVisualLayoutStore,
+  createEditableHost,
+  createVisualLayoutStore,
+  type EditableHost,
+  type EditableUpdate,
   isJsonContentEditableFragment,
-  type JsonContentEditable,
   type JsonContentEditableSelectionIntent,
-  type JsonContentEditableUpdate,
-  measureJsonContentEditableVisualLayout,
+  measureVisualLayout,
 } from "../../packages/editable/dom";
 import {
   type ContentEditableDemoDocument,
@@ -62,13 +62,11 @@ export const Route = createFileRoute("/demo")({
 
 function ContentEditableDemo() {
   const document = useMemo(() => createContentEditableDemoDocument(), []);
-  const visualLayoutStore = useMemo(
-    () => createJsonContentEditableVisualLayoutStore(),
-    [],
-  );
+  const visualLayoutStore = useMemo(() => createVisualLayoutStore(), []);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const coreRef =
-    useRef<JsonContentEditable<ContentEditableDemoDocument> | null>(null);
+  const coreRef = useRef<EditableHost<ContentEditableDemoDocument> | null>(
+    null,
+  );
   const projectionRef = useRef<RichProjection | null>(null);
   const composingRef = useRef(false);
   const visualMeasureFrameRef = useRef<number | null>(null);
@@ -89,7 +87,7 @@ function ContentEditableDemo() {
     projectionRef.current = projection;
     renderContentEditableDemoContent(root, document.value, projection);
     visualLayoutStore.write(
-      measureJsonContentEditableVisualLayout({
+      measureVisualLayout({
         lineSeeds: createRichVisualLineSeeds(document.value),
         root,
         projection: (path) =>
@@ -115,7 +113,7 @@ function ContentEditableDemo() {
       return;
     }
     visualLayoutStore.write(
-      measureJsonContentEditableVisualLayout({
+      measureVisualLayout({
         lineSeeds: createRichVisualLineSeeds(document.value),
         root,
         projection: (path) =>
@@ -146,7 +144,7 @@ function ContentEditableDemo() {
         return;
       }
       refresh({ renderText: true });
-      const commandResult = core.runCommand(command);
+      const commandResult = core.dispatch(command);
       if (shouldRefreshDemo(commandResult)) {
         refresh({
           renderText: "render" in commandResult ? commandResult.render : false,
@@ -170,7 +168,7 @@ function ContentEditableDemo() {
     if (root === null) {
       return;
     }
-    coreRef.current = createJsonContentEditable({
+    coreRef.current = createEditableHost({
       root,
       document,
       atomsPath: contentEditableDemoAtomsPathForTextPath,
@@ -323,7 +321,7 @@ function ContentEditableDemo() {
       }
 
       event.preventDefault();
-      coreRef.current?.flushDOMToModel({ label: "toggle task" });
+      coreRef.current?.flush({ label: "toggle task" });
       toggleContentEditableDemoTaskMarker(
         document,
         atomId,
@@ -367,13 +365,13 @@ function ContentEditableDemo() {
       } else if (name === "mention") {
         core.pasteFragment(createMentionFragment(), commandSelection);
       } else if (name === "h1") {
-        core.flushDOMToModel({ label: "format heading" });
+        core.flush({ label: "format heading" });
         if (commandSelection !== null) {
           document.selection?.restore(commandSelection);
         }
         toggleContentEditableDemoHeading(document, commandSelection);
       } else if (name === "bold" || name === "underline") {
-        core.flushDOMToModel({ label: `format ${name}` });
+        core.flush({ label: `format ${name}` });
         if (commandSelection !== null) {
           document.selection?.restore(commandSelection);
         }
@@ -574,7 +572,7 @@ async function readBrowserClipboardText(): Promise<string | null> {
 
 function shouldRefreshDemo(
   result:
-    | ReturnType<JsonContentEditable<ContentEditableDemoDocument>["handle"]>
+    | ReturnType<EditableHost<ContentEditableDemoDocument>["handle"]>
     | undefined,
 ): boolean {
   if (result === undefined || !result.ok) {
@@ -589,7 +587,7 @@ function shouldRefreshDemo(
 function isVisualLayoutStaleCommand(
   result: unknown,
 ): result is Extract<
-  JsonContentEditableUpdate,
+  EditableUpdate<ContentEditableDemoDocument>,
   { ok: false; code: "visual_layout_stale" }
 > {
   return (

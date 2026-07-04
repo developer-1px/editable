@@ -10,6 +10,7 @@ import {
 } from "./index";
 import * as PublicCore from "./dom";
 import {
+  createEditableHost,
   createJsonContentEditable,
   JSON_ATOM_ATTRIBUTE,
   JSON_ATOM_REPLACEMENT,
@@ -380,11 +381,22 @@ describe("contenteditable-web json-document bridge", () => {
       "JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA",
       "JSON_CONTENT_EDITABLE_MIME",
       "JSON_TEXT_ATTRIBUTE",
+      "createEditableHost",
       "createJsonContentEditable",
       "createJsonContentEditableVisualLayoutStore",
+      "createVisualLayoutStore",
       "isJsonContentEditableFragment",
       "measureJsonContentEditableVisualLayout",
+      "measureVisualLayout",
     ]);
+  });
+
+  it("exposes editable host method aliases", () => {
+    const { root, document } = setup("Plain");
+    const host = createEditableHost({ root, document });
+
+    expect(host.flush).toBe(host.flushDOMToModel);
+    expect(host.dispatch).toBe(host.runCommand);
   });
 
   it("syncs DOM ranges into json-document selection", () => {

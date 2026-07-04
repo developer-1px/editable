@@ -7,6 +7,9 @@ export {
 } from "./contract";
 export type {
   ClipboardUpdate,
+  EditableHost,
+  EditableHostOptions,
+  EditableUpdate,
   FlushOptions,
   JsonContentEditable,
   JsonContentEditableAtomRecord,
@@ -31,10 +34,23 @@ export type {
   JsonContentEditableVisualLine,
   JsonContentEditableVisualLineKind,
   JsonContentEditableVisualLineSeed,
+  RichTextProjection,
+  VisualCaret,
+  VisualLayout,
+  VisualLayoutSnapshot,
+  VisualLayoutStore,
+  VisualLine,
 } from "./contract";
 export {
+  createEditableHost,
   createJsonContentEditable,
   isJsonContentEditableFragment,
 } from "./createJsonContentEditable";
-export { measureJsonContentEditableVisualLayout } from "./internal/visualLayout";
-export { createVisualLayoutStore as createJsonContentEditableVisualLayoutStore } from "./internal/visualLayoutStore";
+export {
+  measureJsonContentEditableVisualLayout,
+  measureJsonContentEditableVisualLayout as measureVisualLayout,
+} from "./internal/visualLayout";
+export {
+  createVisualLayoutStore,
+  createVisualLayoutStore as createJsonContentEditableVisualLayoutStore,
+} from "./internal/visualLayoutStore";

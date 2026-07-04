@@ -7,8 +7,8 @@ import type {
 import { JSON_ATOM_ATTRIBUTE, JSON_TEXT_ATTRIBUTE } from "./contract";
 import type {
   ClipboardUpdate,
+  EditableHost,
   FlushOptions,
-  JsonContentEditable,
   JsonContentEditableFragment,
   JsonContentEditableOptions,
   JsonContentEditableRelatedPath,
@@ -76,7 +76,7 @@ export function createJsonContentEditable<T>({
   projection = null,
   resolveSelectionIntent = null,
   visualLayout = null,
-}: JsonContentEditableOptions<T>): JsonContentEditable<T> {
+}: JsonContentEditableOptions<T>): EditableHost<T> {
   let lease: NativeTextLease | null = null;
   let suppressNextCompositionCommit = false;
   let verticalGoalX: number | null = null;
@@ -789,6 +789,8 @@ export function createJsonContentEditable<T>({
         selection: document.selection?.snapshot() ?? null,
       });
     },
+    dispatch: runCommand,
+    flush: flushDOMToModel,
     flushDOMToModel,
     runCommand,
     syncSelectionFromDOM,
@@ -883,6 +885,12 @@ export function createJsonContentEditable<T>({
       selection: resolved.selection,
     });
   }
+}
+
+export function createEditableHost<T>(
+  options: JsonContentEditableOptions<T>,
+): EditableHost<T> {
+  return createJsonContentEditable(options);
 }
 
 function capabilityToUpdate(result: JSONCapabilityResult): JsonContentEditableUpdate {

@@ -243,3 +243,19 @@ export type JsonContentEditable<T> = {
   redo(): JSONCapabilityResult;
   reset(): void;
 };
+
+export type EditableHostOptions<T> = JsonContentEditableOptions<T>;
+export type EditableUpdate<T = unknown> =
+  | JsonContentEditableUpdate
+  | ClipboardUpdate<T>;
+export type EditableHost<T> = JsonContentEditable<T> & {
+  flush(options?: FlushOptions): JsonContentEditableUpdate;
+  dispatch(intent: JsonContentEditableSelectionIntent): JsonContentEditableUpdate;
+};
+
+export type RichTextProjection<T> = JsonContentEditableTextProjection<T>;
+export type VisualCaret = JsonContentEditableVisualCaret;
+export type VisualLayout = JsonContentEditableVisualLayout;
+export type VisualLayoutSnapshot = JsonContentEditableVisualLayoutSnapshot;
+export type VisualLayoutStore = JsonContentEditableVisualLayoutStore;
+export type VisualLine = JsonContentEditableVisualLine;

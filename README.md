@@ -68,7 +68,9 @@ patches and own history.
 
 The rest of the public API is intentionally small:
 
-- `createJsonContentEditable`
+- `createEditableHost`
+- `createVisualLayoutStore`
+- `measureVisualLayout`
 - `isJsonContentEditableFragment`
 - constants for text, atom, and clipboard attributes
 - adapter types from `packages/editable/dom`
