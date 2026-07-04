@@ -10,12 +10,11 @@ import type {
   FlushOptions,
   JsonContentEditable,
   JsonContentEditableFragment,
-  JsonContentEditableModelCommand,
   JsonContentEditableOptions,
   JsonContentEditableRelatedPath,
+  JsonContentEditableSelectionIntent,
   JsonContentEditableTextProjection,
   JsonContentEditableUpdate,
-  JsonContentEditableVisualLayout,
   JsonContentEditableVisualLayoutSnapshot,
 } from "./contract";
 import {
@@ -60,11 +59,6 @@ import {
   textPointFromDOMSelection,
 } from "./internal/selection";
 import { changedRegionEnd } from "./internal/textDiff";
-import {
-  moveSelectionToRenderLineBoundary,
-  moveSelectionVertically,
-  type VerticalMotion,
-} from "./internal/visualSelection";
 
 export { isJsonContentEditableFragment } from "./internal/clipboard";
 
@@ -80,6 +74,7 @@ export function createJsonContentEditable<T>({
   root,
   textAttribute = JSON_TEXT_ATTRIBUTE,
   projection = null,
+  resolveSelectionIntent = null,
   visualLayout = null,
 }: JsonContentEditableOptions<T>): JsonContentEditable<T> {
   let lease: NativeTextLease | null = null;
@@ -846,56 +841,25 @@ export function createJsonContentEditable<T>({
     return result;
   }
 
-  function moveSelectionToLineBoundary(
-    command: "line-start" | "line-end",
-    extend: boolean,
-    layout: JsonContentEditableVisualLayout | null,
+  function runCommand(
+    intent: JsonContentEditableSelectionIntent,
   ): JsonContentEditableUpdate {
-    const currentSelection = document.selection?.snapshot() ?? null;
-    const renderMoved = moveSelectionToRenderLineBoundary({
-      boundary: command,
-      extend,
-      layout,
-      selection: currentSelection,
-    });
-    if (renderMoved !== null) {
-      document.selection?.restore(renderMoved.selection);
-      restoreDOMSelection(
-        root,
-        renderMoved.selection,
-        textAttribute,
-        atomAttribute,
-        offsetMapper,
+    const layout = readVisualLayoutSnapshot();
+    if (!layout.ok) {
+      return visualLayoutStaleUpdate(
+        intent,
+        layout.reason,
+        document.selection?.snapshot() ?? null,
       );
-      lease = null;
-      return modelToDomUpdate({
-        kind: "selection",
-        render: true,
-        selection: renderMoved.selection,
-      });
     }
 
-    return modelToDomUpdate({
-      kind: "no-change",
-      render: false,
-      selection: currentSelection,
-    });
-  }
-
-  function moveSelectionToVisualLine(
-    direction: VerticalMotion,
-    extend: boolean,
-    layout: JsonContentEditableVisualLayout | null,
-  ): JsonContentEditableUpdate {
     const currentSelection = document.selection?.snapshot() ?? null;
-    const moved = moveSelectionVertically({
-      direction,
-      extend,
-      goalX: verticalGoalX,
-      layout,
-      selection: currentSelection,
-    });
-    if (moved === null) {
+    const resolved =
+      resolveSelectionIntent?.(intent, {
+        selection: currentSelection,
+        goalX: verticalGoalX,
+      }) ?? null;
+    if (resolved === null || resolved.selection === null) {
       return modelToDomUpdate({
         kind: "no-change",
         render: false,
@@ -903,11 +867,11 @@ export function createJsonContentEditable<T>({
       });
     }
 
-    verticalGoalX = moved.goalX;
-    document.selection?.restore(moved.selection);
+    verticalGoalX = resolved.goalX;
+    document.selection?.restore(resolved.selection);
     restoreDOMSelection(
       root,
-      moved.selection,
+      resolved.selection,
       textAttribute,
       atomAttribute,
       offsetMapper,
@@ -916,33 +880,8 @@ export function createJsonContentEditable<T>({
     return modelToDomUpdate({
       kind: "selection",
       render: true,
-      selection: moved.selection,
+      selection: resolved.selection,
     });
-  }
-
-  function runCommand(
-    command: JsonContentEditableModelCommand,
-  ): JsonContentEditableUpdate {
-    const layout = readVisualLayoutSnapshot();
-    if (!layout.ok) {
-      return visualLayoutStaleUpdate(
-        command,
-        layout.reason,
-        document.selection?.snapshot() ?? null,
-      );
-    }
-    if (command.type === "moveVertical") {
-      return moveSelectionToVisualLine(
-        command.direction,
-        command.extend,
-        layout.layout,
-      );
-    }
-    return moveSelectionToLineBoundary(
-      command.boundary,
-      command.extend,
-      layout.layout,
-    );
   }
 }
 
@@ -976,7 +915,7 @@ function relatedPath(
 }
 
 function visualLayoutStaleUpdate(
-  command: JsonContentEditableModelCommand,
+  command: JsonContentEditableSelectionIntent,
   reason: string,
   selection: SelectionSnap | null,
 ): JsonContentEditableUpdate {

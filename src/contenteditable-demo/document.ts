@@ -6,7 +6,10 @@ import {
 import {
   JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
   type JsonContentEditableFragment,
+  type JsonContentEditableSelectionIntentResolver,
   type JsonContentEditableTextProjection,
+  type JsonContentEditableVisualLayout,
+  type JsonContentEditableVisualLayoutStore,
 } from "../../packages/contenteditable-web";
 import {
   applyRichProjectionTextChange,
@@ -23,6 +26,7 @@ import {
   EDITABLE_HEADING_LEVEL_ATTRIBUTE,
   EDITABLE_MARK_ATTRIBUTE,
   EDITABLE_TEXT_ATTRIBUTE,
+  edit,
   RICH_TEXT_ATOM_REPLACEMENT,
   type RichBlock,
   type RichDocument,
@@ -33,7 +37,9 @@ import {
   type RichProjection,
   type RichProjectionBlock,
   type RichProjectionSpan,
+  type RichVisualLineSeed,
   richAtomsPathForTextPath,
+  richBlockIndexFromTextPath,
   richBlockStyleActive,
   richInlineRangeActive,
   richModelOffsetToProjectionOffset,
@@ -268,6 +274,67 @@ export function contentEditableDemoTextProjection(
       };
     },
   };
+}
+
+export function createContentEditableDemoSelectionIntentResolver(
+  document: JSONDocument<ContentEditableDemoDocument>,
+  visualLayout: JsonContentEditableVisualLayoutStore,
+): JsonContentEditableSelectionIntentResolver {
+  return (intent, state) => {
+    const snapshot = visualLayout.read();
+    const lineSeeds =
+      snapshot.layout === null
+        ? null
+        : richVisualLineSeedsFromMeasuredLayout(
+            document.value,
+            snapshot.layout,
+          );
+    const result = edit(
+      {
+        document: document.value,
+        selection: state.selection,
+        goalX: state.goalX,
+      },
+      intent,
+      lineSeeds === null ? {} : { lineSeeds },
+    );
+    if (!result.ok || result.kind === "history") {
+      return null;
+    }
+    return { selection: result.selectionAfter, goalX: result.goalX };
+  };
+}
+
+function richVisualLineSeedsFromMeasuredLayout(
+  document: ContentEditableDemoDocument,
+  layout: JsonContentEditableVisualLayout,
+): RichVisualLineSeed[] {
+  const seeds: RichVisualLineSeed[] = [];
+  const lineIndexByBlock = new Map<string, number>();
+  for (const line of layout.lines) {
+    const blockIndex = richBlockIndexFromTextPath(line.path);
+    const block = blockIndex === null ? undefined : document.blocks[blockIndex];
+    if (blockIndex === null || block === undefined) {
+      continue;
+    }
+    const lineIndex = lineIndexByBlock.get(block.id) ?? 0;
+    lineIndexByBlock.set(block.id, lineIndex + 1);
+    seeds.push({
+      id: line.id,
+      blockId: block.id,
+      blockIndex,
+      path: line.path,
+      startOffset: line.startOffset,
+      endOffset: line.endOffset,
+      kind: line.kind,
+      lineIndex,
+      caretMetrics: line.carets.map((caret) => ({
+        offset: caret.offset,
+        x: caret.x,
+      })),
+    });
+  }
+  return seeds;
 }
 
 export function createMentionFragment(): JsonContentEditableFragment {

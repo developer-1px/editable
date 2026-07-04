@@ -28,7 +28,7 @@ import {
   createJsonContentEditableVisualLayoutStore,
   isJsonContentEditableFragment,
   type JsonContentEditable,
-  type JsonContentEditableModelCommand,
+  type JsonContentEditableSelectionIntent,
   type JsonContentEditableUpdate,
   measureJsonContentEditableVisualLayout,
 } from "../../packages/contenteditable-web";
@@ -45,6 +45,7 @@ import {
   contentEditableDemoTextProjection,
   createContentEditableDemoDocument,
   createContentEditableDemoProjection,
+  createContentEditableDemoSelectionIntentResolver,
   createContentEditableDemoValue,
   createMentionFragment,
   renderContentEditableDemoContent,
@@ -139,7 +140,7 @@ function ContentEditableDemo() {
   );
 
   const replayCommandAfterVisualRefresh = useCallback(
-    (command: JsonContentEditableModelCommand) => {
+    (command: JsonContentEditableSelectionIntent) => {
       const core = coreRef.current;
       if (core === null) {
         return;
@@ -176,6 +177,10 @@ function ContentEditableDemo() {
       projection: (path) =>
         contentEditableDemoTextProjection(projectionRef.current, path),
       rangesPath: contentEditableDemoRangesPathForTextPath,
+      resolveSelectionIntent: createContentEditableDemoSelectionIntentResolver(
+        document,
+        visualLayoutStore,
+      ),
       visualLayout: visualLayoutStore.read,
     });
     renderEditorContent();

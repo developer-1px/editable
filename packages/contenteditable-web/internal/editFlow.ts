@@ -3,7 +3,7 @@ import type {
   SelectionSnap,
 } from "@interactive-os/json-document";
 import type {
-  JsonContentEditableModelCommand,
+  JsonContentEditableSelectionIntent,
   JsonContentEditableUpdate,
 } from "../contract";
 
@@ -19,7 +19,7 @@ export function domToModelUpdate({
   render = false,
   selection,
 }: {
-  command?: JsonContentEditableModelCommand;
+  command?: JsonContentEditableSelectionIntent;
   kind: "no-change" | "selection" | "text";
   patch?: ReadonlyArray<JSONPatchOperation>;
   render?: boolean;

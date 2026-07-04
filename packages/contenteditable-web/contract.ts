@@ -22,6 +22,7 @@ export type JsonContentEditableOptions<T> = {
   atomAttribute?: string;
   textAttribute?: string;
   projection?: JsonContentEditableProjectionProvider<T> | null;
+  resolveSelectionIntent?: JsonContentEditableSelectionIntentResolver | null;
   visualLayout?: JsonContentEditableVisualLayoutProvider | null;
 };
 
@@ -132,49 +133,6 @@ export type JsonContentEditableVisualLayoutSnapshot =
       revision: number;
     };
 
-export type JsonContentEditableRenderBoundaryUnit =
-  | "text"
-  | "atom"
-  | "syntax"
-  | "line-start"
-  | "line-end";
-
-export type JsonContentEditableRenderBoundary = {
-  id: string;
-  lineId: string;
-  path: Pointer;
-  offset: number;
-  x: number;
-  top: number;
-  bottom: number;
-  affinity: "before" | "after";
-  unit: JsonContentEditableRenderBoundaryUnit;
-};
-
-export type JsonContentEditableRenderLine = JsonContentEditableVisualLine & {
-  boundaries: ReadonlyArray<JsonContentEditableRenderBoundary>;
-};
-
-export type JsonContentEditableRenderFrame = {
-  lines: ReadonlyArray<JsonContentEditableRenderLine>;
-  boundaries: ReadonlyArray<JsonContentEditableRenderBoundary>;
-};
-
-export type JsonContentEditableSelectionFrameEndpoint = {
-  boundary: JsonContentEditableRenderBoundary;
-};
-
-export type JsonContentEditableSelectionFrameMode = "caret" | "range";
-
-export type JsonContentEditableSelectionFrame = {
-  renderFrame: JsonContentEditableRenderFrame;
-  selection: SelectionSnap;
-  anchor: JsonContentEditableSelectionFrameEndpoint;
-  focus: JsonContentEditableSelectionFrameEndpoint;
-  mode: JsonContentEditableSelectionFrameMode;
-  goalX: number | null;
-};
-
 export type JsonContentEditableVisualLayoutProvider =
   () => JsonContentEditableVisualLayoutSnapshot;
 
@@ -198,17 +156,26 @@ export type FlushOptions = {
   mergeKey?: string;
 };
 
-export type JsonContentEditableModelCommand =
-  | {
-      type: "moveVertical";
-      direction: "up" | "down";
-      extend: boolean;
-    }
-  | {
-      type: "moveLineBoundary";
-      boundary: "line-start" | "line-end";
-      extend: boolean;
-    };
+// The canonical selection intent vocabulary: Selection.modify's
+// alter/direction/granularity triple. The adapter emits these; the host
+// resolves them against its document model (e.g. rich-document `edit`).
+export type JsonContentEditableSelectionIntent = {
+  type: "modifySelection";
+  alter: "extend" | "move";
+  direction: "backward" | "forward";
+  granularity: "line" | "lineboundary";
+};
+
+export type JsonContentEditableSelectionIntentResolver = (
+  intent: JsonContentEditableSelectionIntent,
+  state: {
+    selection: SelectionSnap | null;
+    goalX: number | null;
+  },
+) => {
+  selection: SelectionSnap | null;
+  goalX: number | null;
+} | null;
 
 export type JsonContentEditableFlow = "dom-to-model" | "model-to-dom";
 
@@ -223,7 +190,7 @@ type JsonContentEditableUpdateBase = {
 export type JsonContentEditableUpdate =
   | (JsonContentEditableUpdateBase & {
       flow: "dom-to-model";
-      command?: JsonContentEditableModelCommand;
+      command?: JsonContentEditableSelectionIntent;
     })
   | (JsonContentEditableUpdateBase & {
       flow: "model-to-dom";
@@ -237,7 +204,7 @@ export type JsonContentEditableUpdate =
   | {
       ok: false;
       code: "visual_layout_stale";
-      command: JsonContentEditableModelCommand;
+      command: JsonContentEditableSelectionIntent;
       reason: string;
       selection: SelectionSnap | null;
     };
@@ -256,7 +223,7 @@ export type ClipboardUpdate<T> =
 export type JsonContentEditable<T> = {
   handle(event: Event): JsonContentEditableUpdate | ClipboardUpdate<T>;
   flushDOMToModel(options?: FlushOptions): JsonContentEditableUpdate;
-  runCommand(command: JsonContentEditableModelCommand): JsonContentEditableUpdate;
+  runCommand(intent: JsonContentEditableSelectionIntent): JsonContentEditableUpdate;
   syncSelectionFromDOM(): SelectionSnap | null;
   restoreSelectionToDOM(selection?: SelectionSnap): boolean;
   copy(event?: ClipboardEvent): ClipboardUpdate<T>;

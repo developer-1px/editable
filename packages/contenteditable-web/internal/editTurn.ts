@@ -1,10 +1,10 @@
-import type { JsonContentEditableModelCommand } from "../contract";
+import type { JsonContentEditableSelectionIntent } from "../contract";
 import type { SelectionIntent } from "./editFlow";
 
 export type EditModelInstruction =
   | {
       type: "command";
-      command: JsonContentEditableModelCommand;
+      command: JsonContentEditableSelectionIntent;
     }
   | {
       type: "insertText";
@@ -308,22 +308,25 @@ function lineBoundaryCommandFromKey(
 
 function modelCommandFromKey(
   event: KeyboardEvent,
-): JsonContentEditableModelCommand | null {
+): JsonContentEditableSelectionIntent | null {
+  const alter = event.shiftKey ? "extend" : "move";
   const verticalMotionCommand = verticalMotionCommandFromKey(event);
   if (verticalMotionCommand !== null) {
     return {
-      type: "moveVertical",
-      direction: verticalMotionCommand,
-      extend: event.shiftKey,
+      type: "modifySelection",
+      alter,
+      direction: verticalMotionCommand === "up" ? "backward" : "forward",
+      granularity: "line",
     };
   }
 
   const lineBoundaryCommand = lineBoundaryCommandFromKey(event);
   if (lineBoundaryCommand !== null) {
     return {
-      type: "moveLineBoundary",
-      boundary: lineBoundaryCommand,
-      extend: event.shiftKey,
+      type: "modifySelection",
+      alter,
+      direction: lineBoundaryCommand === "line-start" ? "backward" : "forward",
+      granularity: "lineboundary",
     };
   }
 
@@ -340,7 +343,7 @@ function runModelInstructionEditTurn(
 }
 
 function commandInstruction(
-  command: JsonContentEditableModelCommand,
+  command: JsonContentEditableSelectionIntent,
 ): EditModelInstruction {
   return {
     type: "command",
