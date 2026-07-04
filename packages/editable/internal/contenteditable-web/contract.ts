@@ -175,7 +175,14 @@ export type HostUpdate =
     })
   | {
       ok: false;
-      code: "missing_root" | "missing_text_path" | "not_string" | "commit_failed";
+      code:
+        | "missing_root"
+        | "missing_text_path"
+        | "not_string"
+        | "commit_failed"
+        | "empty_selection"
+        | "clipboard_unavailable"
+        | "invalid_payload";
       reason: string;
     }
   | {
@@ -186,7 +193,7 @@ export type HostUpdate =
       selection: SelectionSnap | null;
     };
 
-export type JsonContentEditableClipboardUpdate<T> =
+export type JsonContentEditableClipboardResult<T> =
   | {
       ok: true;
       value: T;
@@ -197,25 +204,15 @@ export type JsonContentEditableClipboardUpdate<T> =
       reason: string;
     };
 
-export type ClipboardUpdate = JsonContentEditableClipboardUpdate<RichDocument>;
-export type EditableUpdate = HostUpdate | ClipboardUpdate;
+export type EditableUpdate = HostUpdate;
 
 export type EditableHost = {
   handle(event: Event): EditableUpdate;
-  flushDOMToModel(options?: FlushOptions): HostUpdate;
-  runCommand(intent: EditableSelectionIntent): HostUpdate;
   syncSelectionFromDOM(): SelectionSnap | null;
   restoreSelectionToDOM(selection?: SelectionSnap): boolean;
-  copy(event?: ClipboardEvent): ClipboardUpdate;
-  cut(event?: ClipboardEvent): ClipboardUpdate;
-  paste(event?: ClipboardEvent): ClipboardUpdate;
-  pasteFragment(
-    fragment: RichTextFragment,
-    selection?: SelectionSnap | null,
-  ): ClipboardUpdate;
-  pasteText(text: string, selection?: SelectionSnap | null): ClipboardUpdate;
-  undo(): JSONCapabilityResult;
-  redo(): JSONCapabilityResult;
+  copy(event?: ClipboardEvent): EditableUpdate;
+  cut(event?: ClipboardEvent): EditableUpdate;
+  paste(event?: ClipboardEvent): EditableUpdate;
   reset(): void;
   flush(options?: FlushOptions): HostUpdate;
   dispatch(intent: EditIntent, options?: EditableDispatchOptions): EditableUpdate;
@@ -277,22 +274,22 @@ export type JsonContentEditableFlow = EditableFlow;
 export type JsonContentEditableUpdate = HostUpdate;
 
 export type JsonContentEditable<T> = {
-  handle(event: Event): JsonContentEditableUpdate | JsonContentEditableClipboardUpdate<T>;
+  handle(event: Event): JsonContentEditableUpdate | JsonContentEditableClipboardResult<T>;
   flushDOMToModel(options?: FlushOptions): JsonContentEditableUpdate;
   runCommand(intent: JsonContentEditableSelectionIntent): JsonContentEditableUpdate;
   syncSelectionFromDOM(): SelectionSnap | null;
   restoreSelectionToDOM(selection?: SelectionSnap): boolean;
-  copy(event?: ClipboardEvent): JsonContentEditableClipboardUpdate<T>;
-  cut(event?: ClipboardEvent): JsonContentEditableClipboardUpdate<T>;
-  paste(event?: ClipboardEvent): JsonContentEditableClipboardUpdate<T>;
+  copy(event?: ClipboardEvent): JsonContentEditableClipboardResult<T>;
+  cut(event?: ClipboardEvent): JsonContentEditableClipboardResult<T>;
+  paste(event?: ClipboardEvent): JsonContentEditableClipboardResult<T>;
   pasteFragment(
     fragment: JsonContentEditableFragment,
     selection?: SelectionSnap | null,
-  ): JsonContentEditableClipboardUpdate<T>;
+  ): JsonContentEditableClipboardResult<T>;
   pasteText(
     text: string,
     selection?: SelectionSnap | null,
-  ): JsonContentEditableClipboardUpdate<T>;
+  ): JsonContentEditableClipboardResult<T>;
   undo(): JSONCapabilityResult;
   redo(): JSONCapabilityResult;
   reset(): void;

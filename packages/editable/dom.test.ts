@@ -307,7 +307,17 @@ describe("contenteditable-web json-document bridge", () => {
     window.document.body.append(root);
     const host = createEditableHost({ root, document });
 
-    expect(host.flush).toBe(host.flushDOMToModel);
+    expect(Object.keys(host).sort()).toEqual([
+      "copy",
+      "cut",
+      "dispatch",
+      "flush",
+      "handle",
+      "paste",
+      "reset",
+      "restoreSelectionToDOM",
+      "syncSelectionFromDOM",
+    ]);
     const selection = {
       selectedPointers: [],
       selectionRanges: [
@@ -321,11 +331,24 @@ describe("contenteditable-web json-document bridge", () => {
       focus: { path: "/blocks/0/text", offset: 5 },
     };
 
-    expect(
-      host.dispatch({ type: "insertFromPaste", data: "!" }, { selection }).ok,
-    ).toBe(true);
+    const pasted = host.dispatch(
+      { type: "insertFromPaste", data: "!" },
+      { selection },
+    );
+
+    expect(pasted).toMatchObject({
+      flow: "model-to-dom",
+      kind: "text",
+      ok: true,
+      render: true,
+    });
     expect(document.value.blocks[0]?.text).toBe("Plain!");
-    expect(host.dispatch({ type: "historyUndo" }).ok).toBe(true);
+    expect(host.dispatch({ type: "historyUndo" })).toMatchObject({
+      flow: "model-to-dom",
+      kind: "text",
+      ok: true,
+      render: true,
+    });
     expect(document.value.blocks[0]?.text).toBe("Plain");
   });
 

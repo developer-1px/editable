@@ -24,7 +24,7 @@ import type {
   EditableUpdate,
   EditableHostOptions,
   FlushOptions,
-  JsonContentEditableClipboardUpdate,
+  JsonContentEditableClipboardResult,
   JsonContentEditableFragment,
   JsonContentEditableHost,
   JsonContentEditableOptions,
@@ -389,7 +389,7 @@ export function createJsonContentEditable<T>({
     return runModelInstructionAtCurrentSelection(instruction);
   };
 
-  const copy = (event?: ClipboardEvent): JsonContentEditableClipboardUpdate<T> => {
+  const copy = (event?: ClipboardEvent): JsonContentEditableClipboardResult<T> => {
     flushDOMToModel({ label: "copy selection" });
     const selection = document.selection?.snapshot() ?? null;
     const selectionPath = textPathFromSelection(selection);
@@ -418,8 +418,8 @@ export function createJsonContentEditable<T>({
     };
   };
 
-  const cut = (event?: ClipboardEvent): JsonContentEditableClipboardUpdate<T> => {
-    let result: JsonContentEditableClipboardUpdate<T> | null = null;
+  const cut = (event?: ClipboardEvent): JsonContentEditableClipboardResult<T> => {
+    let result: JsonContentEditableClipboardResult<T> | null = null;
     document.history.transaction({ label: "cut", origin: "contenteditable" }, () => {
       const copyResult = copy(event);
       if (!copyResult.ok) {
@@ -487,8 +487,8 @@ export function createJsonContentEditable<T>({
     clipboardText: string;
     jsonPayload: unknown | null;
     selection?: SelectionSnap | null;
-  }): JsonContentEditableClipboardUpdate<T> => {
-    let result: JsonContentEditableClipboardUpdate<T> | null = null;
+  }): JsonContentEditableClipboardResult<T> => {
+    let result: JsonContentEditableClipboardResult<T> | null = null;
     document.history.transaction(
       { label: "paste", origin: "contenteditable" },
       () => {
@@ -583,7 +583,7 @@ export function createJsonContentEditable<T>({
 
   const paste = (
     event?: ClipboardEvent,
-  ): JsonContentEditableClipboardUpdate<T> =>
+  ): JsonContentEditableClipboardResult<T> =>
     pastePayload({
       clipboardText: event?.clipboardData?.getData("text/plain") ?? "",
       jsonPayload:
@@ -593,7 +593,7 @@ export function createJsonContentEditable<T>({
   const pasteFragment = (
     fragment: JsonContentEditableFragment,
     selection = document.selection?.snapshot() ?? null,
-  ): JsonContentEditableClipboardUpdate<T> =>
+  ): JsonContentEditableClipboardResult<T> =>
     pastePayload({
       clipboardText: plainTextFromFragment(fragment),
       jsonPayload: fragment,
@@ -603,7 +603,7 @@ export function createJsonContentEditable<T>({
   const pasteText = (
     text: string,
     selection = document.selection?.snapshot() ?? null,
-  ): JsonContentEditableClipboardUpdate<T> => {
+  ): JsonContentEditableClipboardResult<T> => {
     const payload = readDocumentClipboard(document);
     const fragment =
       isJsonContentEditableFragment(payload) && plainTextFromFragment(payload) === text
@@ -999,10 +999,51 @@ export function createEditableHost({
     visualLayout,
   });
   return {
-    ...host,
+    handle: (event) =>
+      editableUpdateFromHostResult(
+        host.handle(event),
+        document,
+        event.type === "cut" || event.type === "paste",
+      ),
     dispatch: (intent, options) =>
       dispatchEditableIntent(host, document, visualLayout, intent, options),
+    copy: (event) =>
+      editableUpdateFromHostResult(host.copy(event), document, false),
+    cut: (event) =>
+      editableUpdateFromHostResult(host.cut(event), document, true),
+    flush: host.flush,
+    paste: (event) =>
+      editableUpdateFromHostResult(host.paste(event), document, true),
+    reset: host.reset,
+    restoreSelectionToDOM: host.restoreSelectionToDOM,
+    syncSelectionFromDOM: host.syncSelectionFromDOM,
   };
+}
+
+function editableUpdateFromHostResult(
+  result: JsonContentEditableUpdate | JsonContentEditableClipboardResult<RichDocument>,
+  document: JSONDocument<RichDocument>,
+  renderText: boolean,
+): EditableUpdate {
+  if ("kind" in result) {
+    return result;
+  }
+  if (!result.ok) {
+    if (result.code === "visual_layout_stale") {
+      return result;
+    }
+    return {
+      ok: false,
+      code: result.code,
+      reason: result.reason,
+    };
+  }
+  return modelToDomUpdate({
+    kind: renderText ? "text" : "no-change",
+    patch: [],
+    render: renderText,
+    selection: document.selection?.snapshot() ?? null,
+  });
 }
 
 function dispatchEditableIntent(
@@ -1019,9 +1060,11 @@ function dispatchEditableIntent(
     return capabilityToUpdate(host.redo());
   }
   if (intent.type === "insertFromPaste" || intent.type === "insertFromDrop") {
-    return typeof intent.data === "string"
-      ? host.pasteText(intent.data, options.selection)
-      : host.pasteFragment(intent.data, options.selection);
+    const result =
+      typeof intent.data === "string"
+        ? host.pasteText(intent.data, options.selection)
+        : host.pasteFragment(intent.data, options.selection);
+    return editableUpdateFromHostResult(result, document, true);
   }
   if (
     intent.type === "modifySelection" &&
