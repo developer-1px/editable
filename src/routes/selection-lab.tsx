@@ -15,12 +15,12 @@ import {
   useState,
 } from "react";
 import {
+  ATOM_REPLACEMENT,
   createRichBlock,
   createRichCursorFrame,
   createRichDocument,
   type EditIntent,
   edit,
-  RICH_TEXT_ATOM_REPLACEMENT,
   type RichBlock,
   type RichCursorBlockFrame,
   type RichCursorFrame,
@@ -251,7 +251,7 @@ function SelectionLab() {
 }
 
 function createSelectionLabState(): SelectionLabState {
-  const atom = RICH_TEXT_ATOM_REPLACEMENT;
+  const atom = ATOM_REPLACEMENT;
   const paragraphText = `Markdown-style rich text mixes bold phrase, italic aside, linked reference, inline code, highlight note, ${atom} mention, ${atom} tag, and struck text.`;
   const taskText = `Ship virtual cursor recovery before ${atom} release`;
   const nestedListText = `Nested item keeps code span and ${atom} beside ordinary words.`;
@@ -272,7 +272,7 @@ function createSelectionLabState(): SelectionLabState {
       {
         ...createRichBlock({
           id: "intro",
-          text: `안녕 rich\n둘째 줄과 ${RICH_TEXT_ATOM_REPLACEMENT} atom`,
+          text: `안녕 rich\n둘째 줄과 ${ATOM_REPLACEMENT} atom`,
         }),
         atoms: {
           "mention-ada": {
@@ -1020,9 +1020,7 @@ function selectionLabVisualLineKind(text: string): RichVisualLineSeed["kind"] {
   if (text.length === 0) {
     return "empty";
   }
-  return Array.from(text).every(
-    (character) => character === RICH_TEXT_ATOM_REPLACEMENT,
-  )
+  return Array.from(text).every((character) => character === ATOM_REPLACEMENT)
     ? "atom-only"
     : "text";
 }
@@ -1267,8 +1265,7 @@ function RichTextSegment({
     .filter(Boolean)
     .join(" ");
   const atom = Object.entries(block.atoms).find(
-    ([, candidate]) =>
-      candidate.offset === start && text === RICH_TEXT_ATOM_REPLACEMENT,
+    ([, candidate]) => candidate.offset === start && text === ATOM_REPLACEMENT,
   );
   if (atom !== undefined) {
     return (

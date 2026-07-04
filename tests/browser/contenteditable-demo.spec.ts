@@ -163,7 +163,7 @@ test("contenteditable demo keeps IME preedit DOM across keyup before commit", as
     if (editor === null) {
       throw new Error("Missing contenteditable editor.");
     }
-    const textSurface = editor.querySelector('[data-json-text="/blocks/0/text"]');
+    const textSurface = editor.querySelector('[data-editable-text="/blocks/0/text"]');
     if (textSurface === null) {
       throw new Error("Missing first text surface.");
     }
@@ -254,7 +254,7 @@ test("contenteditable demo hands off IME preedit before vertical command", async
     if (!(editor instanceof HTMLElement)) {
       throw new Error("Missing contenteditable editor.");
     }
-    const textSurface = editor.querySelector('[data-json-text="/blocks/0/text"]');
+    const textSurface = editor.querySelector('[data-editable-text="/blocks/0/text"]');
     if (textSurface === null) {
       throw new Error("Missing first text surface.");
     }
@@ -306,7 +306,7 @@ test("contenteditable demo hands off IME preedit before vertical command", async
     );
 
     const currentSurface = editor.querySelector(
-      '[data-json-text="/blocks/0/text"]',
+      '[data-editable-text="/blocks/0/text"]',
     );
     const currentTextNode =
       currentSurface === null
@@ -360,7 +360,7 @@ test("contenteditable demo derives stale IME caret before Enter", async ({
     if (!(editor instanceof HTMLElement)) {
       throw new Error("Missing contenteditable editor.");
     }
-    const textSurface = editor.querySelector('[data-json-text="/blocks/0/text"]');
+    const textSurface = editor.querySelector('[data-editable-text="/blocks/0/text"]');
     if (textSurface === null) {
       throw new Error("Missing first text surface.");
     }
@@ -450,7 +450,7 @@ test("contenteditable demo handles Enter after Korean text without caret drift",
     if (editor === null) {
       throw new Error("Missing contenteditable editor.");
     }
-    const textSurface = editor.querySelector('[data-json-text="/blocks/0/text"]');
+    const textSurface = editor.querySelector('[data-editable-text="/blocks/0/text"]');
     const firstTextNode = textSurface?.firstChild;
     if (firstTextNode === undefined || firstTextNode === null) {
       throw new Error("Missing first text node.");
@@ -601,7 +601,7 @@ test("contenteditable demo maps task marker line selection to the task text surf
   await page.getByRole("textbox", { name: "JSON document text" }).focus();
   await page.evaluate(() => {
     const taskBlock = document.querySelector(".contenteditable-block-list-item");
-    const textSurface = taskBlock?.querySelector("[data-json-text]");
+    const textSurface = taskBlock?.querySelector("[data-editable-text]");
     if (textSurface === undefined || textSurface === null) {
       throw new Error("Missing task text surface.");
     }
@@ -655,7 +655,7 @@ test("contenteditable demo paste toolbar uses the command-start selection", asyn
       configurable: true,
       value: {
         readText: async () => {
-          const textHost = document.querySelector("[data-json-text]");
+          const textHost = document.querySelector("[data-editable-text]");
           const textNode = textHost?.firstChild;
           if (textNode === undefined || textNode === null) {
             throw new Error("Missing contenteditable editor text node.");
@@ -940,8 +940,8 @@ test("contenteditable demo applies heading, bold, and underline ranges", async (
     "data-editable-heading-level",
     "1",
   );
-  await expect(blocks.nth(0).locator("[data-json-text]")).toHaveAttribute(
-    "data-json-text",
+  await expect(blocks.nth(0).locator("[data-editable-text]")).toHaveAttribute(
+    "data-editable-text",
     "/blocks/0/text",
   );
   await expect(blocks.nth(0)).toHaveText("# **__Plain**__");
@@ -1089,7 +1089,7 @@ test("contenteditable demo survives when native editing removes the atom DOM bef
   });
   await selectMentionAtom(page);
   await page.evaluate(() => {
-    document.querySelector("[data-json-atom]")?.remove();
+    document.querySelector("[data-editable-atom]")?.remove();
   });
 
   await page.getByRole("button", { name: "Cut" }).click();
@@ -1112,7 +1112,7 @@ async function selectEditorText(page: Page, start: number, end: number) {
         const visit = (node: Node): { node: Node; offset: number } | null => {
           if (
             node instanceof HTMLElement &&
-            node.hasAttribute("data-json-atom")
+            node.hasAttribute("data-editable-atom")
           ) {
             const parent = node.parentNode;
             if (parent === null) {
@@ -1177,7 +1177,7 @@ async function selectEditorText(page: Page, start: number, end: number) {
 async function selectMentionAtom(page: Page) {
   await page.getByRole("textbox", { name: "JSON document text" }).focus();
   await page.evaluate(() => {
-    const atom = document.querySelector("[data-json-atom]");
+    const atom = document.querySelector("[data-editable-atom]");
     if (atom === null) {
       throw new Error("Missing mention atom.");
     }
@@ -1261,7 +1261,7 @@ async function firstBlockVisualLines(page: Page) {
 
 async function firstBlockDOMFocusOffset(page: Page) {
   return page.evaluate(() => {
-    const textSurface = document.querySelector('[data-json-text="/blocks/0/text"]');
+    const textSurface = document.querySelector('[data-editable-text="/blocks/0/text"]');
     const selection = window.getSelection();
     if (
       textSurface === null ||
@@ -1276,7 +1276,7 @@ async function firstBlockDOMFocusOffset(page: Page) {
     const nodeLength = (node: Node): number => {
       if (
         node instanceof HTMLElement &&
-        node.hasAttribute("data-json-atom")
+        node.hasAttribute("data-editable-atom")
       ) {
         return atomText.length;
       }
@@ -1306,7 +1306,7 @@ async function firstBlockDOMFocusOffset(page: Page) {
       }
       if (
         node instanceof HTMLElement &&
-        node.hasAttribute("data-json-atom")
+        node.hasAttribute("data-editable-atom")
       ) {
         total += atomText.length;
         return true;

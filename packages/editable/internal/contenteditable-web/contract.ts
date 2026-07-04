@@ -5,14 +5,19 @@ import type {
   Pointer,
   SelectionSnap,
 } from "@interactive-os/json-document";
+import {
+  ATOM_REPLACEMENT,
+  EDITABLE_ATOM_ATTRIBUTE,
+  EDITABLE_TEXT_ATTRIBUTE,
+  RICH_FRAGMENT_MIME,
+  RICH_FRAGMENT_SCHEMA,
+} from "../rich-document";
 
-export const JSON_TEXT_ATTRIBUTE = "data-json-text";
-export const JSON_ATOM_ATTRIBUTE = "data-json-atom";
-export const JSON_ATOM_REPLACEMENT = "\uFFFC";
-export const JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA =
-  "json-document-contenteditable-fragment@1";
-export const JSON_CONTENT_EDITABLE_MIME =
-  "application/x-json-document-fragment";
+export const JSON_TEXT_ATTRIBUTE = EDITABLE_TEXT_ATTRIBUTE;
+export const JSON_ATOM_ATTRIBUTE = EDITABLE_ATOM_ATTRIBUTE;
+export const JSON_ATOM_REPLACEMENT = ATOM_REPLACEMENT;
+export const JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA = RICH_FRAGMENT_SCHEMA;
+export const JSON_CONTENT_EDITABLE_MIME = RICH_FRAGMENT_MIME;
 
 export type JsonContentEditableOptions<T> = {
   root: HTMLElement;

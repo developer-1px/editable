@@ -4,6 +4,7 @@ import {
   type SelectionSnap,
 } from "@interactive-os/json-document";
 import {
+  ATOM_REPLACEMENT,
   applyRichProjectionTextChange,
   canonicalEditableAtomAttributes,
   canonicalEditableBlockAttributes,
@@ -19,11 +20,9 @@ import {
   EDITABLE_MARK_ATTRIBUTE,
   EDITABLE_TEXT_ATTRIBUTE,
   edit,
-  RICH_TEXT_ATOM_REPLACEMENT,
   type RichBlock,
   type RichDocument,
   type RichDocumentPlan,
-  RichDocumentSchema,
   type RichInlineAtom,
   type RichInlineRange,
   type RichProjection,
@@ -53,14 +52,15 @@ import {
   type JsonContentEditableVisualLayout,
   type JsonContentEditableVisualLayoutStore,
 } from "../../packages/editable/dom";
+import { RichDocumentSchema } from "../../packages/editable/schema";
 
 const INITIAL_MENTION_ID = "mention-ada";
 const TASK_MARKER_ID = "task-marker-block-4";
-const INITIAL_TEXT = `Plain text. 한글과 日本語 IME. ${RICH_TEXT_ATOM_REPLACEMENT}`;
-const RICH_PARAGRAPH_TEXT = `Ranges can mix bold, italic, underline, code, highlight, and a link beside ${RICH_TEXT_ATOM_REPLACEMENT} and ${RICH_TEXT_ATOM_REPLACEMENT}.`;
-const TASK_TEXT = `${RICH_TEXT_ATOM_REPLACEMENT}Keep the DOM bridge tiny and the model commands headless.`;
+const INITIAL_TEXT = `Plain text. 한글과 日本語 IME. ${ATOM_REPLACEMENT}`;
+const RICH_PARAGRAPH_TEXT = `Ranges can mix bold, italic, underline, code, highlight, and a link beside ${ATOM_REPLACEMENT} and ${ATOM_REPLACEMENT}.`;
+const TASK_TEXT = `${ATOM_REPLACEMENT}Keep the DOM bridge tiny and the model commands headless.`;
 const QUOTE_TEXT = "The browser proves the path; the model owns the state.";
-const ATTACHMENT_TEXT = `Atoms stay alive across copy and paste: ${RICH_TEXT_ATOM_REPLACEMENT}`;
+const ATTACHMENT_TEXT = `Atoms stay alive across copy and paste: ${ATOM_REPLACEMENT}`;
 
 export type ContentEditableDemoDocument = RichDocument;
 export type RichTextMarkType = "bold" | "underline";
@@ -85,7 +85,7 @@ export function createContentEditableDemoValue(): ContentEditableDemoDocument {
             type: "mention",
             userId: "ada",
             label: "@Ada",
-            offset: INITIAL_TEXT.indexOf(RICH_TEXT_ATOM_REPLACEMENT),
+            offset: INITIAL_TEXT.indexOf(ATOM_REPLACEMENT),
           },
         },
       },
@@ -106,21 +106,13 @@ export function createContentEditableDemoValue(): ContentEditableDemoDocument {
             type: "tag",
             label: "#core",
             target: "core",
-            offset: nthIndexOf(
-              RICH_PARAGRAPH_TEXT,
-              RICH_TEXT_ATOM_REPLACEMENT,
-              1,
-            ),
+            offset: nthIndexOf(RICH_PARAGRAPH_TEXT, ATOM_REPLACEMENT, 1),
           },
           "wiki-canonical-html": {
             type: "wikiLink",
             label: "[[canonical-html]]",
             target: "canonical-editable-html",
-            offset: nthIndexOf(
-              RICH_PARAGRAPH_TEXT,
-              RICH_TEXT_ATOM_REPLACEMENT,
-              2,
-            ),
+            offset: nthIndexOf(RICH_PARAGRAPH_TEXT, ATOM_REPLACEMENT, 2),
           },
         },
         ranges: {
@@ -198,7 +190,7 @@ export function createContentEditableDemoValue(): ContentEditableDemoDocument {
             type: "attachment",
             label: "engine-spec.md",
             target: "docs/engine-spec.md",
-            offset: ATTACHMENT_TEXT.indexOf(RICH_TEXT_ATOM_REPLACEMENT),
+            offset: ATTACHMENT_TEXT.indexOf(ATOM_REPLACEMENT),
           },
         },
       },
@@ -341,7 +333,7 @@ export function createMentionFragment(): JsonContentEditableFragment {
   const id = `mention-${Date.now().toString(36)}`;
   return {
     schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
-    text: RICH_TEXT_ATOM_REPLACEMENT,
+    text: ATOM_REPLACEMENT,
     atoms: {
       [id]: {
         type: "mention",
@@ -616,7 +608,7 @@ function appendAtom(
   id: string,
 ): void {
   if (atom === undefined) {
-    root.append(root.ownerDocument.createTextNode(RICH_TEXT_ATOM_REPLACEMENT));
+    root.append(root.ownerDocument.createTextNode(ATOM_REPLACEMENT));
     return;
   }
   const element = createAtomElement(root, id, atom);

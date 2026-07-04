@@ -9,8 +9,8 @@ import {
   richInlineRangeActive,
   richTextPathForBlock,
   type RichVisualLineSeed,
-  RICH_DOCUMENT_SCHEMA,
-  RICH_TEXT_ATOM_REPLACEMENT,
+  RICH_FRAGMENT_SCHEMA,
+  ATOM_REPLACEMENT,
 } from "./index";
 
 function documentFixture() {
@@ -130,13 +130,13 @@ describe("edit: text intents", () => {
     const result = editedDocument(state, {
       type: "insertFromPaste",
       data: {
-        schema: RICH_DOCUMENT_SCHEMA,
-        text: ` ${RICH_TEXT_ATOM_REPLACEMENT}`,
+        schema: RICH_FRAGMENT_SCHEMA,
+        text: ` ${ATOM_REPLACEMENT}`,
         atoms: { m1: { type: "mention", offset: 1, label: "@user" } },
       },
     });
     expect(result.value.blocks[0]?.text).toBe(
-      `Hello ${RICH_TEXT_ATOM_REPLACEMENT} world`,
+      `Hello ${ATOM_REPLACEMENT} world`,
     );
     const atoms = Object.values(result.value.blocks[0]?.atoms ?? {});
     expect(atoms).toHaveLength(1);

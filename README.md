@@ -49,7 +49,8 @@ Vitest, Biome, and production build checks.
 ## Public Surface
 
 Use `packages/editable/dom` for the DOM adapter and `packages/editable` for the
-headless typed model.
+headless typed model. Use `packages/editable/schema` only when runtime zod
+validation is needed.
 
 The single editing interface is `edit` from `packages/editable`:
 
@@ -71,5 +72,6 @@ The rest of the public API is intentionally small:
 - `isJsonContentEditableFragment`
 - constants for text, atom, and clipboard attributes
 - adapter types from `packages/editable/dom`
+- zod schemas from `packages/editable/schema`
 
 Anything under `packages/editable/internal` is private implementation detail.

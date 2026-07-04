@@ -312,12 +312,12 @@ function ContentEditableDemo() {
         return;
       }
       const atom = target.closest(
-        "[data-json-atom][data-editable-atom-type='taskMarker']",
+        "[data-editable-atom][data-editable-atom-type='taskMarker']",
       );
       if (!(atom instanceof HTMLElement) || !root.contains(atom)) {
         return;
       }
-      const atomId = atom.getAttribute("data-json-atom");
+      const atomId = atom.getAttribute("data-editable-atom");
       if (atomId === null) {
         return;
       }

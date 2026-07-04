@@ -3,10 +3,11 @@ import type {
   Pointer,
   SelectionSnap,
 } from "@interactive-os/json-document";
-import { z } from "zod";
 
 export const RICH_DOCUMENT_SCHEMA = "interactive-os.rich-document@1";
-export const RICH_TEXT_ATOM_REPLACEMENT = "\uFFFC";
+export const RICH_FRAGMENT_SCHEMA = "interactive-os.rich-document/fragment@1";
+export const RICH_FRAGMENT_MIME = "application/x-rich-document-fragment";
+export const ATOM_REPLACEMENT = "\uFFFC";
 
 export const EDITABLE_DOCUMENT_ATTRIBUTE = "data-editable-document";
 export const EDITABLE_BLOCK_ATTRIBUTE = "data-editable-block";
@@ -14,8 +15,8 @@ export const EDITABLE_BLOCK_TYPE_ATTRIBUTE = "data-editable-block-type";
 export const EDITABLE_HEADING_LEVEL_ATTRIBUTE = "data-editable-heading-level";
 export const EDITABLE_ATOM_TYPE_ATTRIBUTE = "data-editable-atom-type";
 export const EDITABLE_MARK_ATTRIBUTE = "data-editable-mark";
-export const EDITABLE_TEXT_ATTRIBUTE = "data-json-text";
-export const EDITABLE_ATOM_ATTRIBUTE = "data-json-atom";
+export const EDITABLE_TEXT_ATTRIBUTE = "data-editable-text";
+export const EDITABLE_ATOM_ATTRIBUTE = "data-editable-atom";
 
 export type JSONPrimitive = string | number | boolean | null;
 export type JSONValue =
@@ -141,16 +142,26 @@ export type RichDocument = {
 };
 
 export type RichTextFragment = {
-  schema: typeof RICH_DOCUMENT_SCHEMA;
+  schema: typeof RICH_FRAGMENT_SCHEMA;
   text: string;
   atoms?: Record<string, RichInlineAtom>;
   ranges?: Record<string, RichInlineRange>;
 };
 
 export type RichBlockFragment = {
-  schema: typeof RICH_DOCUMENT_SCHEMA;
+  schema: typeof RICH_FRAGMENT_SCHEMA;
   blocks: RichBlock[];
 };
+
+export function isRichTextFragment(value: unknown): value is RichTextFragment {
+  return (
+    isPlainRecord(value) &&
+    value.schema === RICH_FRAGMENT_SCHEMA &&
+    typeof value.text === "string" &&
+    (value.atoms === undefined || isPlainRecord(value.atoms)) &&
+    (value.ranges === undefined || isPlainRecord(value.ranges))
+  );
+}
 
 export type RichBlockStyle =
   | { type: "paragraph" }
@@ -382,89 +393,6 @@ export type RichBlockInput =
   | { type: "quote"; id: string; text?: string }
   | { type: "code"; id: string; language?: string; text?: string }
   | { type: "extension"; id: string; kind: string; data?: JSONRecord; text?: string };
-
-const JSONValueSchema: z.ZodType<JSONValue> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(JSONValueSchema),
-    z.record(z.string(), JSONValueSchema),
-  ]),
-);
-
-export const RichInlineAtomSchema = z
-  .object({
-    type: z.string(),
-    offset: z.number().int().nonnegative(),
-    label: z.string().optional(),
-    text: z.string().optional(),
-    target: z.string().optional(),
-    href: z.string().optional(),
-    data: z.record(z.string(), JSONValueSchema).optional(),
-  })
-  .catchall(JSONValueSchema.optional());
-
-export const RichInlineRangeSchema = z
-  .object({
-    type: z.string(),
-    start: z.number().int().nonnegative(),
-    end: z.number().int().nonnegative(),
-    href: z.string().optional(),
-    data: z.record(z.string(), JSONValueSchema).optional(),
-  })
-  .catchall(JSONValueSchema.optional());
-
-const RichTextBlockBaseSchema = z.object({
-  id: z.string().min(1),
-  text: z.string(),
-  atoms: z.record(z.string(), RichInlineAtomSchema),
-  ranges: z.record(z.string(), RichInlineRangeSchema),
-  metadata: z.record(z.string(), JSONValueSchema).optional(),
-});
-
-export const RichBlockSchema = z.discriminatedUnion("type", [
-  RichTextBlockBaseSchema.extend({ type: z.literal("paragraph") }),
-  RichTextBlockBaseSchema.extend({
-    type: z.literal("heading"),
-    level: z.union([
-      z.literal(1),
-      z.literal(2),
-      z.literal(3),
-      z.literal(4),
-      z.literal(5),
-      z.literal(6),
-    ]),
-  }),
-  RichTextBlockBaseSchema.extend({
-    type: z.literal("listItem"),
-    listKind: z.union([
-      z.literal("bullet"),
-      z.literal("ordered"),
-      z.literal("task"),
-    ]),
-    indent: z.number().int().nonnegative(),
-    checked: z.boolean().optional(),
-  }),
-  RichTextBlockBaseSchema.extend({ type: z.literal("quote") }),
-  RichTextBlockBaseSchema.extend({
-    type: z.literal("code"),
-    language: z.string().optional(),
-  }),
-  RichTextBlockBaseSchema.extend({
-    type: z.literal("extension"),
-    kind: z.string().min(1),
-    data: z.record(z.string(), JSONValueSchema).optional(),
-  }),
-]);
-
-export const RichDocumentSchema = z.object({
-  schema: z.literal(RICH_DOCUMENT_SCHEMA),
-  id: z.string().min(1),
-  blocks: z.array(RichBlockSchema),
-  metadata: z.record(z.string(), JSONValueSchema).optional(),
-});
 
 export function createRichDocument({
   blocks = [],
@@ -708,7 +636,7 @@ function richVisualLineKind(text: string): RichVisualLineKind {
   if (text.length === 0) {
     return "empty";
   }
-  return Array.from(text).every((character) => character === RICH_TEXT_ATOM_REPLACEMENT)
+  return Array.from(text).every((character) => character === ATOM_REPLACEMENT)
     ? "atom-only"
     : "text";
 }
@@ -1176,7 +1104,7 @@ export function richTextFragmentFromRange(
   }
 
   const fragment: RichTextFragment = {
-    schema: RICH_DOCUMENT_SCHEMA,
+    schema: RICH_FRAGMENT_SCHEMA,
     text: located.block.text.slice(start, end),
   };
   const atoms = selectAtoms(located.block.atoms, start, end);
@@ -1226,8 +1154,8 @@ export function insertRichAtom(
   atom: RichInlineAtomInput,
 ): RichDocumentPlan {
   return replaceRichTextRange(document, blockId, offset, offset, {
-    schema: RICH_DOCUMENT_SCHEMA,
-    text: RICH_TEXT_ATOM_REPLACEMENT,
+    schema: RICH_FRAGMENT_SCHEMA,
+    text: ATOM_REPLACEMENT,
     atoms: {
       [atomId]: { ...atom, offset: 0 },
     },
@@ -2051,10 +1979,10 @@ function createRichProjectionBlock(
       const atom = atomsByOffset.get(offset);
       if (
         atom !== undefined &&
-        block.text[offset] === RICH_TEXT_ATOM_REPLACEMENT
+        block.text[offset] === ATOM_REPLACEMENT
       ) {
         const projectionStart = text.length;
-        text += RICH_TEXT_ATOM_REPLACEMENT;
+        text += ATOM_REPLACEMENT;
         spans.push({
           kind: "atom",
           projectionStart,
@@ -2072,7 +2000,7 @@ function createRichProjectionBlock(
         offset < end &&
         !(
           atomsByOffset.has(offset) &&
-          block.text[offset] === RICH_TEXT_ATOM_REPLACEMENT
+          block.text[offset] === ATOM_REPLACEMENT
         )
       ) {
         offset += 1;
@@ -2313,7 +2241,7 @@ function remapAtomsToText(
 ): Record<string, RichInlineAtom> {
   const offsets: number[] = [];
   for (let index = 0; index < text.length; index += 1) {
-    if (text[index] === RICH_TEXT_ATOM_REPLACEMENT) {
+    if (text[index] === ATOM_REPLACEMENT) {
       offsets.push(index);
     }
   }
@@ -2532,8 +2460,12 @@ function emptyTextBlock(id: string, text: string): RichTextBlockBase {
 
 function normalizeTextFragment(replacement: string | RichTextFragment): RichTextFragment {
   return typeof replacement === "string"
-    ? { schema: RICH_DOCUMENT_SCHEMA, text: replacement }
+    ? { schema: RICH_FRAGMENT_SCHEMA, text: replacement }
     : replacement;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function replaceBlockRange(
