@@ -22,8 +22,7 @@ part of this repo.
 
 The headless kernel holds the typed document model that can be projected to
 canonical editable HTML. It does not parse arbitrary HTML and does not use DOM
-APIs. The old `packages/rich-document` and `packages/contenteditable-web`
-directories are temporary compatibility wrappers while issue #104 is migrated.
+APIs.
 
 ## Run
 
