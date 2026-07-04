@@ -853,20 +853,18 @@ test("contenteditable visual layout keeps blank lines after line breaks", async 
 }) => {
   const layout = await page.evaluate(async () => {
     const contentEditableModulePath = "/packages/editable/dom.ts";
-    const {
-      JSON_TEXT_ATTRIBUTE,
-      measureJsonContentEditableVisualLayout,
-    } = await import(contentEditableModulePath);
+    const { measureVisualLayout } = await import(contentEditableModulePath);
+    const EDITABLE_TEXT_ATTRIBUTE = "data-editable-text";
     const host = document.createElement("div");
     host.style.font = "20px/30px sans-serif";
     host.style.whiteSpace = "pre-wrap";
     host.style.width = "200px";
     const text = document.createElement("span");
-    text.setAttribute(JSON_TEXT_ATTRIBUTE, "/text");
+    text.setAttribute(EDITABLE_TEXT_ATTRIBUTE, "/text");
     text.textContent = "A\n";
     host.append(text);
     document.body.append(host);
-    const measured = measureJsonContentEditableVisualLayout({ root: host });
+    const measured = measureVisualLayout({ root: host });
     host.remove();
     return measured;
   });
@@ -889,20 +887,18 @@ test("contenteditable visual layout models empty lines between text lines", asyn
 }) => {
   const layout = await page.evaluate(async () => {
     const contentEditableModulePath = "/packages/editable/dom.ts";
-    const {
-      JSON_TEXT_ATTRIBUTE,
-      measureJsonContentEditableVisualLayout,
-    } = await import(contentEditableModulePath);
+    const { measureVisualLayout } = await import(contentEditableModulePath);
+    const EDITABLE_TEXT_ATTRIBUTE = "data-editable-text";
     const host = document.createElement("div");
     host.style.font = "20px/30px sans-serif";
     host.style.whiteSpace = "pre-wrap";
     host.style.width = "200px";
     const text = document.createElement("span");
-    text.setAttribute(JSON_TEXT_ATTRIBUTE, "/text");
+    text.setAttribute(EDITABLE_TEXT_ATTRIBUTE, "/text");
     text.textContent = "A\n\nB";
     host.append(text);
     document.body.append(host);
-    const measured = measureJsonContentEditableVisualLayout({ root: host });
+    const measured = measureVisualLayout({ root: host });
     host.remove();
     return measured;
   });

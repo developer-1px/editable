@@ -19,6 +19,7 @@ import {
   EDITABLE_HEADING_LEVEL_ATTRIBUTE,
   EDITABLE_MARK_ATTRIBUTE,
   EDITABLE_TEXT_ATTRIBUTE,
+  RICH_FRAGMENT_SCHEMA,
   type RichBlock,
   type RichDocument,
   type RichDocumentPlan,
@@ -27,6 +28,7 @@ import {
   type RichProjection,
   type RichProjectionBlock,
   type RichProjectionSpan,
+  type RichTextFragment,
   richAtomsPathForTextPath,
   richBlockStyleActive,
   richInlineRangeActive,
@@ -41,11 +43,7 @@ import {
   toggleRichInlineRangeForSelection,
   toggleRichTaskListItem,
 } from "../../packages/editable";
-import {
-  JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
-  type JsonContentEditableFragment,
-  type JsonContentEditableTextProjection,
-} from "../../packages/editable/dom";
+import type { JsonContentEditableTextProjection } from "../../packages/editable/dom";
 import { RichDocumentSchema } from "../../packages/editable/schema";
 
 const INITIAL_MENTION_ID = "mention-ada";
@@ -262,10 +260,10 @@ export function contentEditableDemoTextProjection(
   };
 }
 
-export function createMentionFragment(): JsonContentEditableFragment {
+export function createMentionFragment(): RichTextFragment {
   const id = `mention-${Date.now().toString(36)}`;
   return {
-    schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
+    schema: RICH_FRAGMENT_SCHEMA,
     text: ATOM_REPLACEMENT,
     atoms: {
       [id]: {

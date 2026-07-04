@@ -70,7 +70,7 @@ The rest of the public API is intentionally small:
 - `createEditableHost`
 - `createVisualLayoutStore`
 - `measureVisualLayout`
-- `isJsonContentEditableFragment`
+- `isRichTextFragment`
 - constants for text, atom, and clipboard attributes
 - adapter types from `packages/editable/dom`
 - zod schemas from `packages/editable/schema`

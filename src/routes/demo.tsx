@@ -25,6 +25,7 @@ import {
 } from "react";
 import {
   createRichVisualLineSeeds,
+  isRichTextFragment,
   type RichProjection,
 } from "../../packages/editable";
 import {
@@ -32,7 +33,6 @@ import {
   createVisualLayoutStore,
   type EditableHost,
   type EditableUpdate,
-  isJsonContentEditableFragment,
   type JsonContentEditableSelectionIntent,
   measureVisualLayout,
 } from "../../packages/editable/dom";
@@ -373,10 +373,7 @@ function ContentEditableDemo() {
         toggleContentEditableDemoMark(document, name, commandSelection);
       } else if (name === "paste") {
         const internalPayload = document.clipboard.read();
-        if (
-          internalPayload.ok &&
-          isJsonContentEditableFragment(internalPayload.payload)
-        ) {
+        if (internalPayload.ok && isRichTextFragment(internalPayload.payload)) {
           core.pasteFragment(internalPayload.payload, commandSelection);
         } else {
           const text = await readBrowserClipboardText();
