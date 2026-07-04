@@ -253,6 +253,7 @@ button {
 
 .selection-lab-editor {
   caret-color: transparent;
+  position: relative;
   user-select: none;
 }
 
@@ -299,12 +300,11 @@ button {
 }
 
 .selection-lab-caret {
-  display: inline-block;
+  position: absolute;
   width: 2px;
-  height: 1.22em;
-  margin: 0 -1px;
   background: #1d3f7a;
-  vertical-align: -0.2em;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .selection-lab-empty-line {

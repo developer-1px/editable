@@ -112,6 +112,7 @@ describe("rich-document core model", () => {
       "createRichDocument",
       "createRichProjection",
       "createRichVisualLineSeeds",
+      "edit",
       "insertRichAtom",
       "mergeAdjacentRichBlocks",
       "moveRichVirtualSelection",
@@ -334,6 +335,204 @@ describe("rich-document core model", () => {
       direction: "forward",
       start: { offset: 0 },
       end: { offset: 1 },
+    });
+  });
+
+  it("moves line boundaries using supplied visual line seeds", () => {
+    const document = createRichDocument({
+      id: "note-softwrap-cursor",
+      blocks: [
+        createRichBlock({
+          id: "b1",
+          text: "Soft wrapped inline rich text",
+        }),
+      ],
+    });
+    const frame = createRichCursorFrame(document, {
+      lineSeeds: [
+        {
+          blockId: "b1",
+          blockIndex: 0,
+          endOffset: 12,
+          id: "b1:visual:0:0-12",
+          kind: "text",
+          lineIndex: 0,
+          path: "/blocks/0/text",
+          startOffset: 0,
+        },
+        {
+          blockId: "b1",
+          blockIndex: 0,
+          endOffset: 29,
+          id: "b1:visual:1:13-29",
+          kind: "text",
+          lineIndex: 1,
+          path: "/blocks/0/text",
+          startOffset: 13,
+        },
+      ],
+    });
+    const initial = richCursorSelectionAt(frame, "/blocks/0/text", 2);
+
+    expect(initial).not.toBeNull();
+    if (initial === null) return;
+
+    const lineEnd = moveRichVirtualSelection(frame, initial, {
+      unit: "lineBoundary",
+      direction: "forward",
+    });
+    expect(lineEnd.focus.offset).toBe(12);
+  });
+
+  it("keeps visual line affinity at shared soft-wrap boundaries", () => {
+    const document = createRichDocument({
+      id: "note-shared-softwrap-boundary",
+      blocks: [
+        createRichBlock({
+          id: "b1",
+          text: "abcdef",
+        }),
+      ],
+    });
+    const frame = createRichCursorFrame(document, {
+      lineSeeds: [
+        {
+          blockId: "b1",
+          blockIndex: 0,
+          endOffset: 3,
+          id: "b1:visual:0:0-3",
+          kind: "text",
+          lineIndex: 0,
+          path: "/blocks/0/text",
+          startOffset: 0,
+        },
+        {
+          blockId: "b1",
+          blockIndex: 0,
+          endOffset: 6,
+          id: "b1:visual:1:3-6",
+          kind: "text",
+          lineIndex: 1,
+          path: "/blocks/0/text",
+          startOffset: 3,
+        },
+      ],
+    });
+    const beforeBoundary = richCursorSelectionAt(
+      frame,
+      "/blocks/0/text",
+      3,
+      "before",
+    );
+    const afterBoundary = richCursorSelectionAt(
+      frame,
+      "/blocks/0/text",
+      3,
+      "after",
+    );
+
+    expect(beforeBoundary?.focus.visualAffinity).toMatchObject({
+      edge: "end",
+      lineOrder: 0,
+    });
+    expect(afterBoundary?.focus.visualAffinity).toMatchObject({
+      edge: "start",
+      lineOrder: 1,
+    });
+
+    const insideSecondLine = richCursorSelectionAt(frame, "/blocks/0/text", 4);
+    expect(insideSecondLine).not.toBeNull();
+    if (insideSecondLine === null) return;
+
+    const secondLineStart = moveRichVirtualSelection(frame, insideSecondLine, {
+      unit: "lineBoundary",
+      direction: "backward",
+    });
+    expect(secondLineStart.focus).toMatchObject({
+      offset: 3,
+      visualAffinity: {
+        edge: "start",
+        lineOrder: 1,
+      },
+    });
+
+    const secondLineEnd = moveRichVirtualSelection(frame, secondLineStart, {
+      unit: "lineBoundary",
+      direction: "forward",
+    });
+    expect(secondLineEnd.focus).toMatchObject({
+      offset: 6,
+      visualAffinity: {
+        edge: "end",
+        lineOrder: 1,
+      },
+    });
+  });
+
+  it("uses measured caret x as the vertical movement goal", () => {
+    const document = createRichDocument({
+      id: "note-measured-vertical-x",
+      blocks: [
+        createRichBlock({
+          id: "b1",
+          text: "abcdefgh",
+        }),
+      ],
+    });
+    const frame = createRichCursorFrame(document, {
+      lineSeeds: [
+        {
+          blockId: "b1",
+          blockIndex: 0,
+          caretMetrics: [
+            { offset: 0, x: 0 },
+            { offset: 1, x: 20 },
+            { offset: 2, x: 100 },
+            { offset: 3, x: 130 },
+            { offset: 4, x: 150 },
+          ],
+          endOffset: 4,
+          id: "b1:visual:0:0-4",
+          kind: "text",
+          lineIndex: 0,
+          path: "/blocks/0/text",
+          startOffset: 0,
+        },
+        {
+          blockId: "b1",
+          blockIndex: 0,
+          caretMetrics: [
+            { offset: 4, x: 0 },
+            { offset: 5, x: 30 },
+            { offset: 6, x: 50 },
+            { offset: 7, x: 98 },
+            { offset: 8, x: 140 },
+          ],
+          endOffset: 8,
+          id: "b1:visual:1:4-8",
+          kind: "text",
+          lineIndex: 1,
+          path: "/blocks/0/text",
+          startOffset: 4,
+        },
+      ],
+    });
+    const initial = richCursorSelectionAt(frame, "/blocks/0/text", 2);
+
+    expect(initial).not.toBeNull();
+    if (initial === null) return;
+
+    const down = moveRichVirtualSelection(frame, initial, {
+      unit: "visualLine",
+      direction: "down",
+    });
+
+    expect(down.goalX).toBe(100);
+    expect(down.focus).toMatchObject({
+      offset: 7,
+      visualAffinity: {
+        lineOrder: 1,
+      },
     });
   });
 

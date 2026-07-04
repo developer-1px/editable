@@ -50,7 +50,21 @@ Vitest, Biome, and production build checks.
 Use `packages/contenteditable-web` for the DOM adapter and
 `packages/rich-document` for the headless typed model.
 
-The public API is intentionally small:
+The single editing interface is `edit` in `packages/rich-document/edit.ts`:
+
+```
+edit({ document, selection, goalX }, intent, { lineSeeds? })
+  -> { patch, selectionAfter, goalX } | { kind: "history", command } | error
+```
+
+Its intent vocabulary is not invented: text intents are W3C Input Events
+`inputType` values (`insertText`, `deleteContentBackward`, `formatBold`, ...)
+and selection intents are the Selection API (`modifySelection` with the
+`alter`/`direction`/`granularity` triple, `setBaseAndExtent`). Output is JSON
+Patch plus `selectionAfter`. Adapters translate events to intents; hosts apply
+patches and own history.
+
+The rest of the public API is intentionally small:
 
 - `createJsonContentEditable`
 - `isJsonContentEditableFragment`

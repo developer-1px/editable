@@ -1,9 +1,15 @@
 // biome-ignore-all lint/a11y/noNoninteractiveTabindex: custom editor surface owns keyboard input.
+
+import type { SelectionSnap } from "@interactive-os/json-document";
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  type Dispatch,
+  memo,
   type ReactNode,
+  type SetStateAction,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -12,18 +18,18 @@ import {
   createRichBlock,
   createRichCursorFrame,
   createRichDocument,
-  moveRichVirtualSelection,
+  type EditIntent,
+  edit,
   RICH_TEXT_ATOM_REPLACEMENT,
   type RichBlock,
   type RichCursorBlockFrame,
   type RichCursorFrame,
   type RichCursorLineFrame,
-  type RichCursorMoveCommand,
   type RichDocument,
   type RichVirtualSelection,
   type RichVirtualSelectionRange,
-  recoverRichVirtualSelection,
-  replaceRichTextRange,
+  type RichVisualLineSeed,
+  richCursorPointAt,
   richCursorSelectionAt,
   richTextPathForBlock,
   richVirtualSelectionRange,
@@ -35,120 +41,136 @@ export const Route = createFileRoute("/selection-lab")({
 
 type SelectionLabState = {
   document: RichDocument;
-  selection: RichVirtualSelection;
+  goalX: number | null;
+  selection: SelectionSnap | null;
+};
+
+type SelectionLabCaretOverlay = {
+  height: number;
+  left: number;
+  top: number;
 };
 
 type RichKeyboardEvent = Pick<
   KeyboardEvent,
-  "altKey" | "ctrlKey" | "key" | "metaKey" | "preventDefault" | "shiftKey"
+  "altKey" | "ctrlKey" | "key" | "metaKey" | "shiftKey"
 >;
+
+type SelectionLabKeyboardResult =
+  | {
+      kind: "blockedTextInput";
+      preventDefault: true;
+    }
+  | {
+      effect: "no-change" | "selection" | "text";
+      intent: EditIntent;
+      kind: "intent";
+      nextState: SelectionLabState;
+      preventDefault: true;
+    }
+  | {
+      kind: "ignored";
+      preventDefault: false;
+    };
+
+type SelectionLabCommittedKeyboardResult = Extract<
+  SelectionLabKeyboardResult,
+  { kind: "intent" }
+>;
+
+type SelectionLabKeyDebugEntry = {
+  activeElement: ReturnType<typeof summarizeSelectionLabElement>;
+  at: number;
+  editorHasFocus: boolean;
+  effect: SelectionLabCommittedKeyboardResult["effect"];
+  event: ReturnType<typeof summarizeSelectionLabKeyboardEvent>;
+  intent: EditIntent;
+  result: ReturnType<typeof summarizeSelectionLabState>;
+  state: ReturnType<typeof summarizeSelectionLabState>;
+};
 
 function SelectionLab() {
   const [state, setState] = useState(createSelectionLabState);
-  const [isReady, setIsReady] = useState(false);
-  const [keyDebugLog, setKeyDebugLog] = useState<SelectionLabKeyDebugEntry[]>(
-    [],
-  );
+  const [visualLineSeeds, setVisualLineSeeds] = useState<
+    RichVisualLineSeed[] | null
+  >(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const stateRef = useRef(state);
-  const frame = useMemo(
+  const renderFrame = useMemo(
     () => createRichCursorFrame(state.document),
     [state.document],
   );
+  const frame = useMemo(
+    () =>
+      createRichCursorFrame(
+        state.document,
+        visualLineSeeds === null ? {} : { lineSeeds: visualLineSeeds },
+      ),
+    [state.document, visualLineSeeds],
+  );
   const selection = useMemo(
-    () => recoverRichVirtualSelection(frame, state.selection),
-    [frame, state.selection],
+    () => selectionLabVirtualSelection(frame, state.selection, state.goalX),
+    [frame, state.selection, state.goalX],
   );
   const range = useMemo(
     () => richVirtualSelectionRange(frame, selection),
     [frame, selection],
+  );
+  const { caretOverlay, invalidateVisualLines, isReady, visualLineSeedsRef } =
+    useSelectionLabDomBoundary({
+      document: state.document,
+      editorRef,
+      focus: range.focus,
+      setVisualLineSeeds,
+      visualLineSeeds,
+    });
+  const { keyDebugLog, recordKeyEffect } =
+    useSelectionLabKeyDebugBoundary(editorRef);
+  const selectionDebugState = useMemo(
+    () => selectionState(frame, range),
+    [frame, range],
+  );
+  const frameDebugState = useMemo(
+    () => ({
+      lines: frame.lines.map((line) => ({
+        blockId: line.blockId,
+        startOffset: line.startOffset,
+        endOffset: line.endOffset,
+        caretXs: line.carets.map((caret) => caret.x),
+        offsets: line.carets.map((caret) => caret.offset),
+      })),
+    }),
+    [frame],
   );
 
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
-  const appendKeyDebugLog = useCallback(
-    (entry: SelectionLabKeyDebugEntryInput) => {
-      const snapshot = {
-        ...entry,
-        at: Math.round(performance.now()),
-        activeElement: summarizeSelectionLabElement(
-          window.document.activeElement,
-        ),
-        editorHasFocus: window.document.activeElement === editorRef.current,
-        state: summarizeSelectionLabState(stateRef.current),
-      };
-      console.log("[selection-lab-key-debug]", snapshot);
-      setKeyDebugLog((entries) => [...entries.slice(-39), snapshot]);
-    },
-    [],
-  );
-
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      const edit = editForKey(event);
-      const command = commandForKey(event);
-      if (shouldLogSelectionLabKey(event)) {
-        appendKeyDebugLog({
-          command,
-          edit,
-          event: summarizeSelectionLabKeyboardEvent(event, editorRef.current),
-          phase: "before",
-        });
-      }
-
-      if (edit !== null) {
-        event.preventDefault();
-        const next = applySelectionLabEdit(stateRef.current, edit);
-        stateRef.current = next;
-        setState(next);
-        if (shouldLogSelectionLabKey(event)) {
-          appendKeyDebugLog({
-            edit,
-            event: summarizeSelectionLabKeyboardEvent(event, editorRef.current),
-            phase: "after-edit",
-            result: summarizeSelectionLabState(next),
-          });
-        }
+      const result = applySelectionLabKeyboardInput(
+        stateRef.current,
+        visualLineSeedsRef.current,
+        event,
+      );
+      if (!result.preventDefault) {
         return;
       }
 
-      if (command !== null) {
-        event.preventDefault();
-        const current = stateRef.current;
-        const currentFrame = createRichCursorFrame(current.document);
-        const next = {
-          ...current,
-          selection: moveRichVirtualSelection(
-            currentFrame,
-            current.selection,
-            command,
-          ),
-        };
-        stateRef.current = next;
-        setState(next);
-        if (shouldLogSelectionLabKey(event)) {
-          appendKeyDebugLog({
-            command,
-            event: summarizeSelectionLabKeyboardEvent(event, editorRef.current),
-            phase: "after-command",
-            result: summarizeSelectionLabState(next),
-          });
-        }
+      event.preventDefault();
+      if (result.kind === "blockedTextInput") {
         return;
       }
 
-      if (
-        event.key.length === 1 &&
-        !event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey
-      ) {
-        event.preventDefault();
+      stateRef.current = result.nextState;
+      if (result.effect === "text") {
+        invalidateVisualLines();
       }
+      setState(result.nextState);
+      recordKeyEffect(event, result);
     },
-    [appendKeyDebugLog],
+    [invalidateVisualLines, recordKeyEffect, visualLineSeedsRef],
   );
 
   useEffect(() => {
@@ -157,10 +179,8 @@ function SelectionLab() {
       return;
     }
     editor.addEventListener("keydown", handleKeyDown);
-    setIsReady(true);
     return () => {
       editor.removeEventListener("keydown", handleKeyDown);
-      setIsReady(false);
     };
   }, [handleKeyDown]);
 
@@ -189,11 +209,15 @@ function SelectionLab() {
               <RichBlockView
                 block={block}
                 blockIndex={blockIndex}
-                frame={frame}
+                cursorFrame={frame}
                 key={block.id}
                 range={range}
+                renderFrame={renderFrame}
               />
             ))}
+            {caretOverlay === null ? null : (
+              <VirtualCaret overlay={caretOverlay} />
+            )}
           </div>
         </section>
         <aside
@@ -203,7 +227,7 @@ function SelectionLab() {
           <StateBlock
             label="selection"
             testId="selection-lab-selection"
-            value={selectionState(frame, range)}
+            value={selectionDebugState}
           />
           <StateBlock
             label="model"
@@ -213,14 +237,7 @@ function SelectionLab() {
           <StateBlock
             label="frame"
             testId="selection-lab-frame"
-            value={{
-              lines: frame.lines.map((line) => ({
-                blockId: line.blockId,
-                startOffset: line.startOffset,
-                endOffset: line.endOffset,
-                offsets: line.carets.map((caret) => caret.offset),
-              })),
-            }}
+            value={frameDebugState}
           />
           <StateBlock
             label="key debug log"
@@ -434,12 +451,635 @@ function createSelectionLabState(): SelectionLabState {
       },
     ],
   });
-  const frame = createRichCursorFrame(document);
-  const selection = richCursorSelectionAt(frame, richTextPathForBlock(0), 2);
-  if (selection === null) {
+  const point = { path: richTextPathForBlock(0), offset: 2 };
+  const initial = edit(
+    { document, goalX: null, selection: null },
+    { type: "setBaseAndExtent", anchor: point, focus: point },
+  );
+  if (!initial.ok || initial.kind === "history") {
     throw new Error("Selection lab requires a non-empty rich document.");
   }
-  return { document, selection };
+  return { document, goalX: initial.goalX, selection: initial.selectionAfter };
+}
+
+function useSelectionLabDomBoundary({
+  document,
+  editorRef,
+  focus,
+  setVisualLineSeeds,
+  visualLineSeeds,
+}: {
+  document: RichDocument;
+  editorRef: { current: HTMLDivElement | null };
+  focus: RichVirtualSelectionRange["focus"];
+  setVisualLineSeeds: Dispatch<SetStateAction<RichVisualLineSeed[] | null>>;
+  visualLineSeeds: RichVisualLineSeed[] | null;
+}) {
+  const [isReady, setIsReady] = useState(false);
+  const [caretOverlay, setCaretOverlay] =
+    useState<SelectionLabCaretOverlay | null>(null);
+  const documentRef = useRef(document);
+  const focusRef = useRef(focus);
+  const visualLineSeedsRef = useRef<RichVisualLineSeed[] | null>(
+    visualLineSeeds,
+  );
+
+  useEffect(() => {
+    documentRef.current = document;
+  }, [document]);
+
+  useEffect(() => {
+    focusRef.current = focus;
+  }, [focus]);
+
+  useEffect(() => {
+    visualLineSeedsRef.current = visualLineSeeds;
+  }, [visualLineSeeds]);
+
+  const measureVisualLines = useCallback(
+    (nextDocument = documentRef.current) => {
+      const editor = editorRef.current;
+      if (editor === null) {
+        return;
+      }
+      const measured = measureSelectionLabVisualLineSeeds(editor, nextDocument);
+      if (measured === null) {
+        return;
+      }
+      setVisualLineSeeds((current) => {
+        if (selectionLabVisualLineSeedsEqual(current, measured)) {
+          return current;
+        }
+        visualLineSeedsRef.current = measured;
+        return measured;
+      });
+    },
+    [editorRef, setVisualLineSeeds],
+  );
+
+  const measureCaretOverlay = useCallback(
+    (nextFocus = focusRef.current) => {
+      const editor = editorRef.current;
+      if (editor === null) {
+        return;
+      }
+      const nextCaretOverlay = measureSelectionLabCaretOverlay(
+        editor,
+        nextFocus,
+      );
+      setCaretOverlay((current) =>
+        selectionLabCaretOverlayEqual(current, nextCaretOverlay)
+          ? current
+          : nextCaretOverlay,
+      );
+    },
+    [editorRef],
+  );
+
+  const invalidateVisualLines = useCallback(() => {
+    visualLineSeedsRef.current = null;
+    setVisualLineSeeds(null);
+  }, [setVisualLineSeeds]);
+
+  useLayoutEffect(() => {
+    measureVisualLines(document);
+  }, [document, measureVisualLines]);
+
+  useLayoutEffect(() => {
+    measureCaretOverlay(focus);
+  }, [focus, measureCaretOverlay]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (editor === null) {
+      return;
+    }
+    const resizeObserver = new ResizeObserver(() => {
+      window.requestAnimationFrame(() => {
+        measureVisualLines();
+        measureCaretOverlay();
+      });
+    });
+    resizeObserver.observe(editor);
+    setIsReady(true);
+    return () => {
+      resizeObserver.disconnect();
+      setIsReady(false);
+    };
+  }, [editorRef, measureCaretOverlay, measureVisualLines]);
+
+  return {
+    caretOverlay,
+    invalidateVisualLines,
+    isReady,
+    visualLineSeedsRef,
+  };
+}
+
+function useSelectionLabKeyDebugBoundary(editorRef: {
+  current: HTMLDivElement | null;
+}) {
+  const enabled = useMemo(isSelectionLabKeyDebugEnabled, []);
+  const [keyDebugLog, setKeyDebugLog] = useState<SelectionLabKeyDebugEntry[]>(
+    [],
+  );
+
+  const recordKeyEffect = useCallback(
+    (event: KeyboardEvent, result: SelectionLabCommittedKeyboardResult) => {
+      if (!enabled) {
+        return;
+      }
+      const resultSnapshot = summarizeSelectionLabState(result.nextState);
+      const snapshot: SelectionLabKeyDebugEntry = {
+        activeElement: summarizeSelectionLabElement(
+          window.document.activeElement,
+        ),
+        at: Math.round(performance.now()),
+        editorHasFocus: window.document.activeElement === editorRef.current,
+        effect: result.effect,
+        event: summarizeSelectionLabKeyboardEvent(event, editorRef.current),
+        intent: result.intent,
+        result: resultSnapshot,
+        state: resultSnapshot,
+      };
+      setKeyDebugLog((entries) => [...entries.slice(-39), snapshot]);
+    },
+    [editorRef, enabled],
+  );
+
+  return { keyDebugLog, recordKeyEffect };
+}
+
+function isSelectionLabKeyDebugEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).has("debugKeys");
+}
+
+function applySelectionLabKeyboardInput(
+  state: SelectionLabState,
+  visualLineSeeds: RichVisualLineSeed[] | null,
+  event: RichKeyboardEvent,
+): SelectionLabKeyboardResult {
+  const intent = selectionLabIntentForKey(event);
+  if (intent !== null) {
+    const result = edit(
+      state,
+      intent,
+      visualLineSeeds === null ? {} : { lineSeeds: visualLineSeeds },
+    );
+    if (!result.ok || result.kind === "history") {
+      return { kind: "ignored", preventDefault: false };
+    }
+    return {
+      effect: result.kind,
+      intent,
+      kind: "intent",
+      nextState: {
+        document: result.value,
+        goalX: result.goalX,
+        selection: result.selectionAfter,
+      },
+      preventDefault: true,
+    };
+  }
+
+  if (
+    event.key.length === 1 &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey
+  ) {
+    return { kind: "blockedTextInput", preventDefault: true };
+  }
+
+  return { kind: "ignored", preventDefault: false };
+}
+
+type SelectionLabMeasuredSegment = {
+  blockId: string;
+  blockIndex: number;
+  endOffset: number;
+  path: string;
+  right: number;
+  startOffset: number;
+  x: number;
+  y: number;
+};
+
+function measureSelectionLabVisualLineSeeds(
+  editor: HTMLElement,
+  document: RichDocument,
+): RichVisualLineSeed[] | null {
+  const editorRect = editor.getBoundingClientRect();
+  const editorLeft = editorRect.left - editor.scrollLeft;
+  const blockElements = Array.from(
+    editor.querySelectorAll<HTMLElement>("[data-block-id][data-block-index]"),
+  );
+  if (blockElements.length === 0) {
+    return null;
+  }
+
+  const seeds: RichVisualLineSeed[] = [];
+  for (const blockElement of blockElements) {
+    const blockId = blockElement.getAttribute("data-block-id");
+    const blockIndex = Number(blockElement.getAttribute("data-block-index"));
+    const block = document.blocks[blockIndex];
+    if (blockId === null || block === undefined || block.id !== blockId) {
+      continue;
+    }
+
+    const segments = measureSelectionLabSegments(
+      blockElement,
+      blockId,
+      blockIndex,
+      editorLeft,
+    );
+    const emptyLineSeeds = measureSelectionLabEmptyLineSeeds(
+      blockElement,
+      block,
+      blockIndex,
+    );
+    const groups = groupSelectionLabSegmentsByVisualLine(segments);
+    const blockSeeds = [
+      ...groups.map((group) => {
+        const sorted = [...group].sort(
+          (left, right) =>
+            left.x - right.x || left.startOffset - right.startOffset,
+        );
+        const first = sorted[0];
+        const last = sorted.at(-1);
+        if (first === undefined || last === undefined) {
+          return null;
+        }
+        return {
+          blockId,
+          blockIndex,
+          caretMetrics: selectionLabCaretMetricsForVisualLine(sorted),
+          endOffset: last.endOffset,
+          id: "",
+          kind: selectionLabVisualLineKind(
+            block.text.slice(first.startOffset, last.endOffset),
+          ),
+          lineIndex: 0,
+          path: first.path,
+          startOffset: first.startOffset,
+        } satisfies RichVisualLineSeed;
+      }),
+      ...emptyLineSeeds,
+    ].filter((seed): seed is RichVisualLineSeed => seed !== null);
+
+    blockSeeds
+      .sort(
+        (left, right) =>
+          left.startOffset - right.startOffset ||
+          left.endOffset - right.endOffset,
+      )
+      .forEach((seed, lineIndex) => {
+        seeds.push({
+          ...seed,
+          id: `${block.id}:measured-line:${lineIndex}:${seed.startOffset}-${seed.endOffset}`,
+          lineIndex,
+        });
+      });
+  }
+
+  return seeds.length === 0 ? null : seeds;
+}
+
+function measureSelectionLabSegments(
+  blockElement: HTMLElement,
+  blockId: string,
+  blockIndex: number,
+  editorLeft: number,
+): SelectionLabMeasuredSegment[] {
+  const segments: SelectionLabMeasuredSegment[] = [];
+  for (const segment of Array.from(
+    blockElement.querySelectorAll<HTMLElement>("[data-rich-segment='true']"),
+  )) {
+    const path = segment.getAttribute("data-rich-path");
+    const startOffset = Number(segment.getAttribute("data-rich-start"));
+    const endOffset = Number(segment.getAttribute("data-rich-end"));
+    const rect = firstVisibleRect(segment);
+    if (
+      path === null ||
+      !Number.isFinite(startOffset) ||
+      !Number.isFinite(endOffset) ||
+      rect === null
+    ) {
+      continue;
+    }
+    segments.push({
+      blockId,
+      blockIndex,
+      endOffset,
+      path,
+      right: rect.right - editorLeft,
+      startOffset,
+      x: rect.left - editorLeft,
+      y: rect.top,
+    });
+  }
+  return segments;
+}
+
+function selectionLabCaretMetricsForVisualLine(
+  segments: SelectionLabMeasuredSegment[],
+): RichVisualLineSeed["caretMetrics"] {
+  const xByOffset = new Map<number, number>();
+  for (const segment of segments) {
+    if (!xByOffset.has(segment.startOffset)) {
+      xByOffset.set(segment.startOffset, segment.x);
+    }
+    xByOffset.set(segment.endOffset, segment.right);
+  }
+  return [...xByOffset.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([offset, x]) => ({ offset, x }));
+}
+
+function measureSelectionLabEmptyLineSeeds(
+  blockElement: HTMLElement,
+  block: RichBlock,
+  blockIndex: number,
+): RichVisualLineSeed[] {
+  const seeds: RichVisualLineSeed[] = [];
+  for (const line of Array.from(
+    blockElement.querySelectorAll<HTMLElement>(".selection-lab-line"),
+  )) {
+    const startOffset = Number(line.getAttribute("data-line-start"));
+    const endOffset = Number(line.getAttribute("data-line-end"));
+    const path = line.getAttribute("data-line-path");
+    if (
+      path === null ||
+      startOffset !== endOffset ||
+      !Number.isFinite(startOffset)
+    ) {
+      continue;
+    }
+    seeds.push({
+      blockId: block.id,
+      blockIndex,
+      endOffset,
+      id: "",
+      kind: "empty",
+      lineIndex: 0,
+      path,
+      startOffset,
+    });
+  }
+  return seeds;
+}
+
+function groupSelectionLabSegmentsByVisualLine(
+  segments: SelectionLabMeasuredSegment[],
+): SelectionLabMeasuredSegment[][] {
+  const sorted = [...segments].sort(
+    (left, right) =>
+      left.y - right.y ||
+      left.x - right.x ||
+      left.startOffset - right.startOffset,
+  );
+  const groups: SelectionLabMeasuredSegment[][] = [];
+  for (const segment of sorted) {
+    const group = groups.find(
+      (candidate) => Math.abs((candidate[0]?.y ?? segment.y) - segment.y) <= 2,
+    );
+    if (group === undefined) {
+      groups.push([segment]);
+    } else {
+      group.push(segment);
+    }
+  }
+  return groups;
+}
+
+function firstVisibleRect(element: HTMLElement): DOMRect | null {
+  for (const rect of Array.from(element.getClientRects())) {
+    if (rect.width > 0 || rect.height > 0) {
+      return rect;
+    }
+  }
+  return null;
+}
+
+function measureSelectionLabCaretOverlay(
+  editor: HTMLElement,
+  point: RichVirtualSelectionRange["focus"],
+): SelectionLabCaretOverlay | null {
+  const segment = findSelectionLabCaretSegment(editor, point);
+  const rect =
+    segment === null
+      ? measureSelectionLabFallbackCaretRect(editor, point)
+      : measureSelectionLabSegmentCaretRect(segment, point.offset);
+  if (rect === null) {
+    return null;
+  }
+  const editorRect = editor.getBoundingClientRect();
+  return {
+    height: rect.height,
+    left: rect.left - editorRect.left + editor.scrollLeft,
+    top: rect.top - editorRect.top + editor.scrollTop,
+  };
+}
+
+function findSelectionLabCaretSegment(
+  editor: HTMLElement,
+  point: RichVirtualSelectionRange["focus"],
+): HTMLElement | null {
+  const block = editor.querySelector<HTMLElement>(
+    `[data-block-id="${selectionLabCssString(point.blockId)}"]`,
+  );
+  const scope = block ?? editor;
+  const pathSelector = `[data-rich-segment='true'][data-rich-path="${selectionLabCssString(point.path)}"]`;
+  const edge = point.visualAffinity?.edge ?? "inside";
+  const exactSelector =
+    edge === "start"
+      ? `${pathSelector}[data-rich-start="${point.offset}"]`
+      : edge === "end"
+        ? `${pathSelector}[data-rich-end="${point.offset}"]`
+        : null;
+  const exact =
+    exactSelector === null
+      ? null
+      : scope.querySelector<HTMLElement>(exactSelector);
+  if (exact !== null) {
+    return exact;
+  }
+
+  const candidates = Array.from(
+    scope.querySelectorAll<HTMLElement>(pathSelector),
+  ).filter((segment) => {
+    const start = Number(segment.getAttribute("data-rich-start"));
+    const end = Number(segment.getAttribute("data-rich-end"));
+    return (
+      Number.isFinite(start) &&
+      Number.isFinite(end) &&
+      start <= point.offset &&
+      point.offset <= end
+    );
+  });
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const affinityMatch = candidates.find((segment) => {
+    const start = Number(segment.getAttribute("data-rich-start"));
+    const end = Number(segment.getAttribute("data-rich-end"));
+    if (edge === "start") {
+      return start === point.offset;
+    }
+    if (edge === "end") {
+      return end === point.offset;
+    }
+    return start < point.offset && point.offset < end;
+  });
+  return affinityMatch ?? candidates[0] ?? null;
+}
+
+function measureSelectionLabSegmentCaretRect(
+  segment: HTMLElement,
+  offset: number,
+): Pick<DOMRect, "height" | "left" | "top"> | null {
+  const start = Number(segment.getAttribute("data-rich-start"));
+  const end = Number(segment.getAttribute("data-rich-end"));
+  const rects = Array.from(segment.getClientRects()).filter(
+    (rect) => rect.width > 0 || rect.height > 0,
+  );
+  const first = rects[0];
+  const last = rects.at(-1);
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    first === undefined ||
+    last === undefined
+  ) {
+    return null;
+  }
+  if (offset <= start) {
+    return { height: first.height, left: first.left, top: first.top };
+  }
+  if (offset >= end) {
+    return { height: last.height, left: last.right, top: last.top };
+  }
+
+  const textNode = firstTextNode(segment);
+  if (textNode === null) {
+    return { height: first.height, left: first.left, top: first.top };
+  }
+  const range = document.createRange();
+  const localOffset = Math.max(0, Math.min(offset - start, textNode.length));
+  range.setStart(textNode, localOffset);
+  range.collapse(true);
+  const rangeRect =
+    Array.from(range.getClientRects()).find(
+      (rect) => rect.width > 0 || rect.height > 0,
+    ) ?? range.getBoundingClientRect();
+  range.detach();
+  return rangeRect.height > 0
+    ? { height: rangeRect.height, left: rangeRect.left, top: rangeRect.top }
+    : { height: first.height, left: first.left, top: first.top };
+}
+
+function measureSelectionLabFallbackCaretRect(
+  editor: HTMLElement,
+  point: RichVirtualSelectionRange["focus"],
+): Pick<DOMRect, "height" | "left" | "top"> | null {
+  const line = Array.from(
+    editor.querySelectorAll<HTMLElement>(".selection-lab-line"),
+  ).find((candidate) => {
+    const start = Number(candidate.getAttribute("data-line-start"));
+    const end = Number(candidate.getAttribute("data-line-end"));
+    return (
+      candidate.getAttribute("data-block-id") === point.blockId &&
+      candidate.getAttribute("data-line-path") === point.path &&
+      Number.isFinite(start) &&
+      Number.isFinite(end) &&
+      start <= point.offset &&
+      point.offset <= end
+    );
+  });
+  const rect = line === undefined ? null : firstVisibleRect(line);
+  return rect === null
+    ? null
+    : { height: rect.height, left: rect.left, top: rect.top };
+}
+
+function firstTextNode(element: HTMLElement): Text | null {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const node = walker.nextNode();
+  return node instanceof Text ? node : null;
+}
+
+function selectionLabCssString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function selectionLabVisualLineKind(text: string): RichVisualLineSeed["kind"] {
+  if (text.length === 0) {
+    return "empty";
+  }
+  return Array.from(text).every(
+    (character) => character === RICH_TEXT_ATOM_REPLACEMENT,
+  )
+    ? "atom-only"
+    : "text";
+}
+
+function selectionLabVisualLineSeedsEqual(
+  left: RichVisualLineSeed[] | null,
+  right: RichVisualLineSeed[],
+): boolean {
+  if (left === null || left.length !== right.length) {
+    return false;
+  }
+  return left.every(
+    (seed, index) =>
+      selectionLabVisualLineSeedKey(seed) ===
+      selectionLabVisualLineSeedKey(right[index]),
+  );
+}
+
+function selectionLabVisualLineSeedKey(
+  seed: RichVisualLineSeed | undefined,
+): string {
+  return seed === undefined
+    ? ""
+    : [
+        seed.blockId,
+        seed.blockIndex,
+        seed.path,
+        seed.lineIndex,
+        seed.startOffset,
+        seed.endOffset,
+        seed.kind,
+        selectionLabCaretMetricsKey(seed.caretMetrics),
+      ].join(":");
+}
+
+function selectionLabCaretMetricsKey(
+  caretMetrics: RichVisualLineSeed["caretMetrics"],
+): string {
+  return (
+    caretMetrics
+      ?.map((metric) => `${metric.offset}@${metric.x.toFixed(2)}`)
+      .join(",") ?? ""
+  );
+}
+
+function selectionLabCaretOverlayEqual(
+  left: SelectionLabCaretOverlay | null,
+  right: SelectionLabCaretOverlay | null,
+): boolean {
+  if (left === null || right === null) {
+    return left === right;
+  }
+  return (
+    Math.abs(left.height - right.height) < 0.5 &&
+    Math.abs(left.left - right.left) < 0.5 &&
+    Math.abs(left.top - right.top) < 0.5
+  );
 }
 
 function nthOffset(text: string, needle: string, occurrence: number): number {
@@ -476,18 +1116,20 @@ function richRange(
 function RichBlockView({
   block,
   blockIndex,
-  frame,
+  cursorFrame,
   range,
+  renderFrame,
 }: {
   block: RichBlock;
   blockIndex: number;
-  frame: RichCursorFrame;
+  cursorFrame: RichCursorFrame;
   range: RichVirtualSelectionRange;
+  renderFrame: RichCursorFrame;
 }) {
-  const blockFrame = frame.blocks.find(
+  const blockFrame = renderFrame.blocks.find(
     (candidate) => candidate.blockId === block.id,
   );
-  const lines = frame.lines.filter((line) => line.blockId === block.id);
+  const lines = renderFrame.lines.filter((line) => line.blockId === block.id);
   if (blockFrame === undefined) {
     return null;
   }
@@ -506,7 +1148,7 @@ function RichBlockView({
         <RichLineView
           block={block}
           blockFrame={blockFrame}
-          frame={frame}
+          cursorFrame={cursorFrame}
           key={line.id}
           line={line}
           range={range}
@@ -541,13 +1183,13 @@ function RichBlockPrefix({ block }: { block: RichBlock }) {
 function RichLineView({
   block,
   blockFrame,
-  frame,
+  cursorFrame,
   line,
   range,
 }: {
   block: RichBlock;
   blockFrame: RichCursorBlockFrame;
-  frame: RichCursorFrame;
+  cursorFrame: RichCursorFrame;
   line: RichCursorLineFrame;
   range: RichVirtualSelectionRange;
 }) {
@@ -558,14 +1200,11 @@ function RichLineView({
   for (let index = 0; index < offsets.length - 1; index += 1) {
     const start = offsets[index] ?? line.startOffset;
     const end = offsets[index + 1] ?? start;
-    if (isFocusAt(range.focus, block.id, line.path, start)) {
-      children.push(<VirtualCaret key={`caret-${start}`} />);
-    }
     children.push(
       <RichTextSegment
         block={block}
         end={end}
-        frame={frame}
+        frame={cursorFrame}
         key={`segment-${start}-${end}`}
         path={line.path}
         range={range}
@@ -574,10 +1213,6 @@ function RichLineView({
     );
   }
 
-  const lastOffset = offsets.at(-1) ?? line.startOffset;
-  if (isFocusAt(range.focus, block.id, line.path, lastOffset)) {
-    children.push(<VirtualCaret key={`caret-${lastOffset}`} />);
-  }
   if (children.length === 0 || line.startOffset === line.endOffset) {
     children.push(
       <span aria-hidden="true" className="selection-lab-empty-line" key="empty">
@@ -587,7 +1222,14 @@ function RichLineView({
   }
 
   return (
-    <div className="selection-lab-line" data-line-order={line.order}>
+    <div
+      className="selection-lab-line"
+      data-block-id={block.id}
+      data-line-end={line.endOffset}
+      data-line-order={line.order}
+      data-line-path={line.path}
+      data-line-start={line.startOffset}
+    >
       {children}
     </div>
   );
@@ -630,21 +1272,47 @@ function RichTextSegment({
   );
   if (atom !== undefined) {
     return (
-      <span className={className}>
+      <span
+        className={className}
+        data-rich-end={end}
+        data-rich-path={path}
+        data-rich-segment="true"
+        data-rich-start={start}
+      >
         <span className={`atom-chip ${atomClassName(atom[1].type)}`}>
           {atom[1].label ?? atom[1].text ?? atom[0]}
         </span>
       </span>
     );
   }
-  return <span className={className}>{text}</span>;
+  return (
+    <span
+      className={className}
+      data-rich-end={end}
+      data-rich-path={path}
+      data-rich-segment="true"
+      data-rich-start={start}
+    >
+      {text}
+    </span>
+  );
 }
 
-function VirtualCaret() {
-  return <span aria-hidden="true" className="selection-lab-caret" />;
+function VirtualCaret({ overlay }: { overlay: SelectionLabCaretOverlay }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="selection-lab-caret"
+      style={{
+        height: overlay.height,
+        left: overlay.left,
+        top: overlay.top,
+      }}
+    />
+  );
 }
 
-function StateBlock({
+const StateBlock = memo(function StateBlock({
   label,
   testId,
   value,
@@ -653,82 +1321,129 @@ function StateBlock({
   testId: string;
   value: unknown;
 }) {
+  const serializedValue = useMemo(
+    () => JSON.stringify(value, null, 2),
+    [value],
+  );
   return (
     <section className="contenteditable-state-block">
       <h2>{label}</h2>
-      <pre data-testid={testId}>{JSON.stringify(value, null, 2)}</pre>
+      <pre data-testid={testId}>{serializedValue}</pre>
     </section>
+  );
+});
+
+function selectionLabVirtualSelection(
+  frame: RichCursorFrame,
+  snap: SelectionSnap | null,
+  goalX: number | null,
+): RichVirtualSelection {
+  const anchor = selectionLabCursorPoint(frame, snap?.anchor ?? null);
+  const focus = selectionLabCursorPoint(frame, snap?.focus ?? null);
+  if (anchor !== null && focus !== null) {
+    return { anchor, focus, goalX };
+  }
+  const fallback = richCursorSelectionAt(frame, richTextPathForBlock(0), 0);
+  if (fallback === null) {
+    throw new Error("Selection lab requires a non-empty rich document.");
+  }
+  return fallback;
+}
+
+function selectionLabCursorPoint(
+  frame: RichCursorFrame,
+  point: SelectionSnap["anchor"],
+) {
+  if (point === null || point === undefined || typeof point === "string") {
+    return null;
+  }
+  if (typeof point.offset !== "number") {
+    return null;
+  }
+  return richCursorPointAt(
+    frame,
+    point.path,
+    point.offset,
+    point.edge === "before" ? "before" : "after",
   );
 }
 
-function commandForKey(event: RichKeyboardEvent): RichCursorMoveCommand | null {
-  const extend = event.shiftKey;
+function selectionLabIntentForKey(event: RichKeyboardEvent): EditIntent | null {
+  if (event.key === "Enter") {
+    return { type: "insertLineBreak" };
+  }
+  if (event.key === "Backspace") {
+    return { type: "deleteContentBackward" };
+  }
+  if (event.key === "Delete") {
+    return { type: "deleteContentForward" };
+  }
+  const alter = event.shiftKey ? "extend" : "move";
   if (event.metaKey && event.key === "ArrowLeft") {
-    return { unit: "lineBoundary", direction: "backward", extend };
+    return {
+      type: "modifySelection",
+      alter,
+      direction: "backward",
+      granularity: "lineboundary",
+    };
   }
   if (event.metaKey && event.key === "ArrowRight") {
-    return { unit: "lineBoundary", direction: "forward", extend };
+    return {
+      type: "modifySelection",
+      alter,
+      direction: "forward",
+      granularity: "lineboundary",
+    };
   }
   if (event.key === "ArrowLeft") {
     return {
-      unit: event.altKey || event.ctrlKey ? "word" : "grapheme",
+      type: "modifySelection",
+      alter,
       direction: "backward",
-      extend,
+      granularity: event.altKey || event.ctrlKey ? "word" : "character",
     };
   }
   if (event.key === "ArrowRight") {
     return {
-      unit: event.altKey || event.ctrlKey ? "word" : "grapheme",
+      type: "modifySelection",
+      alter,
       direction: "forward",
-      extend,
+      granularity: event.altKey || event.ctrlKey ? "word" : "character",
     };
   }
   if (event.key === "ArrowUp") {
-    return { unit: "visualLine", direction: "up", extend };
+    return {
+      type: "modifySelection",
+      alter,
+      direction: "backward",
+      granularity: "line",
+    };
   }
   if (event.key === "ArrowDown") {
-    return { unit: "visualLine", direction: "down", extend };
+    return {
+      type: "modifySelection",
+      alter,
+      direction: "forward",
+      granularity: "line",
+    };
   }
   if (event.key === "Home") {
-    return { unit: "lineBoundary", direction: "backward", extend };
+    return {
+      type: "modifySelection",
+      alter,
+      direction: "backward",
+      granularity: "lineboundary",
+    };
   }
   if (event.key === "End") {
-    return { unit: "lineBoundary", direction: "forward", extend };
+    return {
+      type: "modifySelection",
+      alter,
+      direction: "forward",
+      granularity: "lineboundary",
+    };
   }
   return null;
-}
-
-type SelectionLabKeyDebugEntryInput = {
-  command?: RichCursorMoveCommand | null;
-  edit?: ReturnType<typeof editForKey>;
-  event?: ReturnType<typeof summarizeSelectionLabKeyboardEvent>;
-  phase: string;
-  result?: ReturnType<typeof summarizeSelectionLabState>;
-};
-
-type SelectionLabKeyDebugEntry = SelectionLabKeyDebugEntryInput & {
-  activeElement: ReturnType<typeof summarizeSelectionLabElement>;
-  at: number;
-  editorHasFocus: boolean;
-  state: ReturnType<typeof summarizeSelectionLabState>;
-};
-
-function shouldLogSelectionLabKey(event: KeyboardEvent): boolean {
-  return (
-    event.key === "ArrowLeft" ||
-    event.key === "ArrowRight" ||
-    event.key === "ArrowUp" ||
-    event.key === "ArrowDown" ||
-    event.key === "Home" ||
-    event.key === "End" ||
-    event.code === "ArrowLeft" ||
-    event.code === "ArrowRight" ||
-    event.code === "ArrowUp" ||
-    event.code === "ArrowDown" ||
-    event.code === "Home" ||
-    event.code === "End" ||
-    ((event.metaKey || event.ctrlKey) && event.key.startsWith("Arrow"))
-  );
 }
 
 function summarizeSelectionLabElement(target: EventTarget | null): unknown {
@@ -784,7 +1499,11 @@ function summarizeSelectionLabKeyboardEvent(
 
 function summarizeSelectionLabState(state: SelectionLabState) {
   const frame = createRichCursorFrame(state.document);
-  const selection = recoverRichVirtualSelection(frame, state.selection);
+  const selection = selectionLabVirtualSelection(
+    frame,
+    state.selection,
+    state.goalX,
+  );
   const range = richVirtualSelectionRange(frame, selection);
   return {
     document: {
@@ -806,94 +1525,6 @@ function summarizeSelectionLabState(state: SelectionLabState) {
       })),
     },
     selection: selectionState(frame, range),
-  };
-}
-
-function editForKey(
-  event: RichKeyboardEvent,
-): "break" | "deleteBackward" | "deleteForward" | null {
-  if (event.key === "Enter") {
-    return "break";
-  }
-  if (event.key === "Backspace") {
-    return "deleteBackward";
-  }
-  if (event.key === "Delete") {
-    return "deleteForward";
-  }
-  return null;
-}
-
-function applySelectionLabEdit(
-  state: SelectionLabState,
-  edit: "break" | "deleteBackward" | "deleteForward",
-): SelectionLabState {
-  if (edit === "break") {
-    return replaceSelectionText(state, state.selection, "\n");
-  }
-
-  const frame = createRichCursorFrame(state.document);
-  const selection = recoverRichVirtualSelection(frame, state.selection);
-  const range = richVirtualSelectionRange(frame, selection);
-  if (!range.collapsed) {
-    return replaceSelectionText(state, selection, "");
-  }
-
-  const direction = edit === "deleteBackward" ? "backward" : "forward";
-  const expanded = moveRichVirtualSelection(frame, selection, {
-    unit: "grapheme",
-    direction,
-    extend: true,
-  });
-  const expandedRange = richVirtualSelectionRange(frame, expanded);
-  if (expandedRange.collapsed) {
-    return state;
-  }
-  return replaceSelectionText(state, expanded, "");
-}
-
-function replaceSelectionText(
-  state: SelectionLabState,
-  selection: RichVirtualSelection,
-  replacement: string,
-): SelectionLabState {
-  const frame = createRichCursorFrame(state.document);
-  const range = richVirtualSelectionRange(frame, selection);
-  if (range.start.path !== range.end.path) {
-    return state;
-  }
-  const block = frame.blocks.find(
-    (candidate) => candidate.path === range.start.path,
-  );
-  if (block === undefined) {
-    return state;
-  }
-  const result = replaceRichTextRange(
-    state.document,
-    block.blockId,
-    range.start.offset,
-    range.end.offset,
-    replacement,
-  );
-  if (!result.ok) {
-    return state;
-  }
-
-  const nextFrame = createRichCursorFrame(result.value);
-  const nextBlock = nextFrame.blocks.find(
-    (candidate) => candidate.blockId === block.blockId,
-  );
-  const nextSelection =
-    nextBlock === undefined
-      ? recoverRichVirtualSelection(nextFrame, selection)
-      : (richCursorSelectionAt(
-          nextFrame,
-          nextBlock.path,
-          range.start.offset + replacement.length,
-        ) ?? recoverRichVirtualSelection(nextFrame, selection));
-  return {
-    document: result.value,
-    selection: nextSelection,
   };
 }
 
@@ -927,17 +1558,6 @@ function listMarkerText(
     return "1.";
   }
   return "-";
-}
-
-function isFocusAt(
-  point: RichVirtualSelectionRange["focus"],
-  blockId: string,
-  path: string,
-  offset: number,
-): boolean {
-  return (
-    point.blockId === blockId && point.path === path && point.offset === offset
-  );
 }
 
 function segmentIntersectsSelection(
