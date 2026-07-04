@@ -5,6 +5,15 @@ import type {
   SelectionSnap,
 } from "@interactive-os/json-document";
 import { JSON_ATOM_ATTRIBUTE, JSON_TEXT_ATTRIBUTE } from "./contract";
+import {
+  createRichBlock,
+  createRichDocument,
+  edit,
+  RICH_DOCUMENT_SCHEMA,
+  richTextPathForBlock,
+  type RichDocument,
+  type RichVisualLineSeed,
+} from "../rich-document";
 import type {
   ClipboardUpdate,
   EditableHost,
@@ -15,6 +24,7 @@ import type {
   JsonContentEditableSelectionIntent,
   JsonContentEditableTextProjection,
   JsonContentEditableUpdate,
+  JsonContentEditableVisualLayout,
   JsonContentEditableVisualLayoutSnapshot,
 } from "./contract";
 import {
@@ -59,6 +69,7 @@ import {
   textPointFromDOMSelection,
 } from "./internal/selection";
 import { changedRegionEnd } from "./internal/textDiff";
+import { richVisualLineSeedsFromMeasuredLayout } from "./internal/visualLayout";
 
 export { isJsonContentEditableFragment } from "./internal/clipboard";
 
@@ -74,7 +85,6 @@ export function createJsonContentEditable<T>({
   root,
   textAttribute = JSON_TEXT_ATTRIBUTE,
   projection = null,
-  resolveSelectionIntent = null,
   visualLayout = null,
 }: JsonContentEditableOptions<T>): EditableHost<T> {
   let lease: NativeTextLease | null = null;
@@ -856,11 +866,11 @@ export function createJsonContentEditable<T>({
     }
 
     const currentSelection = document.selection?.snapshot() ?? null;
-    const resolved =
-      resolveSelectionIntent?.(intent, {
-        selection: currentSelection,
-        goalX: verticalGoalX,
-      }) ?? null;
+    const resolved = dispatchSelectionIntentWithKernel(
+      intent,
+      currentSelection,
+      layout.layout,
+    );
     if (resolved === null || resolved.selection === null) {
       return modelToDomUpdate({
         kind: "no-change",
@@ -884,6 +894,76 @@ export function createJsonContentEditable<T>({
       render: true,
       selection: resolved.selection,
     });
+  }
+
+  function dispatchSelectionIntentWithKernel(
+    intent: JsonContentEditableSelectionIntent,
+    selection: SelectionSnap | null,
+    layout: JsonContentEditableVisualLayout | null,
+  ): { selection: SelectionSnap | null; goalX: number | null } | null {
+    const state = richEditState(selection, layout);
+    if (state === null) {
+      return null;
+    }
+    const result = edit(
+      {
+        document: state.document,
+        selection: state.selection,
+        goalX: verticalGoalX,
+      },
+      intent,
+      state.lineSeeds === null ? {} : { lineSeeds: state.lineSeeds },
+    );
+    if (!result.ok || result.kind === "history") {
+      return null;
+    }
+    return {
+      selection: state.selectionAfter(result.selectionAfter),
+      goalX: result.goalX,
+    };
+  }
+
+  function richEditState(
+    selection: SelectionSnap | null,
+    layout: JsonContentEditableVisualLayout | null,
+  ): {
+    document: RichDocument;
+    lineSeeds: ReadonlyArray<RichVisualLineSeed> | null;
+    selection: SelectionSnap | null;
+    selectionAfter(selection: SelectionSnap | null): SelectionSnap | null;
+  } | null {
+    if (isRichDocument(document.value)) {
+      return {
+        document: document.value,
+        lineSeeds:
+          layout === null
+            ? null
+            : richVisualLineSeedsFromMeasuredLayout(document.value, layout),
+        selection,
+        selectionAfter: (next) => next,
+      };
+    }
+
+    const textPath = textPathFromSelection(selection);
+    if (textPath === null) {
+      return null;
+    }
+    const text = readString(document, textPath);
+    if (!text.ok) {
+      return null;
+    }
+    const richPath = richTextPathForBlock(0);
+    const richDocument = createRichDocument({
+      id: "editable-host",
+      blocks: [createRichBlock({ id: "b", type: "paragraph", text: text.value })],
+    });
+    return {
+      document: richDocument,
+      lineSeeds:
+        layout === null ? null : richLineSeedsFromMeasuredLayout(layout, richPath),
+      selection: remapSelectionPath(selection, textPath, richPath),
+      selectionAfter: (next) => remapSelectionPath(next, richPath, textPath),
+    };
   }
 }
 
@@ -950,4 +1030,68 @@ function textPathFromSelection(selection: SelectionSnap | null): Pointer | null 
     return null;
   }
   return range.anchor.path;
+}
+
+function isRichDocument(value: unknown): value is RichDocument {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    "schema" in value &&
+    value.schema === RICH_DOCUMENT_SCHEMA &&
+    "blocks" in value &&
+    Array.isArray(value.blocks)
+  );
+}
+
+function richLineSeedsFromMeasuredLayout(
+  layout: JsonContentEditableVisualLayout,
+  path: Pointer,
+): RichVisualLineSeed[] {
+  return layout.lines.map((line, lineIndex) => ({
+    id: line.id,
+    blockId: "b",
+    blockIndex: 0,
+    path,
+    startOffset: line.startOffset,
+    endOffset: line.endOffset,
+    kind: line.kind,
+    lineIndex,
+    caretMetrics: line.carets.map((caret) => ({
+      offset: caret.offset,
+      x: caret.x,
+    })),
+  }));
+}
+
+function remapSelectionPath(
+  selection: SelectionSnap | null,
+  from: Pointer,
+  to: Pointer,
+): SelectionSnap | null {
+  if (selection === null) {
+    return null;
+  }
+  const mapPoint = (point: SelectionSnap["anchor"]): SelectionSnap["anchor"] => {
+    if (typeof point === "string") {
+      return point === from ? to : point;
+    }
+    if (point !== null && point.path === from) {
+      return { ...point, path: to };
+    }
+    return point;
+  };
+  const mapRangePoint = (
+    point: SelectionSnap["selectionRanges"][number]["anchor"],
+  ): SelectionSnap["selectionRanges"][number]["anchor"] =>
+    mapPoint(point) as SelectionSnap["selectionRanges"][number]["anchor"];
+  return {
+    ...selection,
+    selectionRanges: selection.selectionRanges.map((range) => ({
+      anchor: mapRangePoint(range.anchor),
+      focus: mapRangePoint(range.focus),
+    })),
+    anchor: mapPoint(selection.anchor),
+    focus: mapPoint(selection.focus),
+  };
 }

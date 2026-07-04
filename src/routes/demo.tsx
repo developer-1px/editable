@@ -45,7 +45,6 @@ import {
   contentEditableDemoTextProjection,
   createContentEditableDemoDocument,
   createContentEditableDemoProjection,
-  createContentEditableDemoSelectionIntentResolver,
   createContentEditableDemoValue,
   createMentionFragment,
   renderContentEditableDemoContent,
@@ -175,10 +174,6 @@ function ContentEditableDemo() {
       projection: (path) =>
         contentEditableDemoTextProjection(projectionRef.current, path),
       rangesPath: contentEditableDemoRangesPathForTextPath,
-      resolveSelectionIntent: createContentEditableDemoSelectionIntentResolver(
-        document,
-        visualLayoutStore,
-      ),
       visualLayout: visualLayoutStore.read,
     });
     renderEditorContent();

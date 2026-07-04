@@ -3,11 +3,7 @@
 import { createJSONDocument } from "@interactive-os/json-document";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import {
-  createRichBlock,
-  createRichDocument,
-  edit,
-} from "./index";
+import { createRichBlock, createRichDocument } from "./index";
 import * as PublicCore from "./dom";
 import {
   createEditableHost,
@@ -18,8 +14,6 @@ import {
   JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
   JSON_TEXT_ATTRIBUTE,
   richVisualLineSeedsFromMeasuredLayout,
-  type JsonContentEditableSelectionIntent,
-  type JsonContentEditableSelectionIntentResolver,
   type JsonContentEditableVisualLayout,
   type JsonContentEditableVisualLayoutSnapshot,
 } from "./dom";
@@ -272,17 +266,6 @@ function visualLine({
   };
 }
 
-function selectionSnap(start: number, end: number) {
-  const anchor = { path: "/text", offset: start };
-  const focus = { path: "/text", offset: end };
-  return {
-    selectedPointers: [],
-    selectionRanges: [{ anchor, focus }],
-    primaryIndex: 0,
-    anchor,
-    focus,
-  };
-}
 function freshVisualLayout(
   layout: JsonContentEditableVisualLayout | null,
   revision = 1,
@@ -291,86 +274,6 @@ function freshVisualLayout(
     ok: true,
     layout,
     revision,
-  };
-}
-
-type TestSelectionSnap = ReturnType<typeof selectionSnap>;
-
-function remapSelectionPath<S extends TestSelectionSnap>(
-  selection: S | null,
-  path: string,
-): S | null {
-  if (selection === null) {
-    return null;
-  }
-  const mapPoint = <P,>(point: P): P =>
-    typeof point === "object" && point !== null
-      ? { ...point, path }
-      : point;
-  return {
-    ...selection,
-    selectionRanges: selection.selectionRanges.map((range) => ({
-      anchor: mapPoint(range.anchor),
-      focus: mapPoint(range.focus),
-    })),
-    anchor: mapPoint(selection.anchor),
-    focus: mapPoint(selection.focus),
-  };
-}
-
-function richLineSeedsFromLayout(layout: JsonContentEditableVisualLayout) {
-  return layout.lines.map((line, lineIndex) => ({
-    id: line.id,
-    blockId: "b",
-    blockIndex: 0,
-    path: "/blocks/0/text",
-    startOffset: line.startOffset,
-    endOffset: line.endOffset,
-    kind: line.kind,
-    lineIndex,
-    caretMetrics: line.carets.map((caret) => ({
-      offset: caret.offset,
-      x: caret.x,
-    })),
-  }));
-}
-
-// The canonical wiring under test: the adapter emits selection intents and a
-// host resolver answers them with the rich-document edit() kernel.
-function richTextIntentResolver(
-  document: { value: { text: string } },
-  layout: () => JsonContentEditableVisualLayoutSnapshot,
-): JsonContentEditableSelectionIntentResolver {
-  return (intent, state) => {
-    const richDocument = createRichDocument({
-      id: "test",
-      blocks: [createRichBlock({ id: "b", text: document.value.text })],
-    });
-    const snapshot = layout();
-    const result = edit(
-      {
-        document: richDocument,
-        selection: remapSelectionPath(
-          state.selection as TestSelectionSnap | null,
-          "/blocks/0/text",
-        ),
-        goalX: state.goalX,
-      },
-      intent,
-      snapshot.layout === null
-        ? {}
-        : { lineSeeds: richLineSeedsFromLayout(snapshot.layout) },
-    );
-    if (!result.ok || result.kind === "history") {
-      return null;
-    }
-    return {
-      selection: remapSelectionPath(
-        result.selectionAfter as TestSelectionSnap | null,
-        "/text",
-      ),
-      goalX: result.goalX,
-    };
   };
 }
 
@@ -703,9 +606,6 @@ describe("contenteditable-web json-document bridge", () => {
     const core = createJsonContentEditable({
       root,
       document,
-      resolveSelectionIntent: richTextIntentResolver(document, () =>
-        freshVisualLayout(visualLayout),
-      ),
       visualLayout: () => freshVisualLayout(visualLayout),
     });
 
@@ -744,9 +644,6 @@ describe("contenteditable-web json-document bridge", () => {
     const core = createJsonContentEditable({
       root,
       document,
-      resolveSelectionIntent: richTextIntentResolver(document, () =>
-        freshVisualLayout(visualLayout),
-      ),
       visualLayout: () => freshVisualLayout(visualLayout),
     });
     const textNode = textElement.firstChild;
@@ -806,9 +703,6 @@ describe("contenteditable-web json-document bridge", () => {
     const core = createJsonContentEditable({
       root,
       document,
-      resolveSelectionIntent: richTextIntentResolver(document, () =>
-        freshVisualLayout(visualLayout),
-      ),
       visualLayout: () => freshVisualLayout(visualLayout),
     });
 
@@ -878,9 +772,6 @@ describe("contenteditable-web json-document bridge", () => {
     const core = createJsonContentEditable({
       root,
       document,
-      resolveSelectionIntent: richTextIntentResolver(document, () =>
-        freshVisualLayout(visualLayout),
-      ),
       visualLayout: () => freshVisualLayout(visualLayout),
     });
 
@@ -936,9 +827,6 @@ describe("contenteditable-web json-document bridge", () => {
     const core = createJsonContentEditable({
       root,
       document,
-      resolveSelectionIntent: richTextIntentResolver(document, () =>
-        freshVisualLayout(visualLayout),
-      ),
       visualLayout: () => freshVisualLayout(visualLayout),
     });
 
@@ -1009,9 +897,6 @@ describe("contenteditable-web json-document bridge", () => {
     const core = createJsonContentEditable({
       root,
       document,
-      resolveSelectionIntent: richTextIntentResolver(document, () =>
-        freshVisualLayout(visualLayout),
-      ),
       visualLayout: () => freshVisualLayout(visualLayout),
     });
 
@@ -1041,26 +926,43 @@ describe("contenteditable-web json-document bridge", () => {
     });
   });
 
-  it("delegates selection intents to the host resolver with goalX state", () => {
-    const { document, root, textNode } = setup("abcd\nefgh");
-    const calls: Array<{
-      intent: JsonContentEditableSelectionIntent;
-      goalX: number | null;
-    }> = [];
+  it("dispatches selection intents through the rich kernel with goalX state", () => {
+    const { document, root, textNode } = setup("abcd\nef\nghij");
+    const visualLayout: JsonContentEditableVisualLayout = {
+      lines: [
+        visualLine({
+          bottom: 10,
+          endOffset: 4,
+          index: 0,
+          startOffset: 0,
+          top: 0,
+          xs: [0, 10, 20, 30, 40],
+        }),
+        visualLine({
+          bottom: 20,
+          endOffset: 7,
+          index: 1,
+          startOffset: 5,
+          top: 10,
+          xs: [0, 10, 20],
+        }),
+        visualLine({
+          bottom: 30,
+          endOffset: 12,
+          index: 2,
+          startOffset: 8,
+          top: 20,
+          xs: [0, 10, 20, 30, 40],
+        }),
+      ],
+    };
     const core = createJsonContentEditable({
       root,
       document,
-      resolveSelectionIntent: (intent, state) => {
-        calls.push({ intent, goalX: state.goalX });
-        if (calls.length === 1) {
-          return { selection: selectionSnap(7, 7), goalX: 20 };
-        }
-        return null;
-      },
-      visualLayout: () => freshVisualLayout({ lines: [] }),
+      visualLayout: () => freshVisualLayout(visualLayout),
     });
 
-    setDOMRange(textNode, 2, textNode, 2);
+    setDOMRange(textNode, 3, textNode, 3);
     const down = new KeyboardEvent("keydown", {
       bubbles: true,
       cancelable: true,
@@ -1076,36 +978,19 @@ describe("contenteditable-web json-document bridge", () => {
       offset: 7,
     });
 
-    const up = new KeyboardEvent("keydown", {
+    const secondDown = new KeyboardEvent("keydown", {
       bubbles: true,
       cancelable: true,
-      key: "ArrowUp",
+      key: "ArrowDown",
     });
-    expect(core.handle(up)).toMatchObject({
+    expect(core.handle(secondDown)).toMatchObject({
       flow: "model-to-dom",
-      kind: "no-change",
+      kind: "selection",
     });
-
-    expect(calls).toEqual([
-      {
-        intent: {
-          type: "modifySelection",
-          alter: "move",
-          direction: "forward",
-          granularity: "line",
-        },
-        goalX: null,
-      },
-      {
-        intent: {
-          type: "modifySelection",
-          alter: "move",
-          direction: "backward",
-          granularity: "line",
-        },
-        goalX: 20,
-      },
-    ]);
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 11,
+    });
   });
 
   it("blocks vertical motion without a fresh visual layout", () => {
@@ -1175,9 +1060,6 @@ describe("contenteditable-web json-document bridge", () => {
     const core = createJsonContentEditable({
       root,
       document,
-      resolveSelectionIntent: richTextIntentResolver(document, () =>
-        freshVisualLayout(visualLayout),
-      ),
       visualLayout: () => freshVisualLayout(visualLayout),
     });
 
@@ -1324,9 +1206,6 @@ describe("contenteditable-web json-document bridge", () => {
     const core = createJsonContentEditable({
       root,
       document,
-      resolveSelectionIntent: richTextIntentResolver(document, () =>
-        freshVisualLayout(visualLayout),
-      ),
       visualLayout: () => freshVisualLayout(visualLayout),
     });
 
@@ -1435,9 +1314,6 @@ describe("contenteditable-web json-document bridge", () => {
     const core = createJsonContentEditable({
       root,
       document,
-      resolveSelectionIntent: richTextIntentResolver(document, () =>
-        freshVisualLayout(visualLayout),
-      ),
       visualLayout: () => freshVisualLayout(visualLayout),
     });
 

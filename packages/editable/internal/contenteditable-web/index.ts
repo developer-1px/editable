@@ -20,7 +20,6 @@ export type {
   JsonContentEditableRelatedPath,
   JsonContentEditableRangeRecord,
   JsonContentEditableSelectionIntent,
-  JsonContentEditableSelectionIntentResolver,
   JsonContentEditableTextChange,
   JsonContentEditableTextProjection,
   JsonContentEditableUpdate,

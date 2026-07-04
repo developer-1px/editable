@@ -19,7 +19,6 @@ import {
   EDITABLE_HEADING_LEVEL_ATTRIBUTE,
   EDITABLE_MARK_ATTRIBUTE,
   EDITABLE_TEXT_ATTRIBUTE,
-  edit,
   type RichBlock,
   type RichDocument,
   type RichDocumentPlan,
@@ -45,10 +44,7 @@ import {
 import {
   JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
   type JsonContentEditableFragment,
-  type JsonContentEditableSelectionIntentResolver,
   type JsonContentEditableTextProjection,
-  type JsonContentEditableVisualLayoutStore,
-  richVisualLineSeedsFromMeasuredLayout,
 } from "../../packages/editable/dom";
 import { RichDocumentSchema } from "../../packages/editable/schema";
 
@@ -263,35 +259,6 @@ export function contentEditableDemoTextProjection(
         selection: result.selectionAfter,
       };
     },
-  };
-}
-
-export function createContentEditableDemoSelectionIntentResolver(
-  document: JSONDocument<ContentEditableDemoDocument>,
-  visualLayout: JsonContentEditableVisualLayoutStore,
-): JsonContentEditableSelectionIntentResolver {
-  return (intent, state) => {
-    const snapshot = visualLayout.read();
-    const lineSeeds =
-      snapshot.layout === null
-        ? null
-        : richVisualLineSeedsFromMeasuredLayout(
-            document.value,
-            snapshot.layout,
-          );
-    const result = edit(
-      {
-        document: document.value,
-        selection: state.selection,
-        goalX: state.goalX,
-      },
-      intent,
-      lineSeeds === null ? {} : { lineSeeds },
-    );
-    if (!result.ok || result.kind === "history") {
-      return null;
-    }
-    return { selection: result.selectionAfter, goalX: result.goalX };
   };
 }
 

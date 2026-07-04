@@ -27,7 +27,6 @@ export type JsonContentEditableOptions<T> = {
   atomAttribute?: string;
   textAttribute?: string;
   projection?: JsonContentEditableProjectionProvider<T> | null;
-  resolveSelectionIntent?: JsonContentEditableSelectionIntentResolver | null;
   visualLayout?: JsonContentEditableVisualLayoutProvider | null;
 };
 
@@ -161,26 +160,12 @@ export type FlushOptions = {
   mergeKey?: string;
 };
 
-// The canonical selection intent vocabulary: Selection.modify's
-// alter/direction/granularity triple. The adapter emits these; the host
-// resolves them against its document model (e.g. rich-document `edit`).
 export type JsonContentEditableSelectionIntent = {
   type: "modifySelection";
   alter: "extend" | "move";
   direction: "backward" | "forward";
   granularity: "line" | "lineboundary";
 };
-
-export type JsonContentEditableSelectionIntentResolver = (
-  intent: JsonContentEditableSelectionIntent,
-  state: {
-    selection: SelectionSnap | null;
-    goalX: number | null;
-  },
-) => {
-  selection: SelectionSnap | null;
-  goalX: number | null;
-} | null;
 
 export type JsonContentEditableFlow = "dom-to-model" | "model-to-dom";
 
