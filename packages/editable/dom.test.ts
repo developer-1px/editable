@@ -7,8 +7,8 @@ import {
   createRichBlock,
   createRichDocument,
   edit,
-} from "../rich-document";
-import * as PublicCore from "./index";
+} from "./index";
+import * as PublicCore from "./dom";
 import {
   createJsonContentEditable,
   JSON_ATOM_ATTRIBUTE,
@@ -20,7 +20,7 @@ import {
   type JsonContentEditableSelectionIntentResolver,
   type JsonContentEditableVisualLayout,
   type JsonContentEditableVisualLayoutSnapshot,
-} from "./index";
+} from "./dom";
 
 const TestDocumentSchema = z.object({
   text: z.string(),

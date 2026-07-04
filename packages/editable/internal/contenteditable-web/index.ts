@@ -1,3 +1,10 @@
+export {
+  JSON_ATOM_ATTRIBUTE,
+  JSON_ATOM_REPLACEMENT,
+  JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
+  JSON_CONTENT_EDITABLE_MIME,
+  JSON_TEXT_ATTRIBUTE,
+} from "./contract";
 export type {
   ClipboardUpdate,
   FlushOptions,
@@ -7,8 +14,8 @@ export type {
   JsonContentEditableFlow,
   JsonContentEditableOptions,
   JsonContentEditableProjectionProvider,
-  JsonContentEditableRangeRecord,
   JsonContentEditableRelatedPath,
+  JsonContentEditableRangeRecord,
   JsonContentEditableSelectionIntent,
   JsonContentEditableSelectionIntentResolver,
   JsonContentEditableTextChange,
@@ -17,18 +24,17 @@ export type {
   JsonContentEditableVisualBox,
   JsonContentEditableVisualCaret,
   JsonContentEditableVisualLayout,
-  JsonContentEditableVisualLayoutOptions,
   JsonContentEditableVisualLayoutProvider,
+  JsonContentEditableVisualLayoutOptions,
   JsonContentEditableVisualLayoutSnapshot,
   JsonContentEditableVisualLayoutStore,
   JsonContentEditableVisualLine,
   JsonContentEditableVisualLineKind,
   JsonContentEditableVisualLineSeed,
-} from "../editable/dom";
+} from "./contract";
 export {
-  JSON_ATOM_ATTRIBUTE,
-  JSON_ATOM_REPLACEMENT,
-  JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
-  JSON_CONTENT_EDITABLE_MIME,
-  JSON_TEXT_ATTRIBUTE,
-} from "../editable/dom";
+  createJsonContentEditable,
+  isJsonContentEditableFragment,
+} from "./createJsonContentEditable";
+export { measureJsonContentEditableVisualLayout } from "./internal/visualLayout";
+export { createVisualLayoutStore as createJsonContentEditableVisualLayoutStore } from "./internal/visualLayoutStore";

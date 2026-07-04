@@ -4,14 +4,6 @@ import {
   type SelectionSnap,
 } from "@interactive-os/json-document";
 import {
-  JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
-  type JsonContentEditableFragment,
-  type JsonContentEditableSelectionIntentResolver,
-  type JsonContentEditableTextProjection,
-  type JsonContentEditableVisualLayout,
-  type JsonContentEditableVisualLayoutStore,
-} from "../../packages/contenteditable-web";
-import {
   applyRichProjectionTextChange,
   canonicalEditableAtomAttributes,
   canonicalEditableBlockAttributes,
@@ -52,7 +44,15 @@ import {
   toggleRichBlockStyleForSelection,
   toggleRichInlineRangeForSelection,
   toggleRichTaskListItem,
-} from "../../packages/rich-document";
+} from "../../packages/editable";
+import {
+  JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
+  type JsonContentEditableFragment,
+  type JsonContentEditableSelectionIntentResolver,
+  type JsonContentEditableTextProjection,
+  type JsonContentEditableVisualLayout,
+  type JsonContentEditableVisualLayoutStore,
+} from "../../packages/editable/dom";
 
 const INITIAL_MENTION_ID = "mention-ada";
 const TASK_MARKER_ID = "task-marker-block-4";

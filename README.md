@@ -1,11 +1,11 @@
-# JSON Document Contenteditable Web
+# Interactive OS Editable
 
-This repo is a small `@interactive-os/json-document` contenteditable bridge and
-rich document model lab. It is not a full editor product.
+This repo is the `@interactive-os/editable` rich document editing kit in
+progress. It is not a full editor product.
 
-The package lives in `packages/contenteditable-web`, following the same naming
-shape as `../json-document/packages/contenteditable-web`. It provides the thin
-web layer that is hard to rebuild correctly:
+The public source package lives in `packages/editable`. It exposes a headless
+kernel at `packages/editable` and a DOM adapter at `packages/editable/dom`.
+Together they provide the thin editing layer that is hard to rebuild correctly:
 
 - DOM selection to `json-document` selection mapping
 - native contenteditable text and IME lease/flush
@@ -20,9 +20,10 @@ Product editor concerns such as toolbar frameworks, markdown policy, app
 document schemas, overlays, debug recorders, and legacy editor history are not
 part of this repo.
 
-`packages/rich-document` holds the headless typed document model that can be
-projected to canonical editable HTML. It does not parse arbitrary HTML and does
-not use DOM APIs.
+The headless kernel holds the typed document model that can be projected to
+canonical editable HTML. It does not parse arbitrary HTML and does not use DOM
+APIs. The old `packages/rich-document` and `packages/contenteditable-web`
+directories are temporary compatibility wrappers while issue #104 is migrated.
 
 ## Run
 
@@ -41,16 +42,16 @@ pnpm run verify:browser
 pnpm run verify:internal
 ```
 
-`test:core` runs the jsdom contract tests for the package API. `verify:browser`
+`test:core` runs the jsdom contract tests for the package interface. `verify:browser`
 runs the `/demo` browser smoke tests. `verify:internal` runs TypeScript,
 Vitest, Biome, and production build checks.
 
 ## Public Surface
 
-Use `packages/contenteditable-web` for the DOM adapter and
-`packages/rich-document` for the headless typed model.
+Use `packages/editable/dom` for the DOM adapter and `packages/editable` for the
+headless typed model.
 
-The single editing interface is `edit` in `packages/rich-document/edit.ts`:
+The single editing interface is `edit` from `packages/editable`:
 
 ```
 edit({ document, selection, goalX }, intent, { lineSeeds? })
@@ -69,7 +70,6 @@ The rest of the public API is intentionally small:
 - `createJsonContentEditable`
 - `isJsonContentEditableFragment`
 - constants for text, atom, and clipboard attributes
-- types in `packages/contenteditable-web/contract.ts`
+- adapter types from `packages/editable/dom`
 
-Anything under `packages/contenteditable-web/internal` is private
-implementation detail.
+Anything under `packages/editable/internal` is private implementation detail.

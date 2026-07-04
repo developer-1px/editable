@@ -33,7 +33,7 @@ import {
   richCursorSelectionAt,
   richTextPathForBlock,
   richVirtualSelectionRange,
-} from "../../packages/rich-document";
+} from "../../packages/editable";
 
 export const Route = createFileRoute("/selection-lab")({
   component: SelectionLab,

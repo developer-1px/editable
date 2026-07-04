@@ -852,7 +852,7 @@ test("contenteditable visual layout keeps blank lines after line breaks", async 
   page,
 }) => {
   const layout = await page.evaluate(async () => {
-    const contentEditableModulePath = "/packages/contenteditable-web/index.ts";
+    const contentEditableModulePath = "/packages/editable/dom.ts";
     const {
       JSON_TEXT_ATTRIBUTE,
       measureJsonContentEditableVisualLayout,
@@ -888,7 +888,7 @@ test("contenteditable visual layout models empty lines between text lines", asyn
   page,
 }) => {
   const layout = await page.evaluate(async () => {
-    const contentEditableModulePath = "/packages/contenteditable-web/index.ts";
+    const contentEditableModulePath = "/packages/editable/dom.ts";
     const {
       JSON_TEXT_ATTRIBUTE,
       measureJsonContentEditableVisualLayout,

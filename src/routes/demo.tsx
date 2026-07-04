@@ -24,6 +24,10 @@ import {
   useState,
 } from "react";
 import {
+  createRichVisualLineSeeds,
+  type RichProjection,
+} from "../../packages/editable";
+import {
   createJsonContentEditable,
   createJsonContentEditableVisualLayoutStore,
   isJsonContentEditableFragment,
@@ -31,11 +35,7 @@ import {
   type JsonContentEditableSelectionIntent,
   type JsonContentEditableUpdate,
   measureJsonContentEditableVisualLayout,
-} from "../../packages/contenteditable-web";
-import {
-  createRichVisualLineSeeds,
-  type RichProjection,
-} from "../../packages/rich-document";
+} from "../../packages/editable/dom";
 import {
   type ContentEditableDemoDocument,
   contentEditableDemoAtomsPathForTextPath,
