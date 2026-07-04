@@ -28,9 +28,7 @@ import {
   type RichProjection,
   type RichProjectionBlock,
   type RichProjectionSpan,
-  type RichVisualLineSeed,
   richAtomsPathForTextPath,
-  richBlockIndexFromTextPath,
   richBlockStyleActive,
   richInlineRangeActive,
   richModelOffsetToProjectionOffset,
@@ -49,8 +47,8 @@ import {
   type JsonContentEditableFragment,
   type JsonContentEditableSelectionIntentResolver,
   type JsonContentEditableTextProjection,
-  type JsonContentEditableVisualLayout,
   type JsonContentEditableVisualLayoutStore,
+  richVisualLineSeedsFromMeasuredLayout,
 } from "../../packages/editable/dom";
 import { RichDocumentSchema } from "../../packages/editable/schema";
 
@@ -295,38 +293,6 @@ export function createContentEditableDemoSelectionIntentResolver(
     }
     return { selection: result.selectionAfter, goalX: result.goalX };
   };
-}
-
-function richVisualLineSeedsFromMeasuredLayout(
-  document: ContentEditableDemoDocument,
-  layout: JsonContentEditableVisualLayout,
-): RichVisualLineSeed[] {
-  const seeds: RichVisualLineSeed[] = [];
-  const lineIndexByBlock = new Map<string, number>();
-  for (const line of layout.lines) {
-    const blockIndex = richBlockIndexFromTextPath(line.path);
-    const block = blockIndex === null ? undefined : document.blocks[blockIndex];
-    if (blockIndex === null || block === undefined) {
-      continue;
-    }
-    const lineIndex = lineIndexByBlock.get(block.id) ?? 0;
-    lineIndexByBlock.set(block.id, lineIndex + 1);
-    seeds.push({
-      id: line.id,
-      blockId: block.id,
-      blockIndex,
-      path: line.path,
-      startOffset: line.startOffset,
-      endOffset: line.endOffset,
-      kind: line.kind,
-      lineIndex,
-      caretMetrics: line.carets.map((caret) => ({
-        offset: caret.offset,
-        x: caret.x,
-      })),
-    });
-  }
-  return seeds;
 }
 
 export function createMentionFragment(): JsonContentEditableFragment {

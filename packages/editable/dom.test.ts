@@ -17,6 +17,7 @@ import {
   JSON_CONTENT_EDITABLE_MIME,
   JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
   JSON_TEXT_ATTRIBUTE,
+  richVisualLineSeedsFromMeasuredLayout,
   type JsonContentEditableSelectionIntent,
   type JsonContentEditableSelectionIntentResolver,
   type JsonContentEditableVisualLayout,
@@ -388,6 +389,7 @@ describe("contenteditable-web json-document bridge", () => {
       "isJsonContentEditableFragment",
       "measureJsonContentEditableVisualLayout",
       "measureVisualLayout",
+      "richVisualLineSeedsFromMeasuredLayout",
     ]);
   });
 
@@ -397,6 +399,46 @@ describe("contenteditable-web json-document bridge", () => {
 
     expect(host.flush).toBe(host.flushDOMToModel);
     expect(host.dispatch).toBe(host.runCommand);
+  });
+
+  it("derives rich visual line seeds from measured layout", () => {
+    const document = createRichDocument({
+      id: "test",
+      blocks: [
+        createRichBlock({ id: "b1", text: "First" }),
+        createRichBlock({ id: "b2", text: "Second" }),
+      ],
+    });
+    const seeds = richVisualLineSeedsFromMeasuredLayout(document, {
+      lines: [
+        {
+          id: "line-1",
+          sourceId: "line-1",
+          path: "/blocks/1/text",
+          startOffset: 0,
+          endOffset: 6,
+          kind: "text",
+          top: 0,
+          bottom: 10,
+          box: { x: 0, y: 0, width: 100, height: 10 },
+          carets: [{ path: "/blocks/1/text", offset: 3, x: 12, top: 0, bottom: 10 }],
+        },
+      ],
+    });
+
+    expect(seeds).toEqual([
+      {
+        id: "line-1",
+        blockId: "b2",
+        blockIndex: 1,
+        path: "/blocks/1/text",
+        startOffset: 0,
+        endOffset: 6,
+        kind: "text",
+        lineIndex: 0,
+        caretMetrics: [{ offset: 3, x: 12 }],
+      },
+    ]);
   });
 
   it("syncs DOM ranges into json-document selection", () => {

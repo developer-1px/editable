@@ -1,4 +1,9 @@
 import type { Pointer } from "@interactive-os/json-document";
+import {
+  richBlockIndexFromTextPath,
+  type RichDocument,
+  type RichVisualLineSeed,
+} from "../../rich-document";
 import type {
   JsonContentEditableProjectionProvider,
   JsonContentEditableVisualCaret,
@@ -75,6 +80,38 @@ export function measureJsonContentEditableVisualLayout<T>({
     root,
     textAttribute,
   });
+}
+
+export function richVisualLineSeedsFromMeasuredLayout(
+  document: RichDocument,
+  layout: JsonContentEditableVisualLayout,
+): RichVisualLineSeed[] {
+  const seeds: RichVisualLineSeed[] = [];
+  const lineIndexByBlock = new Map<string, number>();
+  for (const line of layout.lines) {
+    const blockIndex = richBlockIndexFromTextPath(line.path);
+    const block = blockIndex === null ? undefined : document.blocks[blockIndex];
+    if (blockIndex === null || block === undefined) {
+      continue;
+    }
+    const lineIndex = lineIndexByBlock.get(block.id) ?? 0;
+    lineIndexByBlock.set(block.id, lineIndex + 1);
+    seeds.push({
+      id: line.id,
+      blockId: block.id,
+      blockIndex,
+      path: line.path,
+      startOffset: line.startOffset,
+      endOffset: line.endOffset,
+      kind: line.kind,
+      lineIndex,
+      caretMetrics: line.carets.map((caret) => ({
+        offset: caret.offset,
+        x: caret.x,
+      })),
+    });
+  }
+  return seeds;
 }
 
 function offsetMapperFromProjection<T>(

@@ -49,6 +49,7 @@ export {
 export {
   measureJsonContentEditableVisualLayout,
   measureJsonContentEditableVisualLayout as measureVisualLayout,
+  richVisualLineSeedsFromMeasuredLayout,
 } from "./internal/visualLayout";
 export {
   createVisualLayoutStore,
