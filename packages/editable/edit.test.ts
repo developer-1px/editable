@@ -89,6 +89,23 @@ describe("edit: text intents", () => {
     expect(caretOf(result.selectionAfter).offset).toBe(7);
   });
 
+  it("insertReplacementText replaces a non-collapsed range", () => {
+    const state = stateAt(
+      documentFixture(),
+      { block: 0, offset: 6 },
+      { block: 0, offset: 11 },
+    );
+    const result = editedDocument(state, {
+      type: "insertReplacementText",
+      text: "there",
+    });
+    expect(result.value.blocks[0]?.text).toBe("Hello there");
+    expect(caretOf(result.selectionAfter)).toEqual({
+      path: richTextPathForBlock(0),
+      offset: 11,
+    });
+  });
+
   it("insertText replaces a cross-block range by merging blocks", () => {
     const state = stateAt(
       documentFixture(),
@@ -141,6 +158,19 @@ describe("edit: text intents", () => {
     const atoms = Object.values(result.value.blocks[0]?.atoms ?? {});
     expect(atoms).toHaveLength(1);
     expect(atoms[0]).toMatchObject({ type: "mention", offset: 6 });
+  });
+
+  it("insertFromDrop follows paste insertion semantics", () => {
+    const state = stateAt(documentFixture(), { block: 0, offset: 5 });
+    const result = editedDocument(state, {
+      type: "insertFromDrop",
+      data: " dropped",
+    });
+    expect(result.value.blocks[0]?.text).toBe("Hello dropped world");
+    expect(caretOf(result.selectionAfter)).toEqual({
+      path: richTextPathForBlock(0),
+      offset: 13,
+    });
   });
 });
 
@@ -198,6 +228,28 @@ describe("edit: delete intents", () => {
     const state = stateAt(document, { block: 0, offset: 13 });
     const result = editedDocument(state, { type: "deleteSoftLineBackward" });
     expect(result.value.blocks[0]?.text).toBe("line one\n two");
+  });
+
+  it("deleteByCut removes the selected range without expanding a caret", () => {
+    const state = stateAt(
+      documentFixture(),
+      { block: 0, offset: 6 },
+      { block: 0, offset: 11 },
+    );
+    const result = editedDocument(state, { type: "deleteByCut" });
+    expect(result.value.blocks[0]?.text).toBe("Hello ");
+    expect(caretOf(result.selectionAfter)).toEqual({
+      path: richTextPathForBlock(0),
+      offset: 6,
+    });
+
+    const collapsed = edit(stateAt(documentFixture(), { block: 0, offset: 6 }), {
+      type: "deleteByCut",
+    });
+    expect(collapsed).toMatchObject({
+      ok: false,
+      code: "empty_selection",
+    });
   });
 });
 
@@ -380,6 +432,33 @@ describe("edit: format and history intents", () => {
     const state = stateAt(documentFixture(), { block: 0, offset: 3 });
     const result = edit(state, { type: "formatBold" });
     expect(result).toMatchObject({ ok: false, code: "empty_selection" });
+  });
+
+  it("formatRemove strips all inline ranges in the selected span", () => {
+    const document = documentFixture();
+    document.blocks[0] = {
+      ...createRichBlock({
+        id: "b1",
+        type: "paragraph",
+        text: "Hello world",
+      }),
+      ranges: {
+        bold: { type: "bold", start: 0, end: 5 },
+        underline: { type: "underline", start: 3, end: 8 },
+      },
+    };
+    const state = stateAt(
+      document,
+      { block: 0, offset: 1 },
+      { block: 0, offset: 7 },
+    );
+    const result = editedDocument(state, { type: "formatRemove" });
+
+    expect(Object.values(result.value.blocks[0]?.ranges ?? {})).toEqual([
+      { type: "bold", start: 0, end: 1 },
+      { type: "underline", start: 7, end: 8 },
+    ]);
+    expect(result.selectionAfter).toEqual(state.selection);
   });
 
   it("history intents resolve to host instructions", () => {
