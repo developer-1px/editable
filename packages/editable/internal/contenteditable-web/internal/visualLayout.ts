@@ -12,6 +12,8 @@ import type {
   JsonContentEditableVisualLineKind,
   JsonContentEditableVisualLineSeed,
   JsonContentEditableVisualLayoutOptions,
+  VisualLayout,
+  VisualLayoutOptions,
 } from "../contract";
 import {
   JSON_ATOM_ATTRIBUTE,
@@ -79,6 +81,20 @@ export function measureJsonContentEditableVisualLayout<T>({
     mapper: offsetMapperFromProjection(projection),
     root,
     textAttribute,
+  });
+}
+
+export function measureEditableVisualLayout({
+  lineSeeds = null,
+  projection = null,
+  root,
+}: VisualLayoutOptions): VisualLayout | null {
+  return measureJsonContentEditableVisualLayout<RichDocument>({
+    atomAttribute: JSON_ATOM_ATTRIBUTE,
+    lineSeeds,
+    projection,
+    root,
+    textAttribute: JSON_TEXT_ATTRIBUTE,
   });
 }
 

@@ -31,10 +31,6 @@ export type EditableRelatedPath =
 export type EditableHostOptions = {
   root: HTMLElement;
   document: JSONDocument<RichDocument>;
-  atomsPath?: EditableRelatedPath | null;
-  rangesPath?: EditableRelatedPath | null;
-  atomAttribute?: string;
-  textAttribute?: string;
   projection?: TextProjectionProvider | null;
   visualLayout?: VisualLayoutProvider | null;
 };
@@ -133,8 +129,6 @@ export type VisualLayoutStore = {
 
 export type VisualLayoutOptions = {
   root: HTMLElement;
-  atomAttribute?: string;
-  textAttribute?: string;
   projection?: TextProjectionProvider | null;
   lineSeeds?: ReadonlyArray<VisualLineSeed> | null;
 };

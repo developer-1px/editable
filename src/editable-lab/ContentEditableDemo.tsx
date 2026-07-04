@@ -474,10 +474,6 @@ export function ContentEditableDemo() {
             <IconButton label="Reset" onClick={() => command("reset")}>
               <RotateCcw size={16} />
             </IconButton>
-            <span className="contenteditable-toolbar-gap" />
-            <a className="home-link" href="/?surface=selection-lab">
-              Cursor lab
-            </a>
           </div>
           {/* biome-ignore lint/a11y/useSemanticElements: this demo must exercise a contenteditable host, not a textarea. */}
           <div

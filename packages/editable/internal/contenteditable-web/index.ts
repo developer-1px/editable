@@ -3,7 +3,6 @@ export type {
   EditableFlow,
   EditableHost,
   EditableHostOptions,
-  EditableRelatedPath,
   EditableSelectionIntent,
   EditableUpdate,
   FlushOptions,
@@ -27,7 +26,7 @@ export {
   createEditableHost,
 } from "./createJsonContentEditable";
 export {
-  measureJsonContentEditableVisualLayout as measureVisualLayout,
+  measureEditableVisualLayout as measureVisualLayout,
   richVisualLineSeedsFromMeasuredLayout,
 } from "./internal/visualLayout";
 export {

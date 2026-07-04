@@ -979,22 +979,18 @@ export function createJsonContentEditable<T>({
 }
 
 export function createEditableHost({
-  atomAttribute = JSON_ATOM_ATTRIBUTE,
-  atomsPath = richAtomsPathForTextPath,
   document,
-  rangesPath = richRangesPathForTextPath,
   root,
-  textAttribute = JSON_TEXT_ATTRIBUTE,
   projection = null,
   visualLayout = null,
 }: EditableHostOptions): EditableHost {
   const host = createJsonContentEditable<RichDocument>({
-    atomAttribute,
-    atomsPath,
+    atomAttribute: JSON_ATOM_ATTRIBUTE,
+    atomsPath: richAtomsPathForTextPath,
     document,
-    rangesPath,
+    rangesPath: richRangesPathForTextPath,
     root,
-    textAttribute,
+    textAttribute: JSON_TEXT_ATTRIBUTE,
     projection,
     visualLayout,
   });

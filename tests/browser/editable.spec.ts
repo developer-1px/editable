@@ -645,6 +645,25 @@ test("contenteditable demo maps task marker line selection to the task text surf
   });
 });
 
+test("contenteditable demo toggles the task marker atom", async ({ page }) => {
+  const incompleteMarker = page.getByRole("checkbox", { name: "Incomplete" });
+
+  await expect(incompleteMarker).toHaveAttribute("aria-checked", "false");
+  await incompleteMarker.click();
+
+  const completedMarker = page.getByRole("checkbox", { name: "Completed" });
+  await expect(completedMarker).toHaveAttribute("aria-checked", "true");
+  await expect
+    .poll(async () => {
+      const value = await getContentEditableValue(page);
+      return {
+        atomChecked: value.blocks[3]?.atoms["task-marker-block-4"]?.checked,
+        blockChecked: value.blocks[3]?.checked,
+      };
+    })
+    .toEqual({ atomChecked: true, blockChecked: true });
+});
+
 test("contenteditable demo paste toolbar uses the command-start selection", async ({
   page,
 }) => {
