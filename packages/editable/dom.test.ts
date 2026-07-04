@@ -16,9 +16,11 @@ import * as PublicCore from "./dom";
 import {
   createEditableHost,
   richVisualLineSeedsFromMeasuredLayout,
-  type JsonContentEditableVisualLayout,
-  type JsonContentEditableVisualLayoutSnapshot,
+  type VisualLayout,
+  type VisualLayoutSnapshot,
 } from "./dom";
+import { createJsonContentEditable as createInternalEditableHost } from "./internal/contenteditable-web/createJsonContentEditable";
+import { RichDocumentSchema } from "./schema";
 
 const TestDocumentSchema = z.object({
   text: z.string(),
@@ -79,7 +81,7 @@ function setup(initial = "Plain") {
     throw new Error("Fixture failed to create editable text.");
   }
 
-  const core = createEditableHost({ root, document });
+  const core = createInternalEditableHost({ root, document });
   return { core, document, root, textElement, textNode: textElement.firstChild };
 }
 
@@ -116,7 +118,7 @@ function setupMarkerDocument(initial = "Task text") {
     throw new Error("Fixture failed to create marker text.");
   }
 
-  const core = createEditableHost({ root, document, atomsPath: "/atoms" });
+  const core = createInternalEditableHost({ root, document, atomsPath: "/atoms" });
   return {
     block,
     core,
@@ -153,7 +155,7 @@ function setupAtomDocument(
     throw new Error("Fixture failed to create atom text.");
   }
 
-  const core = createEditableHost({
+  const core = createInternalEditableHost({
     root,
     document,
     atomsPath: "/atoms",
@@ -186,7 +188,7 @@ function setupTrailingAtomDocument() {
     throw new Error("Fixture failed to create trailing atom text.");
   }
 
-  const core = createEditableHost({
+  const core = createInternalEditableHost({
     root,
     document,
     atomsPath: "/atoms",
@@ -218,7 +220,7 @@ function setupRangeDocument(
     throw new Error("Fixture failed to create range text.");
   }
 
-  const core = createEditableHost({
+  const core = createInternalEditableHost({
     root,
     document,
     rangesPath: "/marks",
@@ -269,9 +271,9 @@ function visualLine({
 }
 
 function freshVisualLayout(
-  layout: JsonContentEditableVisualLayout | null,
+  layout: VisualLayout | null,
   revision = 1,
-): JsonContentEditableVisualLayoutSnapshot {
+): VisualLayoutSnapshot {
   return {
     ok: true,
     layout,
@@ -290,7 +292,19 @@ describe("contenteditable-web json-document bridge", () => {
   });
 
   it("exposes editable host method aliases", () => {
-    const { root, document } = setup("Plain");
+    const value = createRichDocument({
+      id: "host",
+      blocks: [createRichBlock({ id: "b", text: "Plain" })],
+    });
+    const document = createJSONDocument(RichDocumentSchema, value, {
+      history: 20,
+      selection: true,
+      trustedInitial: true,
+    });
+    const root = window.document.createElement("div");
+    root.contentEditable = "true";
+    root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text">Plain</span>`;
+    window.document.body.append(root);
     const host = createEditableHost({ root, document });
 
     expect(host.flush).toBe(host.flushDOMToModel);
@@ -584,7 +598,7 @@ describe("contenteditable-web json-document bridge", () => {
 
   it("moves the caret after a trailing atom for command line-end", () => {
     const { document, root, textElement } = setupTrailingAtomDocument();
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -596,7 +610,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    const core = createEditableHost({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -622,7 +636,7 @@ describe("contenteditable-web json-document bridge", () => {
 
   it("extends the selection through a trailing atom for command-shift line-end", () => {
     const { document, root, textElement } = setupTrailingAtomDocument();
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -634,7 +648,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    const core = createEditableHost({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -664,7 +678,7 @@ describe("contenteditable-web json-document bridge", () => {
   });
 
   it("moves command arrows to measured visual line boundaries", () => {
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -693,7 +707,7 @@ describe("contenteditable-web json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("One\nTwo\nThree");
-    const core = createEditableHost({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -733,7 +747,7 @@ describe("contenteditable-web json-document bridge", () => {
   });
 
   it("maps home and end keys to measured visual line boundaries", () => {
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -762,7 +776,7 @@ describe("contenteditable-web json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("One\nTwo\nThree");
-    const core = createEditableHost({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -796,7 +810,7 @@ describe("contenteditable-web json-document bridge", () => {
   });
 
   it("moves arrow up and down through a visual layout snapshot", () => {
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -817,7 +831,7 @@ describe("contenteditable-web json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("abcd\nefgh");
-    const core = createEditableHost({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -858,7 +872,7 @@ describe("contenteditable-web json-document bridge", () => {
   });
 
   it("keeps the original visual x while moving through shorter lines", () => {
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -887,7 +901,7 @@ describe("contenteditable-web json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("abc\nde\nfgh");
-    const core = createEditableHost({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -921,7 +935,7 @@ describe("contenteditable-web json-document bridge", () => {
 
   it("dispatches selection intents through the rich kernel with goalX state", () => {
     const { document, root, textNode } = setup("abcd\nef\nghij");
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -949,7 +963,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    const core = createEditableHost({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1047,10 +1061,10 @@ describe("contenteditable-web json-document bridge", () => {
 
   it("hands off native IME text before vertical model commands", () => {
     const { document, root, textNode } = setup("top\nbottom");
-    let visualLayout: JsonContentEditableVisualLayout = {
+    let visualLayout: VisualLayout = {
       lines: [],
     };
-    const core = createEditableHost({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1193,10 +1207,10 @@ describe("contenteditable-web json-document bridge", () => {
 
   it("runs command continuations from recovered model selection after IME flush", () => {
     const { document, root, textNode } = setup("Plain\nTail");
-    let visualLayout: JsonContentEditableVisualLayout = {
+    let visualLayout: VisualLayout = {
       lines: [],
     };
-    const core = createEditableHost({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1292,7 +1306,7 @@ describe("contenteditable-web json-document bridge", () => {
 
   it("hands off native IME text before command-arrow movement", () => {
     const { document, root, textNode } = setup("Plain");
-    let visualLayout: JsonContentEditableVisualLayout = {
+    let visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -1304,7 +1318,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    const core = createEditableHost({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),

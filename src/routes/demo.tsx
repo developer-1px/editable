@@ -32,16 +32,13 @@ import {
   createEditableHost,
   createVisualLayoutStore,
   type EditableHost,
+  type EditableSelectionIntent,
   type EditableUpdate,
-  type JsonContentEditableSelectionIntent,
   measureVisualLayout,
 } from "../../packages/editable/dom";
 import {
-  type ContentEditableDemoDocument,
-  contentEditableDemoAtomsPathForTextPath,
   contentEditableDemoHeadingActive,
   contentEditableDemoMarkActive,
-  contentEditableDemoRangesPathForTextPath,
   contentEditableDemoTextProjection,
   createContentEditableDemoDocument,
   createContentEditableDemoProjection,
@@ -63,9 +60,7 @@ function ContentEditableDemo() {
   const document = useMemo(() => createContentEditableDemoDocument(), []);
   const visualLayoutStore = useMemo(() => createVisualLayoutStore(), []);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const coreRef = useRef<EditableHost<ContentEditableDemoDocument> | null>(
-    null,
-  );
+  const coreRef = useRef<EditableHost | null>(null);
   const projectionRef = useRef<RichProjection | null>(null);
   const composingRef = useRef(false);
   const visualMeasureFrameRef = useRef<number | null>(null);
@@ -137,7 +132,7 @@ function ContentEditableDemo() {
   );
 
   const replayCommandAfterVisualRefresh = useCallback(
-    (command: JsonContentEditableSelectionIntent) => {
+    (command: EditableSelectionIntent) => {
       const core = coreRef.current;
       if (core === null) {
         return;
@@ -170,10 +165,8 @@ function ContentEditableDemo() {
     coreRef.current = createEditableHost({
       root,
       document,
-      atomsPath: contentEditableDemoAtomsPathForTextPath,
       projection: (path) =>
         contentEditableDemoTextProjection(projectionRef.current, path),
-      rangesPath: contentEditableDemoRangesPathForTextPath,
       visualLayout: visualLayoutStore.read,
     });
     renderEditorContent();
@@ -563,9 +556,7 @@ async function readBrowserClipboardText(): Promise<string | null> {
 }
 
 function shouldRefreshDemo(
-  result:
-    | ReturnType<EditableHost<ContentEditableDemoDocument>["handle"]>
-    | undefined,
+  result: ReturnType<EditableHost["handle"]> | undefined,
 ): boolean {
   if (result === undefined || !result.ok) {
     return false;
@@ -579,7 +570,7 @@ function shouldRefreshDemo(
 function isVisualLayoutStaleCommand(
   result: unknown,
 ): result is Extract<
-  EditableUpdate<ContentEditableDemoDocument>,
+  EditableUpdate,
   { ok: false; code: "visual_layout_stale" }
 > {
   return (

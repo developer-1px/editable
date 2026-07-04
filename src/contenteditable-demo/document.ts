@@ -29,21 +29,19 @@ import {
   type RichProjectionBlock,
   type RichProjectionSpan,
   type RichTextFragment,
-  richAtomsPathForTextPath,
   richBlockStyleActive,
   richInlineRangeActive,
   richModelOffsetToProjectionOffset,
   richProjectionBlockForTextPath,
   richProjectionOffsetToModelOffset,
   richProjectionTextToModelText,
-  richRangesPathForTextPath,
   richTextPathForBlock,
   richTextSurfaceForBlock,
   toggleRichBlockStyleForSelection,
   toggleRichInlineRangeForSelection,
   toggleRichTaskListItem,
 } from "../../packages/editable";
-import type { JsonContentEditableTextProjection } from "../../packages/editable/dom";
+import type { TextProjection } from "../../packages/editable/dom";
 import { RichDocumentSchema } from "../../packages/editable/schema";
 
 const INITIAL_MENTION_ID = "mention-ada";
@@ -58,9 +56,6 @@ export type ContentEditableDemoDocument = RichDocument;
 export type RichTextMarkType = "bold" | "underline";
 
 export const contentEditableDemoTextPath = richTextPathForBlock;
-export const contentEditableDemoAtomsPathForTextPath = richAtomsPathForTextPath;
-export const contentEditableDemoRangesPathForTextPath =
-  richRangesPathForTextPath;
 
 export function createContentEditableDemoValue(): ContentEditableDemoDocument {
   return createRichDocument({
@@ -217,7 +212,7 @@ export function createContentEditableDemoProjection(
 export function contentEditableDemoTextProjection(
   projection: RichProjection | null,
   path: string,
-): JsonContentEditableTextProjection<ContentEditableDemoDocument> | null {
+): TextProjection | null {
   if (projection === null) {
     return null;
   }

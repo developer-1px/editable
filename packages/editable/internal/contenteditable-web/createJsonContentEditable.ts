@@ -10,15 +10,19 @@ import {
   createRichDocument,
   edit,
   RICH_DOCUMENT_SCHEMA,
+  richAtomsPathForTextPath,
+  richRangesPathForTextPath,
   richTextPathForBlock,
   type RichDocument,
   type RichVisualLineSeed,
 } from "../rich-document";
 import type {
-  ClipboardUpdate,
   EditableHost,
+  EditableHostOptions,
   FlushOptions,
+  JsonContentEditableClipboardUpdate,
   JsonContentEditableFragment,
+  JsonContentEditableHost,
   JsonContentEditableOptions,
   JsonContentEditableRelatedPath,
   JsonContentEditableSelectionIntent,
@@ -86,7 +90,7 @@ export function createJsonContentEditable<T>({
   textAttribute = JSON_TEXT_ATTRIBUTE,
   projection = null,
   visualLayout = null,
-}: JsonContentEditableOptions<T>): EditableHost<T> {
+}: JsonContentEditableOptions<T>): JsonContentEditableHost<T> {
   let lease: NativeTextLease | null = null;
   let suppressNextCompositionCommit = false;
   let verticalGoalX: number | null = null;
@@ -380,7 +384,7 @@ export function createJsonContentEditable<T>({
     return runModelInstructionAtCurrentSelection(instruction);
   };
 
-  const copy = (event?: ClipboardEvent): ClipboardUpdate<T> => {
+  const copy = (event?: ClipboardEvent): JsonContentEditableClipboardUpdate<T> => {
     flushDOMToModel({ label: "copy selection" });
     const selection = document.selection?.snapshot() ?? null;
     const selectionPath = textPathFromSelection(selection);
@@ -409,8 +413,8 @@ export function createJsonContentEditable<T>({
     };
   };
 
-  const cut = (event?: ClipboardEvent): ClipboardUpdate<T> => {
-    let result: ClipboardUpdate<T> | null = null;
+  const cut = (event?: ClipboardEvent): JsonContentEditableClipboardUpdate<T> => {
+    let result: JsonContentEditableClipboardUpdate<T> | null = null;
     document.history.transaction({ label: "cut", origin: "contenteditable" }, () => {
       const copyResult = copy(event);
       if (!copyResult.ok) {
@@ -478,8 +482,8 @@ export function createJsonContentEditable<T>({
     clipboardText: string;
     jsonPayload: unknown | null;
     selection?: SelectionSnap | null;
-  }): ClipboardUpdate<T> => {
-    let result: ClipboardUpdate<T> | null = null;
+  }): JsonContentEditableClipboardUpdate<T> => {
+    let result: JsonContentEditableClipboardUpdate<T> | null = null;
     document.history.transaction(
       { label: "paste", origin: "contenteditable" },
       () => {
@@ -572,7 +576,9 @@ export function createJsonContentEditable<T>({
     );
   };
 
-  const paste = (event?: ClipboardEvent): ClipboardUpdate<T> =>
+  const paste = (
+    event?: ClipboardEvent,
+  ): JsonContentEditableClipboardUpdate<T> =>
     pastePayload({
       clipboardText: event?.clipboardData?.getData("text/plain") ?? "",
       jsonPayload:
@@ -582,7 +588,7 @@ export function createJsonContentEditable<T>({
   const pasteFragment = (
     fragment: JsonContentEditableFragment,
     selection = document.selection?.snapshot() ?? null,
-  ): ClipboardUpdate<T> =>
+  ): JsonContentEditableClipboardUpdate<T> =>
     pastePayload({
       clipboardText: plainTextFromFragment(fragment),
       jsonPayload: fragment,
@@ -592,7 +598,7 @@ export function createJsonContentEditable<T>({
   const pasteText = (
     text: string,
     selection = document.selection?.snapshot() ?? null,
-  ): ClipboardUpdate<T> => {
+  ): JsonContentEditableClipboardUpdate<T> => {
     const payload = readDocumentClipboard(document);
     const fragment =
       isJsonContentEditableFragment(payload) && plainTextFromFragment(payload) === text
@@ -967,10 +973,26 @@ export function createJsonContentEditable<T>({
   }
 }
 
-export function createEditableHost<T>(
-  options: JsonContentEditableOptions<T>,
-): EditableHost<T> {
-  return createJsonContentEditable(options);
+export function createEditableHost({
+  atomAttribute = JSON_ATOM_ATTRIBUTE,
+  atomsPath = richAtomsPathForTextPath,
+  document,
+  rangesPath = richRangesPathForTextPath,
+  root,
+  textAttribute = JSON_TEXT_ATTRIBUTE,
+  projection = null,
+  visualLayout = null,
+}: EditableHostOptions): EditableHost {
+  return createJsonContentEditable<RichDocument>({
+    atomAttribute,
+    atomsPath,
+    document,
+    rangesPath,
+    root,
+    textAttribute,
+    projection,
+    visualLayout,
+  });
 }
 
 function capabilityToUpdate(result: JSONCapabilityResult): JsonContentEditableUpdate {

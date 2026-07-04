@@ -72,7 +72,7 @@ The rest of the public API is intentionally small:
 - `measureVisualLayout`
 - `isRichTextFragment`
 - constants for text, atom, and clipboard attributes
-- adapter types from `packages/editable/dom`
+- rich document adapter types from `packages/editable/dom`
 - zod schemas from `packages/editable/schema`
 
 Anything under `packages/editable/internal` is private implementation detail.
