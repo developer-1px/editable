@@ -351,7 +351,10 @@ function ContentEditableDemo() {
       } else if (name === "cut") {
         core.cut();
       } else if (name === "mention") {
-        core.pasteFragment(createMentionFragment(), commandSelection);
+        core.dispatch(
+          { type: "insertFromPaste", data: createMentionFragment() },
+          { selection: commandSelection },
+        );
       } else if (name === "h1") {
         core.flush({ label: "format heading" });
         if (commandSelection !== null) {
@@ -367,19 +370,25 @@ function ContentEditableDemo() {
       } else if (name === "paste") {
         const internalPayload = document.clipboard.read();
         if (internalPayload.ok && isRichTextFragment(internalPayload.payload)) {
-          core.pasteFragment(internalPayload.payload, commandSelection);
+          core.dispatch(
+            { type: "insertFromPaste", data: internalPayload.payload },
+            { selection: commandSelection },
+          );
         } else {
           const text = await readBrowserClipboardText();
           if (text === null) {
             core.paste();
           } else {
-            core.pasteText(text, commandSelection);
+            core.dispatch(
+              { type: "insertFromPaste", data: text },
+              { selection: commandSelection },
+            );
           }
         }
       } else if (name === "undo") {
-        core.undo();
+        core.dispatch({ type: "historyUndo" });
       } else if (name === "redo") {
-        core.redo();
+        core.dispatch({ type: "historyRedo" });
       } else {
         document.reset(createContentEditableDemoValue());
         core.reset();

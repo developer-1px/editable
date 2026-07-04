@@ -291,7 +291,7 @@ describe("contenteditable-web json-document bridge", () => {
     ]);
   });
 
-  it("exposes editable host method aliases", () => {
+  it("dispatches edit intents through the public editable host", () => {
     const value = createRichDocument({
       id: "host",
       blocks: [createRichBlock({ id: "b", text: "Plain" })],
@@ -308,7 +308,25 @@ describe("contenteditable-web json-document bridge", () => {
     const host = createEditableHost({ root, document });
 
     expect(host.flush).toBe(host.flushDOMToModel);
-    expect(host.dispatch).toBe(host.runCommand);
+    const selection = {
+      selectedPointers: [],
+      selectionRanges: [
+        {
+          anchor: { path: "/blocks/0/text", offset: 5 },
+          focus: { path: "/blocks/0/text", offset: 5 },
+        },
+      ],
+      primaryIndex: 0,
+      anchor: { path: "/blocks/0/text", offset: 5 },
+      focus: { path: "/blocks/0/text", offset: 5 },
+    };
+
+    expect(
+      host.dispatch({ type: "insertFromPaste", data: "!" }, { selection }).ok,
+    ).toBe(true);
+    expect(document.value.blocks[0]?.text).toBe("Plain!");
+    expect(host.dispatch({ type: "historyUndo" }).ok).toBe(true);
+    expect(document.value.blocks[0]?.text).toBe("Plain");
   });
 
   it("derives rich visual line seeds from measured layout", () => {

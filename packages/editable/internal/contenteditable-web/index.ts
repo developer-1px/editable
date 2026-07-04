@@ -1,5 +1,6 @@
 export type {
   ClipboardUpdate,
+  EditableDispatchOptions,
   EditableFlow,
   EditableHost,
   EditableHostOptions,

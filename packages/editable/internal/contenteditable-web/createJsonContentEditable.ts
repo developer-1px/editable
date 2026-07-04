@@ -1,5 +1,6 @@
 import type {
   JSONCapabilityResult,
+  JSONDocument,
   JSONPatchOperation,
   Pointer,
   SelectionSnap,
@@ -13,11 +14,14 @@ import {
   richAtomsPathForTextPath,
   richRangesPathForTextPath,
   richTextPathForBlock,
+  type EditIntent,
   type RichDocument,
   type RichVisualLineSeed,
 } from "../rich-document";
 import type {
+  EditableDispatchOptions,
   EditableHost,
+  EditableUpdate,
   EditableHostOptions,
   FlushOptions,
   JsonContentEditableClipboardUpdate,
@@ -30,6 +34,7 @@ import type {
   JsonContentEditableUpdate,
   JsonContentEditableVisualLayout,
   JsonContentEditableVisualLayoutSnapshot,
+  VisualLayoutProvider,
 } from "./contract";
 import {
   atomReplacementPatches,
@@ -983,7 +988,7 @@ export function createEditableHost({
   projection = null,
   visualLayout = null,
 }: EditableHostOptions): EditableHost {
-  return createJsonContentEditable<RichDocument>({
+  const host = createJsonContentEditable<RichDocument>({
     atomAttribute,
     atomsPath,
     document,
@@ -992,6 +997,118 @@ export function createEditableHost({
     textAttribute,
     projection,
     visualLayout,
+  });
+  return {
+    ...host,
+    dispatch: (intent, options) =>
+      dispatchEditableIntent(host, document, visualLayout, intent, options),
+  };
+}
+
+function dispatchEditableIntent(
+  host: JsonContentEditableHost<RichDocument>,
+  document: JSONDocument<RichDocument>,
+  visualLayout: VisualLayoutProvider | null,
+  intent: EditIntent,
+  options: EditableDispatchOptions = {},
+): EditableUpdate {
+  if (intent.type === "historyUndo") {
+    return capabilityToUpdate(host.undo());
+  }
+  if (intent.type === "historyRedo") {
+    return capabilityToUpdate(host.redo());
+  }
+  if (intent.type === "insertFromPaste" || intent.type === "insertFromDrop") {
+    return typeof intent.data === "string"
+      ? host.pasteText(intent.data, options.selection)
+      : host.pasteFragment(intent.data, options.selection);
+  }
+  if (
+    intent.type === "modifySelection" &&
+    (intent.granularity === "line" || intent.granularity === "lineboundary")
+  ) {
+    return host.runCommand(intent);
+  }
+  return dispatchKernelIntent(host, document, visualLayout, intent, options);
+}
+
+function dispatchKernelIntent(
+  host: JsonContentEditableHost<RichDocument>,
+  document: JSONDocument<RichDocument>,
+  visualLayout: VisualLayoutProvider | null,
+  intent: EditIntent,
+  options: EditableDispatchOptions,
+): JsonContentEditableUpdate {
+  const flushed = host.flush({
+    label: `prepare ${options.label ?? intent.type}`,
+  });
+  if (!flushed.ok) {
+    return flushed;
+  }
+
+  const selection =
+    options.selection === undefined
+      ? document.selection?.snapshot() ?? null
+      : options.selection;
+  if (options.selection !== undefined && options.selection !== null) {
+    document.selection?.restore(options.selection);
+  }
+
+  const layout = visualLayout?.();
+  const result = edit(
+    {
+      document: document.value,
+      selection,
+      goalX: null,
+    },
+    intent,
+    {
+      lineSeeds:
+        layout?.ok === true && layout.layout !== null
+          ? richVisualLineSeedsFromMeasuredLayout(document.value, layout.layout)
+          : null,
+    },
+  );
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      code: "commit_failed",
+      reason: result.reason,
+    };
+  }
+  if (result.kind === "history") {
+    return capabilityToUpdate(
+      result.command === "undo" ? host.undo() : host.redo(),
+    );
+  }
+
+  if (result.patch.length > 0) {
+    const commit = document.commit(result.patch, {
+      label: options.label ?? intent.type,
+      origin: "contenteditable",
+      selectionAfter: result.selectionAfter ?? undefined,
+    });
+    if (!commit.ok) {
+      return {
+        ok: false,
+        code: "commit_failed",
+        reason: commit.reason ?? commit.code,
+      };
+    }
+  } else if (result.selectionAfter !== null) {
+    document.selection?.restore(result.selectionAfter);
+  }
+
+  if (result.selectionAfter !== null) {
+    host.restoreSelectionToDOM(result.selectionAfter);
+  }
+
+  return modelToDomUpdate({
+    kind: result.kind,
+    patch: result.patch,
+    render: result.kind !== "no-change",
+    selection: result.selectionAfter,
   });
 }
 

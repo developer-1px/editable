@@ -11,6 +11,7 @@ import {
   EDITABLE_TEXT_ATTRIBUTE,
   RICH_FRAGMENT_MIME,
   RICH_FRAGMENT_SCHEMA,
+  type EditIntent,
   type RichDocument,
   type RichInlineAtom,
   type RichInlineRange,
@@ -143,12 +144,15 @@ export type FlushOptions = {
   mergeKey?: string;
 };
 
-export type EditableSelectionIntent = {
-  type: "modifySelection";
-  alter: "extend" | "move";
-  direction: "backward" | "forward";
-  granularity: "line" | "lineboundary";
+export type EditableDispatchOptions = {
+  label?: string;
+  selection?: SelectionSnap | null;
 };
+
+export type EditableSelectionIntent = Extract<
+  EditIntent,
+  { type: "modifySelection" }
+>;
 
 export type EditableFlow = "dom-to-model" | "model-to-dom";
 
@@ -214,7 +218,7 @@ export type EditableHost = {
   redo(): JSONCapabilityResult;
   reset(): void;
   flush(options?: FlushOptions): HostUpdate;
-  dispatch(intent: EditableSelectionIntent): HostUpdate;
+  dispatch(intent: EditIntent, options?: EditableDispatchOptions): EditableUpdate;
 };
 
 export type JsonContentEditableOptions<T> = {
