@@ -271,6 +271,37 @@ test.describe("BiDi and RTL cursor geometry matrix", () => {
   });
 });
 
+test.describe("nested editable and iframe focus handoff traces", () => {
+  test("keeps inner editable events out of the outer editor handler", async ({
+    browserName,
+    page,
+  }) => {
+    const trace = await runNestedEditableTrace(page);
+
+    expect(trace.nested.innerSelectionText).toBe("inner");
+    expect(trace.nested.outerRawEvents).toEqual([
+      "copy",
+      "cut",
+      "paste",
+      "keydown",
+    ]);
+    expect(trace.nested.outerWouldHandle).toEqual({
+      copy: false,
+      cut: false,
+      keydown: false,
+      paste: false,
+    });
+    expect(trace.nested.arrowTrace.beforeText).toBe("inner");
+
+    expect(trace.iframe.textFlushedBeforeFocus).toBe("outer preedit draft");
+    expect(trace.iframe.parentActiveElement).toBe("handoff-frame");
+    expect(trace.iframe.iframeActiveElement).toBe(
+      browserName === "firefox" ? null : "iframe-inner-editable",
+    );
+    expect(trace.iframe.outerSelectionSuspended).toBe(true);
+  });
+});
+
 test("contenteditable demo exposes model surfaces and canonical DOM anchors", async ({
   page,
 }) => {
@@ -1693,6 +1724,26 @@ type BidiRtlTrace = {
   text: string;
 };
 
+type NestedEditableTrace = {
+  iframe: {
+    iframeActiveElement: string | null;
+    outerSelectionSuspended: boolean;
+    parentActiveElement: string | null;
+    textFlushedBeforeFocus: string;
+  };
+  nested: {
+    arrowTrace: {
+      afterLeftText: string;
+      afterRightText: string;
+      beforeText: string;
+      selectionModifySupported: boolean;
+    };
+    innerSelectionText: string;
+    outerRawEvents: string[];
+    outerWouldHandle: Record<string, boolean>;
+  };
+};
+
 async function runCrossRootFixture(
   page: Page,
   rootKind: CrossRootKind,
@@ -1743,6 +1794,14 @@ async function runBidiRtlTrace(page: Page): Promise<BidiRtlTrace> {
     const fixturePath = "/tests/browser/fixtures/bidiRtlFixture.ts";
     const fixture = await import(/* @vite-ignore */ fixturePath);
     return fixture.runBidiRtlTrace();
+  });
+}
+
+async function runNestedEditableTrace(page: Page): Promise<NestedEditableTrace> {
+  return page.evaluate(async () => {
+    const fixturePath = "/tests/browser/fixtures/nestedEditableFixture.ts";
+    const fixture = await import(/* @vite-ignore */ fixturePath);
+    return fixture.runNestedEditableTrace();
   });
 }
 
