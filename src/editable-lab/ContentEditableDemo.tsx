@@ -23,6 +23,7 @@ import {
   useState,
 } from "react";
 import {
+  createRichCursorFrame,
   createRichVisualLineSeeds,
   isRichTextFragment,
   type RichProjection,
@@ -34,6 +35,7 @@ import {
   type EditableSelectionIntent,
   type EditableUpdate,
   measureVisualLayout,
+  richVisualLineSeedsFromMeasuredLayout,
 } from "../../packages/editable/dom";
 import {
   contentEditableDemoHeadingActive,
@@ -54,6 +56,7 @@ import {
 export function ContentEditableDemo() {
   const document = useMemo(() => createContentEditableDemoDocument(), []);
   const visualLayoutStore = useMemo(() => createVisualLayoutStore(), []);
+  const keyDebugEnabled = useMemo(isKeyDebugEnabled, []);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const coreRef = useRef<EditableHost | null>(null);
   const projectionRef = useRef<RichProjection | null>(null);
@@ -61,6 +64,16 @@ export function ContentEditableDemo() {
   const visualMeasureFrameRef = useRef<number | null>(null);
   const [, refreshState] = useState(0);
   const [isReady, setIsReady] = useState(false);
+  const [keyDebugLog, setKeyDebugLog] = useState<
+    Array<{
+      at: number;
+      defaultPrevented: boolean;
+      key: string;
+      metaKey: boolean;
+      selection: unknown;
+      shiftKey: boolean;
+    }>
+  >([]);
 
   const renderEditorContent = useCallback(() => {
     const root = rootRef.current;
@@ -256,8 +269,25 @@ export function ContentEditableDemo() {
     [run],
   );
   const handleKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLDivElement>) => run(event.nativeEvent),
-    [run],
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      run(event.nativeEvent);
+      if (!keyDebugEnabled) {
+        return;
+      }
+      const nativeEvent = event.nativeEvent;
+      setKeyDebugLog((entries) => [
+        ...entries.slice(-39),
+        {
+          at: Math.round(performance.now()),
+          defaultPrevented: nativeEvent.defaultPrevented,
+          key: nativeEvent.key,
+          metaKey: nativeEvent.metaKey,
+          selection: document.selection?.snapshot() ?? null,
+          shiftKey: nativeEvent.shiftKey,
+        },
+      ]);
+    },
+    [document, keyDebugEnabled, run],
   );
   const handleCompositionStart = useCallback(
     (event: ReactCompositionEvent<HTMLDivElement>) => {
@@ -407,6 +437,17 @@ export function ContentEditableDemo() {
     "underline",
   );
   const visualLayout = visualLayoutStore.read();
+  const cursorFrame = createRichCursorFrame(
+    document.value,
+    visualLayout.ok && visualLayout.layout !== null
+      ? {
+          lineSeeds: richVisualLineSeedsFromMeasuredLayout(
+            document.value,
+            visualLayout.layout,
+          ),
+        }
+      : undefined,
+  );
 
   return (
     <main className="contenteditable-shell">
@@ -542,10 +583,36 @@ export function ContentEditableDemo() {
               redoDepth: document.history.redoDepth,
             }}
           />
+          <StateBlock
+            label="cursor frame"
+            value={{
+              blocks: cursorFrame.blocks.map((block) => ({
+                blockId: block.blockId,
+                blockIndex: block.blockIndex,
+                caretCount: block.caretOffsets.length,
+                textLength: block.textLength,
+              })),
+              caretCount: cursorFrame.carets.length,
+              lines: cursorFrame.lines.map((line) => ({
+                blockId: line.blockId,
+                caretCount: line.carets.length,
+                endOffset: line.endOffset,
+                startOffset: line.startOffset,
+              })),
+            }}
+          />
+          <StateBlock label="key debug log" value={keyDebugLog} />
         </aside>
       </section>
     </main>
   );
+}
+
+function isKeyDebugEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).has("debugKeys");
 }
 
 async function readBrowserClipboardText(): Promise<string | null> {

@@ -1,14 +1,14 @@
 import type {
-  JsonContentEditableVisualLayout,
-  JsonContentEditableVisualLayoutSnapshot,
-  JsonContentEditableVisualLayoutStore,
+  InternalVisualLayout,
+  InternalVisualLayoutSnapshot,
+  InternalVisualLayoutStore,
 } from "../contract";
 
 export function createVisualLayoutStore(
-  initial: JsonContentEditableVisualLayout | null = null,
-): JsonContentEditableVisualLayoutStore {
+  initial: InternalVisualLayout | null = null,
+): InternalVisualLayoutStore {
   let revision = 0;
-  let current: JsonContentEditableVisualLayoutSnapshot =
+  let current: InternalVisualLayoutSnapshot =
     initial === null
       ? staleSnapshot(null, revision, "Visual layout has not been measured.")
       : freshSnapshot(initial, revision);
@@ -31,9 +31,9 @@ export function createVisualLayoutStore(
 }
 
 function freshSnapshot(
-  layout: JsonContentEditableVisualLayout | null,
+  layout: InternalVisualLayout | null,
   revision: number,
-): JsonContentEditableVisualLayoutSnapshot {
+): InternalVisualLayoutSnapshot {
   return {
     ok: true,
     layout,
@@ -42,10 +42,10 @@ function freshSnapshot(
 }
 
 function staleSnapshot(
-  layout: JsonContentEditableVisualLayout | null,
+  layout: InternalVisualLayout | null,
   revision: number,
   reason: string,
-): JsonContentEditableVisualLayoutSnapshot {
+): InternalVisualLayoutSnapshot {
   return {
     ok: false,
     code: "visual_layout_stale",

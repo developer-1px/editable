@@ -16,7 +16,7 @@ import {
   type RichInlineAtom,
   type RichInlineRange,
   type RichTextFragment,
-} from "../rich-document";
+} from "../kernel";
 
 export const JSON_TEXT_ATTRIBUTE = EDITABLE_TEXT_ATTRIBUTE;
 export const JSON_ATOM_ATTRIBUTE = EDITABLE_ATOM_ATTRIBUTE;
@@ -187,7 +187,7 @@ export type HostUpdate =
       selection: SelectionSnap | null;
     };
 
-export type JsonContentEditableClipboardResult<T> =
+export type InternalClipboardResult<T> =
   | {
       ok: true;
       value: T;
@@ -212,24 +212,24 @@ export type EditableHost = {
   dispatch(intent: EditIntent, options?: EditableDispatchOptions): EditableUpdate;
 };
 
-export type JsonContentEditableOptions<T> = {
+export type InternalEditableHostOptions<T> = {
   root: HTMLElement;
   document: JSONDocument<T>;
-  atomsPath?: JsonContentEditableRelatedPath | null;
-  rangesPath?: JsonContentEditableRelatedPath | null;
+  atomsPath?: InternalEditableRelatedPath | null;
+  rangesPath?: InternalEditableRelatedPath | null;
   atomAttribute?: string;
   textAttribute?: string;
-  projection?: JsonContentEditableProjectionProvider<T> | null;
-  visualLayout?: JsonContentEditableVisualLayoutProvider | null;
+  projection?: InternalProjectionProvider<T> | null;
+  visualLayout?: InternalVisualLayoutProvider | null;
 };
 
-export type JsonContentEditableRelatedPath = EditableRelatedPath;
-export type JsonContentEditableAtomRecord = RichInlineAtom;
-export type JsonContentEditableFragment = RichTextFragment;
-export type JsonContentEditableRangeRecord = RichInlineRange;
-export type JsonContentEditableTextChange = TextChange;
+export type InternalEditableRelatedPath = EditableRelatedPath;
+export type InternalEditableAtomRecord = RichInlineAtom;
+export type { RichTextFragment };
+export type InternalEditableRangeRecord = RichInlineRange;
+export type InternalTextChange = TextChange;
 
-export type JsonContentEditableTextProjection<T> = {
+export type InternalTextProjection<T> = {
   editableTextToDocumentText(editableText: string): string;
   editableOffsetToDocumentOffset(offset: number): number;
   documentOffsetToEditableOffset(offset: number): number;
@@ -238,60 +238,60 @@ export type JsonContentEditableTextProjection<T> = {
     editableText: string;
     path: Pointer;
     selection: SelectionSnap | null;
-  }) => JsonContentEditableTextChange;
+  }) => InternalTextChange;
 };
 
-export type JsonContentEditableProjectionProvider<T> = (
+export type InternalProjectionProvider<T> = (
   path: Pointer,
-) => JsonContentEditableTextProjection<T> | null;
+) => InternalTextProjection<T> | null;
 
-export type JsonContentEditableVisualCaret = VisualCaret;
-export type JsonContentEditableVisualLineKind = VisualLineKind;
-export type JsonContentEditableVisualBox = VisualBox;
-export type JsonContentEditableVisualLineSeed = VisualLineSeed;
-export type JsonContentEditableVisualLine = VisualLine;
-export type JsonContentEditableVisualLayout = VisualLayout;
-export type JsonContentEditableVisualLayoutSnapshot = VisualLayoutSnapshot;
-export type JsonContentEditableVisualLayoutProvider = VisualLayoutProvider;
-export type JsonContentEditableVisualLayoutStore = VisualLayoutStore;
+export type InternalVisualCaret = VisualCaret;
+export type InternalVisualLineKind = VisualLineKind;
+export type InternalVisualBox = VisualBox;
+export type InternalVisualLineSeed = VisualLineSeed;
+export type InternalVisualLine = VisualLine;
+export type InternalVisualLayout = VisualLayout;
+export type InternalVisualLayoutSnapshot = VisualLayoutSnapshot;
+export type InternalVisualLayoutProvider = VisualLayoutProvider;
+export type InternalVisualLayoutStore = VisualLayoutStore;
 
-export type JsonContentEditableVisualLayoutOptions<T> = {
+export type InternalVisualLayoutOptions<T> = {
   root: HTMLElement;
   atomAttribute?: string;
   textAttribute?: string;
-  projection?: JsonContentEditableProjectionProvider<T> | null;
-  lineSeeds?: ReadonlyArray<JsonContentEditableVisualLineSeed> | null;
+  projection?: InternalProjectionProvider<T> | null;
+  lineSeeds?: ReadonlyArray<InternalVisualLineSeed> | null;
 };
 
-export type JsonContentEditableSelectionIntent = EditableSelectionIntent;
-export type JsonContentEditableFlow = EditableFlow;
-export type JsonContentEditableUpdate = HostUpdate;
+export type InternalSelectionIntent = EditableSelectionIntent;
+export type InternalEditableFlow = EditableFlow;
+export type InternalEditableUpdate = HostUpdate;
 
-export type JsonContentEditable<T> = {
-  handle(event: Event): JsonContentEditableUpdate | JsonContentEditableClipboardResult<T>;
-  flushDOMToModel(options?: FlushOptions): JsonContentEditableUpdate;
-  runCommand(intent: JsonContentEditableSelectionIntent): JsonContentEditableUpdate;
+export type InternalEditableController<T> = {
+  handle(event: Event): InternalEditableUpdate | InternalClipboardResult<T>;
+  flushDOMToModel(options?: FlushOptions): InternalEditableUpdate;
+  dispatchSelectionIntent(intent: InternalSelectionIntent): InternalEditableUpdate;
   syncSelectionFromDOM(): SelectionSnap | null;
   restoreSelectionToDOM(selection?: SelectionSnap): boolean;
-  copy(event?: ClipboardEvent): JsonContentEditableClipboardResult<T>;
-  cut(event?: ClipboardEvent): JsonContentEditableClipboardResult<T>;
-  paste(event?: ClipboardEvent): JsonContentEditableClipboardResult<T>;
-  pasteFragment(
-    fragment: JsonContentEditableFragment,
+  copy(event?: ClipboardEvent): InternalClipboardResult<T>;
+  cut(event?: ClipboardEvent): InternalClipboardResult<T>;
+  paste(event?: ClipboardEvent): InternalClipboardResult<T>;
+  insertFragment(
+    fragment: RichTextFragment,
     selection?: SelectionSnap | null,
-  ): JsonContentEditableClipboardResult<T>;
-  pasteText(
+  ): InternalClipboardResult<T>;
+  insertText(
     text: string,
     selection?: SelectionSnap | null,
-  ): JsonContentEditableClipboardResult<T>;
-  undo(): JSONCapabilityResult;
-  redo(): JSONCapabilityResult;
+  ): InternalClipboardResult<T>;
+  applyHistoryUndo(): JSONCapabilityResult;
+  applyHistoryRedo(): JSONCapabilityResult;
   reset(): void;
 };
 
-export type JsonContentEditableHost<T> = JsonContentEditable<T> & {
-  flush(options?: FlushOptions): JsonContentEditableUpdate;
-  dispatch(intent: JsonContentEditableSelectionIntent): JsonContentEditableUpdate;
+export type InternalEditableHost<T> = InternalEditableController<T> & {
+  flush(options?: FlushOptions): InternalEditableUpdate;
+  dispatch(intent: InternalSelectionIntent): InternalEditableUpdate;
 };
 
 export type RichTextProjection = TextProjection;

@@ -1,1 +1,1 @@
-export * from "./internal/rich-document";
+export * from "./internal/kernel";

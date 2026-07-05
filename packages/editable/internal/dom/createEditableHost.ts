@@ -17,23 +17,23 @@ import {
   type EditIntent,
   type RichDocument,
   type RichVisualLineSeed,
-} from "../rich-document";
+} from "../kernel";
 import type {
   EditableDispatchOptions,
   EditableHost,
   EditableUpdate,
   EditableHostOptions,
   FlushOptions,
-  JsonContentEditableClipboardResult,
-  JsonContentEditableFragment,
-  JsonContentEditableHost,
-  JsonContentEditableOptions,
-  JsonContentEditableRelatedPath,
-  JsonContentEditableSelectionIntent,
-  JsonContentEditableTextProjection,
-  JsonContentEditableUpdate,
-  JsonContentEditableVisualLayout,
-  JsonContentEditableVisualLayoutSnapshot,
+  InternalClipboardResult,
+  RichTextFragment,
+  InternalEditableHost,
+  InternalEditableHostOptions,
+  InternalEditableRelatedPath,
+  InternalSelectionIntent,
+  InternalTextProjection,
+  InternalEditableUpdate,
+  InternalVisualLayout,
+  InternalVisualLayoutSnapshot,
   VisualLayoutProvider,
 } from "./contract";
 import {
@@ -41,7 +41,7 @@ import {
   atomSyncPatchesFromDOM,
 } from "./internal/atoms";
 import {
-  isJsonContentEditableFragment,
+  isRichTextFragmentPayload,
   plainTextFromFragment,
   readBrowserJSONPayload,
   readDocumentClipboard,
@@ -80,13 +80,13 @@ import {
 import { changedRegionEnd } from "./internal/textDiff";
 import { richVisualLineSeedsFromMeasuredLayout } from "./internal/visualLayout";
 
-export { isJsonContentEditableFragment } from "./internal/clipboard";
+export { isRichTextFragmentPayload } from "./internal/clipboard";
 
 type CommitTextOptions = FlushOptions & {
   resetVerticalGoal?: boolean;
 };
 
-export function createJsonContentEditable<T>({
+export function createInternalEditableHost<T>({
   atomAttribute = JSON_ATOM_ATTRIBUTE,
   atomsPath = null,
   document,
@@ -95,7 +95,7 @@ export function createJsonContentEditable<T>({
   textAttribute = JSON_TEXT_ATTRIBUTE,
   projection = null,
   visualLayout = null,
-}: JsonContentEditableOptions<T>): JsonContentEditableHost<T> {
+}: InternalEditableHostOptions<T>): InternalEditableHost<T> {
   let lease: NativeTextLease | null = null;
   let suppressNextCompositionCommit = false;
   let verticalGoalX: number | null = null;
@@ -105,7 +105,7 @@ export function createJsonContentEditable<T>({
 
   const projectionForPath = (
     path: Pointer | null,
-  ): JsonContentEditableTextProjection<T> | null =>
+  ): InternalTextProjection<T> | null =>
     path === null ? null : projection?.(path) ?? null;
 
   const offsetMapper: TextOffsetMapper = {
@@ -159,7 +159,7 @@ export function createJsonContentEditable<T>({
     return selection;
   };
 
-  const readVisualLayoutSnapshot = (): JsonContentEditableVisualLayoutSnapshot =>
+  const readVisualLayoutSnapshot = (): InternalVisualLayoutSnapshot =>
     visualLayout?.() ?? {
       ok: false,
       code: "visual_layout_stale",
@@ -171,7 +171,7 @@ export function createJsonContentEditable<T>({
   const commitTextFromDOM = (
     selectionIntent: SelectionIntent,
     options: CommitTextOptions = {},
-  ): JsonContentEditableUpdate => {
+  ): InternalEditableUpdate => {
     if (options.resetVerticalGoal !== false) {
       verticalGoalX = null;
     }
@@ -337,7 +337,7 @@ export function createJsonContentEditable<T>({
     });
   };
 
-  const flushDOMToModel = (options: FlushOptions = {}): JsonContentEditableUpdate =>
+  const flushDOMToModel = (options: FlushOptions = {}): InternalEditableUpdate =>
     commitTextFromDOM("range-command", {
       ...options,
       resetVerticalGoal: false,
@@ -345,7 +345,7 @@ export function createJsonContentEditable<T>({
 
   const flushNativeTextForModelInstruction = (
     instruction: EditModelInstruction,
-  ): JsonContentEditableUpdate => {
+  ): InternalEditableUpdate => {
     const mergeKey = lease === null ? undefined : `native:${lease.surface}`;
     const committed = commitTextFromDOM("composition-commit", {
       label: `flush before ${modelInstructionLabel(instruction)}`,
@@ -369,7 +369,7 @@ export function createJsonContentEditable<T>({
 
   const runModelInstructionAfterDOMFlush = (
     instruction: EditModelInstruction,
-  ): JsonContentEditableUpdate => {
+  ): InternalEditableUpdate => {
     const flushed = flushDOMToModel({
       label: `prepare ${modelInstructionLabel(instruction)}`,
     });
@@ -389,7 +389,7 @@ export function createJsonContentEditable<T>({
     return runModelInstructionAtCurrentSelection(instruction);
   };
 
-  const copy = (event?: ClipboardEvent): JsonContentEditableClipboardResult<T> => {
+  const copy = (event?: ClipboardEvent): InternalClipboardResult<T> => {
     flushDOMToModel({ label: "copy selection" });
     const selection = document.selection?.snapshot() ?? null;
     const selectionPath = textPathFromSelection(selection);
@@ -418,8 +418,8 @@ export function createJsonContentEditable<T>({
     };
   };
 
-  const cut = (event?: ClipboardEvent): JsonContentEditableClipboardResult<T> => {
-    let result: JsonContentEditableClipboardResult<T> | null = null;
+  const cut = (event?: ClipboardEvent): InternalClipboardResult<T> => {
+    let result: InternalClipboardResult<T> | null = null;
     document.history.transaction({ label: "cut", origin: "contenteditable" }, () => {
       const copyResult = copy(event);
       if (!copyResult.ok) {
@@ -487,8 +487,8 @@ export function createJsonContentEditable<T>({
     clipboardText: string;
     jsonPayload: unknown | null;
     selection?: SelectionSnap | null;
-  }): JsonContentEditableClipboardResult<T> => {
-    let result: JsonContentEditableClipboardResult<T> | null = null;
+  }): InternalClipboardResult<T> => {
+    let result: InternalClipboardResult<T> | null = null;
     document.history.transaction(
       { label: "paste", origin: "contenteditable" },
       () => {
@@ -513,7 +513,7 @@ export function createJsonContentEditable<T>({
           document.clipboard.write(clipboardText, { trustedPayload: true });
         }
 
-        const fragment = isJsonContentEditableFragment(jsonPayload)
+        const fragment = isRichTextFragmentPayload(jsonPayload)
           ? jsonPayload
           : null;
         const replacementText = fragment?.text ?? clipboardText;
@@ -583,30 +583,30 @@ export function createJsonContentEditable<T>({
 
   const paste = (
     event?: ClipboardEvent,
-  ): JsonContentEditableClipboardResult<T> =>
+  ): InternalClipboardResult<T> =>
     pastePayload({
       clipboardText: event?.clipboardData?.getData("text/plain") ?? "",
       jsonPayload:
         event === undefined ? readDocumentClipboard(document) : readBrowserJSONPayload(event),
     });
 
-  const pasteFragment = (
-    fragment: JsonContentEditableFragment,
+  const insertFragment = (
+    fragment: RichTextFragment,
     selection = document.selection?.snapshot() ?? null,
-  ): JsonContentEditableClipboardResult<T> =>
+  ): InternalClipboardResult<T> =>
     pastePayload({
       clipboardText: plainTextFromFragment(fragment),
       jsonPayload: fragment,
       selection,
     });
 
-  const pasteText = (
+  const insertText = (
     text: string,
     selection = document.selection?.snapshot() ?? null,
-  ): JsonContentEditableClipboardResult<T> => {
+  ): InternalClipboardResult<T> => {
     const payload = readDocumentClipboard(document);
     const fragment =
-      isJsonContentEditableFragment(payload) && plainTextFromFragment(payload) === text
+      isRichTextFragmentPayload(payload) && plainTextFromFragment(payload) === text
         ? payload
         : null;
     return pastePayload({ clipboardText: text, jsonPayload: fragment, selection });
@@ -614,9 +614,9 @@ export function createJsonContentEditable<T>({
 
   const runModelInstructionAtCurrentSelection = (
     instruction: EditModelInstruction,
-  ): JsonContentEditableUpdate => {
+  ): InternalEditableUpdate => {
     if (instruction.type === "command") {
-      return runCommand(instruction.command);
+      return dispatchSelectionIntent(instruction.command);
     }
     return insertTextAtSelection(
       instruction.text,
@@ -629,7 +629,7 @@ export function createJsonContentEditable<T>({
     replacementText: string,
     label: string,
     selection: SelectionSnap | null,
-  ): JsonContentEditableUpdate => {
+  ): InternalEditableUpdate => {
     verticalGoalX = null;
     if (selection === null || document.selection === undefined) {
       return modelToDomUpdate({
@@ -718,7 +718,7 @@ export function createJsonContentEditable<T>({
       }
 
       if (turn.type === "history") {
-        return capabilityToUpdate(turn.command === "undo" ? undo() : redo());
+        return capabilityToUpdate(turn.command === "undo" ? applyHistoryUndo() : applyHistoryRedo());
       }
 
       if (turn.type === "run-model-instruction") {
@@ -810,10 +810,10 @@ export function createJsonContentEditable<T>({
         selection: document.selection?.snapshot() ?? null,
       });
     },
-    dispatch: runCommand,
+    dispatch: dispatchSelectionIntent,
     flush: flushDOMToModel,
     flushDOMToModel,
-    runCommand,
+    dispatchSelectionIntent,
     syncSelectionFromDOM,
     restoreSelectionToDOM(selection = document.selection?.snapshot()) {
       return selection === undefined
@@ -829,10 +829,10 @@ export function createJsonContentEditable<T>({
     copy,
     cut,
     paste,
-    pasteFragment,
-    pasteText,
-    undo,
-    redo,
+    insertFragment,
+    insertText,
+    applyHistoryUndo,
+    applyHistoryRedo,
     reset() {
       lease = null;
       suppressNextCompositionCommit = false;
@@ -840,7 +840,7 @@ export function createJsonContentEditable<T>({
     },
   };
 
-  function undo(): JSONCapabilityResult {
+  function applyHistoryUndo(): JSONCapabilityResult {
     const result = document.undo();
     restoreDOMSelection(
       root,
@@ -852,7 +852,7 @@ export function createJsonContentEditable<T>({
     return result;
   }
 
-  function redo(): JSONCapabilityResult {
+  function applyHistoryRedo(): JSONCapabilityResult {
     const result = document.redo();
     restoreDOMSelection(
       root,
@@ -864,9 +864,9 @@ export function createJsonContentEditable<T>({
     return result;
   }
 
-  function runCommand(
-    intent: JsonContentEditableSelectionIntent,
-  ): JsonContentEditableUpdate {
+  function dispatchSelectionIntent(
+    intent: InternalSelectionIntent,
+  ): InternalEditableUpdate {
     const layout = readVisualLayoutSnapshot();
     if (!layout.ok) {
       return visualLayoutStaleUpdate(
@@ -908,9 +908,9 @@ export function createJsonContentEditable<T>({
   }
 
   function dispatchSelectionIntentWithKernel(
-    intent: JsonContentEditableSelectionIntent,
+    intent: InternalSelectionIntent,
     selection: SelectionSnap | null,
-    layout: JsonContentEditableVisualLayout | null,
+    layout: InternalVisualLayout | null,
   ): { selection: SelectionSnap | null; goalX: number | null } | null {
     const state = richEditState(selection, layout);
     if (state === null) {
@@ -936,7 +936,7 @@ export function createJsonContentEditable<T>({
 
   function richEditState(
     selection: SelectionSnap | null,
-    layout: JsonContentEditableVisualLayout | null,
+    layout: InternalVisualLayout | null,
   ): {
     document: RichDocument;
     lineSeeds: ReadonlyArray<RichVisualLineSeed> | null;
@@ -984,7 +984,7 @@ export function createEditableHost({
   projection = null,
   visualLayout = null,
 }: EditableHostOptions): EditableHost {
-  const host = createJsonContentEditable<RichDocument>({
+  const host = createInternalEditableHost<RichDocument>({
     atomAttribute: JSON_ATOM_ATTRIBUTE,
     atomsPath: richAtomsPathForTextPath,
     document,
@@ -1017,7 +1017,7 @@ export function createEditableHost({
 }
 
 function editableUpdateFromHostResult(
-  result: JsonContentEditableUpdate | JsonContentEditableClipboardResult<RichDocument>,
+  result: InternalEditableUpdate | InternalClipboardResult<RichDocument>,
   document: JSONDocument<RichDocument>,
   renderText: boolean,
 ): EditableUpdate {
@@ -1043,41 +1043,41 @@ function editableUpdateFromHostResult(
 }
 
 function dispatchEditableIntent(
-  host: JsonContentEditableHost<RichDocument>,
+  host: InternalEditableHost<RichDocument>,
   document: JSONDocument<RichDocument>,
   visualLayout: VisualLayoutProvider | null,
   intent: EditIntent,
   options: EditableDispatchOptions = {},
 ): EditableUpdate {
   if (intent.type === "historyUndo") {
-    return capabilityToUpdate(host.undo());
+    return capabilityToUpdate(host.applyHistoryUndo());
   }
   if (intent.type === "historyRedo") {
-    return capabilityToUpdate(host.redo());
+    return capabilityToUpdate(host.applyHistoryRedo());
   }
   if (intent.type === "insertFromPaste" || intent.type === "insertFromDrop") {
     const result =
       typeof intent.data === "string"
-        ? host.pasteText(intent.data, options.selection)
-        : host.pasteFragment(intent.data, options.selection);
+        ? host.insertText(intent.data, options.selection)
+        : host.insertFragment(intent.data, options.selection);
     return editableUpdateFromHostResult(result, document, true);
   }
   if (
     intent.type === "modifySelection" &&
     (intent.granularity === "line" || intent.granularity === "lineboundary")
   ) {
-    return host.runCommand(intent);
+    return host.dispatchSelectionIntent(intent);
   }
   return dispatchKernelIntent(host, document, visualLayout, intent, options);
 }
 
 function dispatchKernelIntent(
-  host: JsonContentEditableHost<RichDocument>,
+  host: InternalEditableHost<RichDocument>,
   document: JSONDocument<RichDocument>,
   visualLayout: VisualLayoutProvider | null,
   intent: EditIntent,
   options: EditableDispatchOptions,
-): JsonContentEditableUpdate {
+): InternalEditableUpdate {
   const flushed = host.flush({
     label: `prepare ${options.label ?? intent.type}`,
   });
@@ -1118,7 +1118,7 @@ function dispatchKernelIntent(
   }
   if (result.kind === "history") {
     return capabilityToUpdate(
-      result.command === "undo" ? host.undo() : host.redo(),
+      result.command === "undo" ? host.applyHistoryUndo() : host.applyHistoryRedo(),
     );
   }
 
@@ -1151,7 +1151,7 @@ function dispatchKernelIntent(
   });
 }
 
-function capabilityToUpdate(result: JSONCapabilityResult): JsonContentEditableUpdate {
+function capabilityToUpdate(result: JSONCapabilityResult): InternalEditableUpdate {
   return result.ok
     ? modelToDomUpdate({
         kind: "text",
@@ -1171,7 +1171,7 @@ function modelInstructionLabel(instruction: EditModelInstruction): string {
 }
 
 function relatedPath(
-  path: JsonContentEditableRelatedPath | null,
+  path: InternalEditableRelatedPath | null,
   textPath: Pointer | null,
 ): Pointer | null {
   if (path === null || textPath === null) {
@@ -1181,10 +1181,10 @@ function relatedPath(
 }
 
 function visualLayoutStaleUpdate(
-  command: JsonContentEditableSelectionIntent,
+  command: InternalSelectionIntent,
   reason: string,
   selection: SelectionSnap | null,
-): JsonContentEditableUpdate {
+): InternalEditableUpdate {
   return {
     ok: false,
     code: "visual_layout_stale",
@@ -1223,7 +1223,7 @@ function isRichDocument(value: unknown): value is RichDocument {
 }
 
 function richLineSeedsFromMeasuredLayout(
-  layout: JsonContentEditableVisualLayout,
+  layout: InternalVisualLayout,
   path: Pointer,
 ): RichVisualLineSeed[] {
   return layout.lines.map((line, lineIndex) => ({

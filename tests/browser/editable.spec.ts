@@ -64,6 +64,8 @@ test("contenteditable demo exposes model surfaces and canonical DOM anchors", as
 }) => {
   await expect(page.getByRole("heading", { name: "text surfaces" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "canonical dom" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "cursor frame" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "key debug log" })).toBeVisible();
 
   await expect.poll(async () => {
     const surfaces = await getStateValue(page, "text surfaces");
@@ -93,6 +95,42 @@ test("contenteditable demo exposes model surfaces and canonical DOM anchors", as
       atoms: [{ id: "mention-ada", type: "mention", text: "@Ada" }],
     },
   );
+  await expect.poll(async () => {
+    const cursorFrame = await getStateValue(page, "cursor frame");
+    return {
+      blockCount: cursorFrame.blocks.length,
+      lineCount: cursorFrame.lines.length,
+      keyDebugLog: await getStateValue(page, "key debug log"),
+    };
+  }).toMatchObject({
+    blockCount: 7,
+    keyDebugLog: [],
+  });
+});
+
+test("contenteditable demo keeps key debug side effects opt-in", async ({
+  page,
+}) => {
+  const editor = page.getByRole("textbox", { name: "JSON document text" });
+
+  await editor.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => getStateValue(page, "key debug log")).toEqual([]);
+
+  await page.goto("/?debugKeys=1");
+  await expect(editor).toHaveAttribute("data-ready", "true", {
+    timeout: 15_000,
+  });
+  await editor.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect
+    .poll(async () => {
+      const log = await getStateValue(page, "key debug log");
+      return log.at(-1);
+    })
+    .toMatchObject({
+      key: "ArrowRight",
+    });
 });
 
 test("contenteditable demo starts with a rich document fixture", async ({ page }) => {

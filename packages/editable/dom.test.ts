@@ -19,7 +19,7 @@ import {
   type VisualLayout,
   type VisualLayoutSnapshot,
 } from "./dom";
-import { createJsonContentEditable as createInternalEditableHost } from "./internal/contenteditable-web/createJsonContentEditable";
+import { createInternalEditableHost } from "./internal/dom/createEditableHost";
 import { RichDocumentSchema } from "./schema";
 
 const TestDocumentSchema = z.object({
@@ -281,7 +281,7 @@ function freshVisualLayout(
   };
 }
 
-describe("contenteditable-web json-document bridge", () => {
+describe("editable DOM adapter json-document bridge", () => {
   it("locks the runtime public API surface", () => {
     expect(Object.keys(PublicCore).sort()).toEqual([
       "createEditableHost",
@@ -512,9 +512,9 @@ describe("contenteditable-web json-document bridge", () => {
       offset: 1,
     });
 
-    expect(core.undo().ok).toBe(true);
+    expect(core.applyHistoryUndo().ok).toBe(true);
     expect(document.value.text).toBe("Plain");
-    expect(core.redo().ok).toBe(true);
+    expect(core.applyHistoryRedo().ok).toBe(true);
     expect(document.value.text).toBe("가Plain");
   });
 
@@ -577,7 +577,7 @@ describe("contenteditable-web json-document bridge", () => {
     setDOMRange(textNode, 7, textNode, 8);
     core.syncSelectionFromDOM();
 
-    const result = core.pasteText("Z");
+    const result = core.insertText("Z");
 
     expect(result.ok).toBe(true);
     expect(document.value.text).toBe("Plain xZ");
@@ -594,7 +594,7 @@ describe("contenteditable-web json-document bridge", () => {
     core.syncSelectionFromDOM();
     setDOMRange(textNode, 8, textNode, 8);
 
-    const result = core.pasteText("Z");
+    const result = core.insertText("Z");
 
     expect(result.ok).toBe(true);
     expect(document.value.text).toBe("Z xy");
@@ -611,7 +611,7 @@ describe("contenteditable-web json-document bridge", () => {
     core.syncSelectionFromDOM();
     setDOMRange(textNode, 8, textNode, 8);
 
-    const result = core.pasteText("Z");
+    const result = core.insertText("Z");
 
     expect(result.ok).toBe(true);
     expect(document.value.text).toBe("PlZain xy");
@@ -1173,7 +1173,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    expect(core.runCommand(result.command)).toMatchObject({
+    expect(core.dispatchSelectionIntent(result.command)).toMatchObject({
       flow: "model-to-dom",
       kind: "selection",
     });
@@ -1335,7 +1335,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    expect(core.runCommand(result.command)).toMatchObject({
+    expect(core.dispatchSelectionIntent(result.command)).toMatchObject({
       flow: "model-to-dom",
       kind: "selection",
     });
@@ -1420,7 +1420,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    expect(core.runCommand(result.command)).toMatchObject({
+    expect(core.dispatchSelectionIntent(result.command)).toMatchObject({
       flow: "model-to-dom",
       kind: "selection",
     });

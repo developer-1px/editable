@@ -51,11 +51,11 @@ Use `packages/editable/dom` for the DOM adapter and `packages/editable` for the
 headless typed model. Use `packages/editable/schema` only when runtime zod
 validation is needed.
 
-GitHub issue #104 is the canon for the collapsed package surface: surface A is
-the headless model in `packages/editable` plus schema validation in
-`packages/editable/schema`; surface B is the DOM adapter in
-`packages/editable/dom`. The sample app is intentionally one root route backed
-by `src/editable-lab`.
+[GitHub issue #104](https://github.com/developer-1px/editable/issues/104) is
+the canon for the collapsed package surface: surface A is the headless model in
+`packages/editable` plus schema validation in `packages/editable/schema`;
+surface B is the DOM adapter in `packages/editable/dom`. The sample app is
+intentionally one root route backed by `src/editable-lab`.
 
 The single editing interface is `edit` from `packages/editable`:
 

@@ -24,7 +24,7 @@ export type {
 } from "./contract";
 export {
   createEditableHost,
-} from "./createJsonContentEditable";
+} from "./createEditableHost";
 export {
   measureEditableVisualLayout as measureVisualLayout,
   richVisualLineSeedsFromMeasuredLayout,

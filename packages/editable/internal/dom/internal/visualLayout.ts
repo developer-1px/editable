@@ -3,15 +3,15 @@ import {
   richBlockIndexFromTextPath,
   type RichDocument,
   type RichVisualLineSeed,
-} from "../../rich-document";
+} from "../../kernel";
 import type {
-  JsonContentEditableProjectionProvider,
-  JsonContentEditableVisualCaret,
-  JsonContentEditableVisualLayout,
-  JsonContentEditableVisualLine,
-  JsonContentEditableVisualLineKind,
-  JsonContentEditableVisualLineSeed,
-  JsonContentEditableVisualLayoutOptions,
+  InternalProjectionProvider,
+  InternalVisualCaret,
+  InternalVisualLayout,
+  InternalVisualLine,
+  InternalVisualLineKind,
+  InternalVisualLineSeed,
+  InternalVisualLayoutOptions,
   VisualLayout,
   VisualLayoutOptions,
 } from "../contract";
@@ -34,12 +34,12 @@ export function measureVisualLayout({
   textAttribute,
 }: {
   atomAttribute: string;
-  lineSeeds?: ReadonlyArray<JsonContentEditableVisualLineSeed> | null;
+  lineSeeds?: ReadonlyArray<InternalVisualLineSeed> | null;
   mapper: TextOffsetMapper | null;
   root: HTMLElement;
   textAttribute: string;
-}): JsonContentEditableVisualLayout | null {
-  const lines: JsonContentEditableVisualLine[] = [];
+}): InternalVisualLayout | null {
+  const lines: InternalVisualLine[] = [];
   const seedsByPath = lineSeedsByTextPath(lineSeeds);
   for (const element of textSurfaceElements(root, textAttribute)) {
     const path = element.getAttribute(textAttribute);
@@ -68,13 +68,13 @@ export function measureVisualLayout({
   return sorted.length === 0 ? null : { lines: sorted };
 }
 
-export function measureJsonContentEditableVisualLayout<T>({
+export function measureInternalVisualLayout<T>({
   atomAttribute = JSON_ATOM_ATTRIBUTE,
   lineSeeds = null,
   projection = null,
   root,
   textAttribute = JSON_TEXT_ATTRIBUTE,
-}: JsonContentEditableVisualLayoutOptions<T>): JsonContentEditableVisualLayout | null {
+}: InternalVisualLayoutOptions<T>): InternalVisualLayout | null {
   return measureVisualLayout({
     atomAttribute,
     lineSeeds,
@@ -89,7 +89,7 @@ export function measureEditableVisualLayout({
   projection = null,
   root,
 }: VisualLayoutOptions): VisualLayout | null {
-  return measureJsonContentEditableVisualLayout<RichDocument>({
+  return measureInternalVisualLayout<RichDocument>({
     atomAttribute: JSON_ATOM_ATTRIBUTE,
     lineSeeds,
     projection,
@@ -100,7 +100,7 @@ export function measureEditableVisualLayout({
 
 export function richVisualLineSeedsFromMeasuredLayout(
   document: RichDocument,
-  layout: JsonContentEditableVisualLayout,
+  layout: InternalVisualLayout,
 ): RichVisualLineSeed[] {
   const seeds: RichVisualLineSeed[] = [];
   const lineIndexByBlock = new Map<string, number>();
@@ -131,7 +131,7 @@ export function richVisualLineSeedsFromMeasuredLayout(
 }
 
 function offsetMapperFromProjection<T>(
-  projection: JsonContentEditableProjectionProvider<T> | null,
+  projection: InternalProjectionProvider<T> | null,
 ): TextOffsetMapper | null {
   return projection === null
     ? null
@@ -146,9 +146,9 @@ function offsetMapperFromProjection<T>(
 }
 
 function lineSeedsByTextPath(
-  lineSeeds: ReadonlyArray<JsonContentEditableVisualLineSeed> | null,
-): Map<Pointer, JsonContentEditableVisualLineSeed[]> {
-  const grouped = new Map<Pointer, JsonContentEditableVisualLineSeed[]>();
+  lineSeeds: ReadonlyArray<InternalVisualLineSeed> | null,
+): Map<Pointer, InternalVisualLineSeed[]> {
+  const grouped = new Map<Pointer, InternalVisualLineSeed[]>();
   for (const seed of lineSeeds ?? []) {
     const seeds = grouped.get(seed.path) ?? [];
     seeds.push(seed);
@@ -185,8 +185,8 @@ function hardLineSeedsFromEditableText(
   path: Pointer,
   editableText: string,
   mapper: TextOffsetMapper | null,
-): JsonContentEditableVisualLineSeed[] {
-  const seeds: JsonContentEditableVisualLineSeed[] = [];
+): InternalVisualLineSeed[] {
+  const seeds: InternalVisualLineSeed[] = [];
   let lineIndex = 0;
   let start = 0;
   for (let index = 0; index < editableText.length; index += 1) {
@@ -210,7 +210,7 @@ function createFallbackSeed(
   editableEnd: number,
   editableText: string,
   mapper: TextOffsetMapper | null,
-): JsonContentEditableVisualLineSeed {
+): InternalVisualLineSeed {
   const startOffset =
     mapper?.editableOffsetToDocumentOffset(path, editableStart) ?? editableStart;
   const endOffset =
@@ -225,7 +225,7 @@ function createFallbackSeed(
   };
 }
 
-function visualLineKind(text: string): JsonContentEditableVisualLineKind {
+function visualLineKind(text: string): InternalVisualLineKind {
   if (text.length === 0) {
     return "empty";
   }
@@ -246,9 +246,9 @@ function measureSeedLine({
   editableText: string;
   element: HTMLElement;
   mapper: TextOffsetMapper | null;
-  previousLines: ReadonlyArray<JsonContentEditableVisualLine>;
-  seed: JsonContentEditableVisualLineSeed;
-}): JsonContentEditableVisualLine[] {
+  previousLines: ReadonlyArray<InternalVisualLine>;
+  seed: InternalVisualLineSeed;
+}): InternalVisualLine[] {
   const startEditable = clampOffset(
     mapper?.documentOffsetToEditableOffset(seed.path, seed.startOffset) ??
       seed.startOffset,
@@ -261,7 +261,7 @@ function measureSeedLine({
   );
   const start = Math.min(startEditable, endEditable);
   const end = Math.max(startEditable, endEditable);
-  const carets: JsonContentEditableVisualCaret[] = [];
+  const carets: InternalVisualCaret[] = [];
   for (let editableOffset = start; editableOffset <= end; editableOffset += 1) {
     const caret = measureCaret({
       atomAttribute,
@@ -305,7 +305,7 @@ function measureCaret({
   element: HTMLElement;
   mapper: TextOffsetMapper | null;
   path: Pointer;
-}): JsonContentEditableVisualCaret | null {
+}): InternalVisualCaret | null {
   const position = textDOMPositionForOffset(
     element,
     editableOffset,
@@ -459,9 +459,9 @@ function synthesizeLineFromSeed({
 }: {
   editableOffset: number;
   element: HTMLElement;
-  previousLines: ReadonlyArray<JsonContentEditableVisualLine>;
-  seed: JsonContentEditableVisualLineSeed;
-}): JsonContentEditableVisualLine {
+  previousLines: ReadonlyArray<InternalVisualLine>;
+  seed: InternalVisualLineSeed;
+}): InternalVisualLine {
   const previous = [...previousLines]
     .filter((line) => line.path === seed.path)
     .sort(compareVisualLines)
@@ -493,14 +493,14 @@ function synthesizeLineFromSeed({
 }
 
 function groupCaretsIntoLines(
-  seed: JsonContentEditableVisualLineSeed,
-  carets: JsonContentEditableVisualCaret[],
-): JsonContentEditableVisualLine[] {
+  seed: InternalVisualLineSeed,
+  carets: InternalVisualCaret[],
+): InternalVisualLine[] {
   const sorted = [...carets].sort((left, right) => {
     const lineOrder = lineCenter(left) - lineCenter(right);
     return lineOrder === 0 ? left.x - right.x : lineOrder;
   });
-  const grouped: JsonContentEditableVisualCaret[][] = [];
+  const grouped: InternalVisualCaret[][] = [];
 
   for (const caret of sorted) {
     const existing = grouped.find((line) => sameLine(lineBounds(line), caret));
@@ -522,15 +522,15 @@ function groupCaretsIntoLines(
 }
 
 function lineFromCarets(
-  seed: JsonContentEditableVisualLineSeed,
-  carets: JsonContentEditableVisualCaret[],
+  seed: InternalVisualLineSeed,
+  carets: InternalVisualCaret[],
   wrapIndex: number,
   identity: {
     id: string;
     sourceId: string;
     editableOffset?: number;
   },
-): JsonContentEditableVisualLine {
+): InternalVisualLine {
   const sorted = [...carets].sort((left, right) => {
     if (left.x !== right.x) {
       return left.x - right.x;
@@ -567,7 +567,7 @@ function lineFromCarets(
 }
 
 function lineBounds(
-  carets: ReadonlyArray<JsonContentEditableVisualCaret>,
+  carets: ReadonlyArray<InternalVisualCaret>,
 ): { top: number; bottom: number } {
   return {
     top: Math.min(...carets.map((caret) => caret.top)),
@@ -576,8 +576,8 @@ function lineBounds(
 }
 
 function sameLine(
-  line: Pick<JsonContentEditableVisualLine, "top" | "bottom">,
-  caret: JsonContentEditableVisualCaret,
+  line: Pick<InternalVisualLine, "top" | "bottom">,
+  caret: InternalVisualCaret,
 ): boolean {
   const center = lineCenter(caret);
   return line.top - 2 <= center && center <= line.bottom + 2;
@@ -610,8 +610,8 @@ function lineStartX(element: HTMLElement): number {
 }
 
 function compareVisualLines(
-  left: JsonContentEditableVisualLine,
-  right: JsonContentEditableVisualLine,
+  left: InternalVisualLine,
+  right: InternalVisualLine,
 ): number {
   const visualOrder = lineCenter(left) - lineCenter(right);
   if (visualOrder !== 0) {

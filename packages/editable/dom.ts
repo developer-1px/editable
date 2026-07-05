@@ -1,1 +1,1 @@
-export * from "./internal/contenteditable-web";
+export * from "./internal/dom";
