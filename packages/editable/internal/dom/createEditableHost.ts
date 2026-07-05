@@ -86,7 +86,7 @@ type CommitTextOptions = FlushOptions & {
   resetVerticalGoal?: boolean;
 };
 
-export function createInternalEditableHost<T>({
+export function createInternalEditableHost({
   atomAttribute = JSON_ATOM_ATTRIBUTE,
   atomsPath = null,
   document,
@@ -95,7 +95,7 @@ export function createInternalEditableHost<T>({
   textAttribute = JSON_TEXT_ATTRIBUTE,
   projection = null,
   visualLayout = null,
-}: InternalEditableHostOptions<T>): InternalEditableHost<T> {
+}: InternalEditableHostOptions): InternalEditableHost {
   let lease: NativeTextLease | null = null;
   let suppressNextCompositionCommit = false;
   let verticalGoalX: number | null = null;
@@ -105,7 +105,7 @@ export function createInternalEditableHost<T>({
 
   const projectionForPath = (
     path: Pointer | null,
-  ): InternalTextProjection<T> | null =>
+  ): InternalTextProjection | null =>
     path === null ? null : projection?.(path) ?? null;
 
   const offsetMapper: TextOffsetMapper = {
@@ -259,7 +259,7 @@ export function createInternalEditableHost<T>({
 
     const projectionChange =
       textProjection?.applyTextChange?.({
-        document,
+        document: document as JSONDocument<RichDocument>,
         editableText,
         path,
         selection: selectionAfter,
@@ -389,7 +389,7 @@ export function createInternalEditableHost<T>({
     return runModelInstructionAtCurrentSelection(instruction);
   };
 
-  const copy = (event?: ClipboardEvent): InternalClipboardResult<T> => {
+  const copy = (event?: ClipboardEvent): InternalClipboardResult => {
     flushDOMToModel({ label: "copy selection" });
     const selection = document.selection?.snapshot() ?? null;
     const selectionPath = textPathFromSelection(selection);
@@ -418,8 +418,8 @@ export function createInternalEditableHost<T>({
     };
   };
 
-  const cut = (event?: ClipboardEvent): InternalClipboardResult<T> => {
-    let result: InternalClipboardResult<T> | null = null;
+  const cut = (event?: ClipboardEvent): InternalClipboardResult => {
+    let result: InternalClipboardResult | null = null;
     document.history.transaction({ label: "cut", origin: "contenteditable" }, () => {
       const copyResult = copy(event);
       if (!copyResult.ok) {
@@ -487,8 +487,8 @@ export function createInternalEditableHost<T>({
     clipboardText: string;
     jsonPayload: unknown | null;
     selection?: SelectionSnap | null;
-  }): InternalClipboardResult<T> => {
-    let result: InternalClipboardResult<T> | null = null;
+  }): InternalClipboardResult => {
+    let result: InternalClipboardResult | null = null;
     document.history.transaction(
       { label: "paste", origin: "contenteditable" },
       () => {
@@ -583,7 +583,7 @@ export function createInternalEditableHost<T>({
 
   const paste = (
     event?: ClipboardEvent,
-  ): InternalClipboardResult<T> =>
+  ): InternalClipboardResult =>
     pastePayload({
       clipboardText: event?.clipboardData?.getData("text/plain") ?? "",
       jsonPayload:
@@ -593,7 +593,7 @@ export function createInternalEditableHost<T>({
   const insertFragment = (
     fragment: RichTextFragment,
     selection = document.selection?.snapshot() ?? null,
-  ): InternalClipboardResult<T> =>
+  ): InternalClipboardResult =>
     pastePayload({
       clipboardText: plainTextFromFragment(fragment),
       jsonPayload: fragment,
@@ -603,7 +603,7 @@ export function createInternalEditableHost<T>({
   const insertText = (
     text: string,
     selection = document.selection?.snapshot() ?? null,
-  ): InternalClipboardResult<T> => {
+  ): InternalClipboardResult => {
     const payload = readDocumentClipboard(document);
     const fragment =
       isRichTextFragmentPayload(payload) && plainTextFromFragment(payload) === text
@@ -984,7 +984,7 @@ export function createEditableHost({
   projection = null,
   visualLayout = null,
 }: EditableHostOptions): EditableHost {
-  const host = createInternalEditableHost<RichDocument>({
+  const host = createInternalEditableHost({
     atomAttribute: JSON_ATOM_ATTRIBUTE,
     atomsPath: richAtomsPathForTextPath,
     document,
@@ -1017,7 +1017,7 @@ export function createEditableHost({
 }
 
 function editableUpdateFromHostResult(
-  result: InternalEditableUpdate | InternalClipboardResult<RichDocument>,
+  result: InternalEditableUpdate | InternalClipboardResult,
   document: JSONDocument<RichDocument>,
   renderText: boolean,
 ): EditableUpdate {
@@ -1043,7 +1043,7 @@ function editableUpdateFromHostResult(
 }
 
 function dispatchEditableIntent(
-  host: InternalEditableHost<RichDocument>,
+  host: InternalEditableHost,
   document: JSONDocument<RichDocument>,
   visualLayout: VisualLayoutProvider | null,
   intent: EditIntent,
@@ -1072,7 +1072,7 @@ function dispatchEditableIntent(
 }
 
 function dispatchKernelIntent(
-  host: InternalEditableHost<RichDocument>,
+  host: InternalEditableHost,
   document: JSONDocument<RichDocument>,
   visualLayout: VisualLayoutProvider | null,
   intent: EditIntent,

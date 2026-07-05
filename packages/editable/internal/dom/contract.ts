@@ -187,10 +187,10 @@ export type HostUpdate =
       selection: SelectionSnap | null;
     };
 
-export type InternalClipboardResult<T> =
+export type InternalClipboardResult =
   | {
       ok: true;
-      value: T;
+      value: unknown;
     }
   | {
       ok: false;
@@ -212,14 +212,14 @@ export type EditableHost = {
   dispatch(intent: EditIntent, options?: EditableDispatchOptions): EditableUpdate;
 };
 
-export type InternalEditableHostOptions<T> = {
+export type InternalEditableHostOptions = {
   root: HTMLElement;
-  document: JSONDocument<T>;
+  document: JSONDocument<unknown>;
   atomsPath?: InternalEditableRelatedPath | null;
   rangesPath?: InternalEditableRelatedPath | null;
   atomAttribute?: string;
   textAttribute?: string;
-  projection?: InternalProjectionProvider<T> | null;
+  projection?: InternalProjectionProvider | null;
   visualLayout?: InternalVisualLayoutProvider | null;
 };
 
@@ -229,21 +229,8 @@ export type { RichTextFragment };
 export type InternalEditableRangeRecord = RichInlineRange;
 export type InternalTextChange = TextChange;
 
-export type InternalTextProjection<T> = {
-  editableTextToDocumentText(editableText: string): string;
-  editableOffsetToDocumentOffset(offset: number): number;
-  documentOffsetToEditableOffset(offset: number): number;
-  applyTextChange?: (input: {
-    document: JSONDocument<T>;
-    editableText: string;
-    path: Pointer;
-    selection: SelectionSnap | null;
-  }) => InternalTextChange;
-};
-
-export type InternalProjectionProvider<T> = (
-  path: Pointer,
-) => InternalTextProjection<T> | null;
+export type InternalTextProjection = TextProjection;
+export type InternalProjectionProvider = TextProjectionProvider;
 
 export type InternalVisualCaret = VisualCaret;
 export type InternalVisualLineKind = VisualLineKind;
@@ -255,11 +242,11 @@ export type InternalVisualLayoutSnapshot = VisualLayoutSnapshot;
 export type InternalVisualLayoutProvider = VisualLayoutProvider;
 export type InternalVisualLayoutStore = VisualLayoutStore;
 
-export type InternalVisualLayoutOptions<T> = {
+export type InternalVisualLayoutOptions = {
   root: HTMLElement;
   atomAttribute?: string;
   textAttribute?: string;
-  projection?: InternalProjectionProvider<T> | null;
+  projection?: InternalProjectionProvider | null;
   lineSeeds?: ReadonlyArray<InternalVisualLineSeed> | null;
 };
 
@@ -267,29 +254,29 @@ export type InternalSelectionIntent = EditableSelectionIntent;
 export type InternalEditableFlow = EditableFlow;
 export type InternalEditableUpdate = HostUpdate;
 
-export type InternalEditableController<T> = {
-  handle(event: Event): InternalEditableUpdate | InternalClipboardResult<T>;
+export type InternalEditableController = {
+  handle(event: Event): InternalEditableUpdate | InternalClipboardResult;
   flushDOMToModel(options?: FlushOptions): InternalEditableUpdate;
   dispatchSelectionIntent(intent: InternalSelectionIntent): InternalEditableUpdate;
   syncSelectionFromDOM(): SelectionSnap | null;
   restoreSelectionToDOM(selection?: SelectionSnap): boolean;
-  copy(event?: ClipboardEvent): InternalClipboardResult<T>;
-  cut(event?: ClipboardEvent): InternalClipboardResult<T>;
-  paste(event?: ClipboardEvent): InternalClipboardResult<T>;
+  copy(event?: ClipboardEvent): InternalClipboardResult;
+  cut(event?: ClipboardEvent): InternalClipboardResult;
+  paste(event?: ClipboardEvent): InternalClipboardResult;
   insertFragment(
     fragment: RichTextFragment,
     selection?: SelectionSnap | null,
-  ): InternalClipboardResult<T>;
+  ): InternalClipboardResult;
   insertText(
     text: string,
     selection?: SelectionSnap | null,
-  ): InternalClipboardResult<T>;
+  ): InternalClipboardResult;
   applyHistoryUndo(): JSONCapabilityResult;
   applyHistoryRedo(): JSONCapabilityResult;
   reset(): void;
 };
 
-export type InternalEditableHost<T> = InternalEditableController<T> & {
+export type InternalEditableHost = InternalEditableController & {
   flush(options?: FlushOptions): InternalEditableUpdate;
   dispatch(intent: InternalSelectionIntent): InternalEditableUpdate;
 };

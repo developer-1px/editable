@@ -68,13 +68,13 @@ export function measureVisualLayout({
   return sorted.length === 0 ? null : { lines: sorted };
 }
 
-export function measureInternalVisualLayout<T>({
+export function measureInternalVisualLayout({
   atomAttribute = JSON_ATOM_ATTRIBUTE,
   lineSeeds = null,
   projection = null,
   root,
   textAttribute = JSON_TEXT_ATTRIBUTE,
-}: InternalVisualLayoutOptions<T>): InternalVisualLayout | null {
+}: InternalVisualLayoutOptions): InternalVisualLayout | null {
   return measureVisualLayout({
     atomAttribute,
     lineSeeds,
@@ -89,7 +89,7 @@ export function measureEditableVisualLayout({
   projection = null,
   root,
 }: VisualLayoutOptions): VisualLayout | null {
-  return measureInternalVisualLayout<RichDocument>({
+  return measureInternalVisualLayout({
     atomAttribute: JSON_ATOM_ATTRIBUTE,
     lineSeeds,
     projection,
@@ -130,8 +130,8 @@ export function richVisualLineSeedsFromMeasuredLayout(
   return seeds;
 }
 
-function offsetMapperFromProjection<T>(
-  projection: InternalProjectionProvider<T> | null,
+function offsetMapperFromProjection(
+  projection: InternalProjectionProvider | null,
 ): TextOffsetMapper | null {
   return projection === null
     ? null
