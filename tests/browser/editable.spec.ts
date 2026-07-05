@@ -1277,6 +1277,13 @@ test("contenteditable demo owns arrow-down from measured visual layout", async (
   });
   await selectEditorText(page, 0, 0);
 
+  await expect
+    .poll(async () => (await firstBlockVisualLines(page)).length)
+    .toBeGreaterThan(1);
+  const measuredLines = await firstBlockVisualLines(page);
+  const secondLineStart = measuredLines[1]?.start ?? -1;
+  expect(secondLineStart).toBeGreaterThan(0);
+
   const dispatched = await page.evaluate(() => {
     const editor = document.querySelector(".contenteditable-editor");
     if (!(editor instanceof HTMLElement)) {
@@ -1301,7 +1308,7 @@ test("contenteditable demo owns arrow-down from measured visual layout", async (
       const range = await getSelectionRange(page);
       return `${range?.focus?.path ?? ""}:${range?.focus?.offset ?? ""}`;
     })
-    .not.toBe("/blocks/0/text:0");
+    .toBe(`/blocks/0/text:${secondLineStart}`);
 });
 
 test("contenteditable visual layout keeps blank lines after line breaks", async ({

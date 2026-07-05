@@ -18,7 +18,7 @@ import {
   EDITABLE_ATOM_ATTRIBUTE,
   EDITABLE_TEXT_ATTRIBUTE,
 } from "../projection";
-import type { EditIntent } from "../kernel";
+import type { EditErrorCode, EditIntent } from "../kernel";
 
 export const JSON_TEXT_ATTRIBUTE = EDITABLE_TEXT_ATTRIBUTE;
 export const JSON_ATOM_ATTRIBUTE = EDITABLE_ATOM_ATTRIBUTE;
@@ -176,9 +176,9 @@ export type HostUpdate =
         | "missing_text_path"
         | "not_string"
         | "commit_failed"
-        | "empty_selection"
         | "clipboard_unavailable"
-        | "invalid_payload";
+        | "invalid_payload"
+        | EditErrorCode;
       reason: string;
     }
   | {
@@ -275,6 +275,8 @@ export type InternalEditableController = {
   ): InternalClipboardResult;
   applyHistoryUndo(): JSONCapabilityResult;
   applyHistoryRedo(): JSONCapabilityResult;
+  verticalGoal(): number | null;
+  setVerticalGoal(goalX: number | null): void;
   reset(): void;
 };
 

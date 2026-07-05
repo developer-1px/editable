@@ -816,6 +816,10 @@ export function createInternalEditableHost({
     flush: flushDOMToModel,
     flushDOMToModel,
     dispatchSelectionIntent,
+    verticalGoal: () => verticalGoalX,
+    setVerticalGoal(goalX: number | null) {
+      verticalGoalX = goalX;
+    },
     syncSelectionFromDOM,
     restoreSelectionToDOM(selection = document.selection?.snapshot()) {
       return selection === undefined
@@ -1057,13 +1061,6 @@ function dispatchEditableIntent(
   if (intent.type === "historyRedo") {
     return capabilityToUpdate(host.applyHistoryRedo());
   }
-  if (intent.type === "insertFromPaste" || intent.type === "insertFromDrop") {
-    const result =
-      typeof intent.data === "string"
-        ? host.insertText(intent.data, options.selection)
-        : host.insertFragment(intent.data, options.selection);
-    return editableUpdateFromHostResult(result, document, true);
-  }
   if (
     intent.type === "modifySelection" &&
     (intent.granularity === "line" || intent.granularity === "lineboundary")
@@ -1100,7 +1097,7 @@ function dispatchKernelIntent(
     {
       document: document.value,
       selection,
-      goalX: null,
+      goalX: host.verticalGoal(),
     },
     intent,
     {
@@ -1114,7 +1111,7 @@ function dispatchKernelIntent(
   if (!result.ok) {
     return {
       ok: false,
-      code: "commit_failed",
+      code: result.code,
       reason: result.reason,
     };
   }
@@ -1123,6 +1120,7 @@ function dispatchKernelIntent(
       result.command === "undo" ? host.applyHistoryUndo() : host.applyHistoryRedo(),
     );
   }
+  host.setVerticalGoal(result.goalX);
 
   if (result.patch.length > 0) {
     const commit = document.commit(result.patch, {
