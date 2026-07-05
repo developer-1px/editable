@@ -51,7 +51,7 @@ export function selectionFromDOM(
   atomAttribute: string,
   mapper: TextOffsetMapper | null = null,
 ): SelectionSnap | null {
-  const selection = root.ownerDocument.getSelection();
+  const selection = getRootSelection(root);
   if (
     selection === null ||
     selection.anchorNode === null ||
@@ -108,7 +108,7 @@ export function textPointFromDOMSelection(
   atomAttribute: string,
   mapper: TextOffsetMapper | null = null,
 ): { path: Pointer; offset: number } | null {
-  const selection = root.ownerDocument.getSelection();
+  const selection = getRootSelection(root);
   if (
     selection === null ||
     selection.focusNode === null ||
@@ -156,7 +156,7 @@ export function restoreDOMSelection(
     return false;
   }
 
-  const domSelection = root.ownerDocument.getSelection();
+  const domSelection = getRootSelection(root);
   if (domSelection === null) {
     return false;
   }
@@ -248,4 +248,18 @@ function sameDOMPosition(
   right: { node: Node; offset: number },
 ): boolean {
   return left.node === right.node && left.offset === right.offset;
+}
+
+function getRootSelection(root: HTMLElement): Selection | null {
+  const rootNode = root.getRootNode();
+  if (hasGetSelection(rootNode)) {
+    return rootNode.getSelection() ?? root.ownerDocument.getSelection();
+  }
+  return root.ownerDocument.getSelection();
+}
+
+function hasGetSelection(
+  rootNode: Node,
+): rootNode is Node & { getSelection(): Selection | null } {
+  return typeof (rootNode as { getSelection?: unknown }).getSelection === "function";
 }
