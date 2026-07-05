@@ -75,3 +75,29 @@ Future widget producer work should start with these fixtures:
 - Paste/drop at a widget anchor with widget DOM ignored by DOM-to-model text extraction.
 - Widget with internal button/input rendered outside the text surface, verifying outer canonical selection is not overwritten.
 - Widget destroy cleanup for listeners, observers, timers, subscriptions, and portal roots after re-render and removal.
+
+## Issue #87 Mark Boundary Composition Trace
+
+The browser trace fixture is `tests/browser/fixtures/markBoundaryCompositionTrace.ts` and is exercised in Chromium, WebKit, and Firefox by `tests/browser/editable.spec.ts`.
+
+Covered mark-boundary scenarios:
+
+- Korean composition at bold start and end boundaries.
+- Chinese composition at italic start boundary.
+- Korean composition at code end boundary.
+- Japanese composition at link start boundary.
+- Korean composition inside an active bold range at a collapsed caret.
+- Korean composition replacing a range selection that crosses a bold boundary.
+- Korean composition whose committed text includes a trailing space.
+- Korean composition at an italic end boundary followed by Enter.
+
+Each trace compares event order, native DOM selection ownership, canonical selection, and final document text. The observed desktop browser set keeps the composition event order compatible with the current DOM-to-model flow: `compositionstart`, composing `input`, `compositionend`, and commit `input` are sufficient for one-patch flush at the active text leaf.
+
+Current guard decision:
+
+- Mark wrappers remain visual text-run wrappers, not cursor units.
+- Composition at mark starts, ends, and active-mark collapsed carets should continue to resolve through the active text leaf.
+- Range composition across a mark boundary should be committed as one text replacement, then range metadata is rebased by the existing text/range sync path.
+- Space and Enter adjacent to composition do not require a separate mark-boundary guard in the traced desktop browsers.
+
+No additional browser-specific mark boundary guard is required for the #87 desktop traces. Mobile IME boundary behavior remains covered by the separate mobile composition issues.
