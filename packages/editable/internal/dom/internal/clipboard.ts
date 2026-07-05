@@ -7,8 +7,8 @@ import {
   JSON_ATOM_REPLACEMENT,
   JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
   JSON_CONTENT_EDITABLE_MIME,
-  type JsonContentEditableAtomRecord,
-  type JsonContentEditableFragment,
+  type InternalEditableAtomRecord,
+  type RichTextFragment,
 } from "../contract";
 import { selectedAtoms } from "./atoms";
 import { readString } from "./jsonDocument";
@@ -49,7 +49,7 @@ export function selectedFragment<T>(
     return { plainText: text, payload: text };
   }
 
-  const payload: JsonContentEditableFragment = {
+  const payload: RichTextFragment = {
     schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
     text,
   };
@@ -70,9 +70,9 @@ export function readDocumentClipboard<T>(document: JSONDocument<T>): unknown | n
   return result.ok ? result.payload : null;
 }
 
-export function isJsonContentEditableFragment(
+export function isRichTextFragmentPayload(
   value: unknown,
-): value is JsonContentEditableFragment {
+): value is RichTextFragment {
   return (
     isRecord(value) &&
     value.schema === JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA &&
@@ -82,7 +82,7 @@ export function isJsonContentEditableFragment(
   );
 }
 
-export function plainTextFromFragment(fragment: JsonContentEditableFragment): string {
+export function plainTextFromFragment(fragment: RichTextFragment): string {
   let text = "";
   for (let index = 0; index < fragment.text.length; index += 1) {
     if (fragment.text[index] === JSON_ATOM_REPLACEMENT) {
@@ -123,7 +123,7 @@ export function readBrowserJSONPayload(
   }
 }
 
-function atomPlainText(atom: JsonContentEditableAtomRecord): string {
+function atomPlainText(atom: InternalEditableAtomRecord): string {
   if (typeof atom.label === "string") {
     return atom.label;
   }

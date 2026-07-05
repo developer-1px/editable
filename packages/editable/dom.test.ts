@@ -3,37 +3,24 @@
 import { createJSONDocument } from "@interactive-os/json-document";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import * as PublicCore from "./index";
 import {
-  editorContractBlocked,
-  editorContractOk,
-} from "./internal/editorContract";
-import type {
-  EditorPoint,
-  EditorSelection,
-  RenderBoundary,
-  RenderFrame,
-} from "./internal/editorContract";
-import {
-  editorSelectionFromSelectionSnap,
-  moveEditorSelection,
-  recoverEditorSelectionAfterModelOperations,
-  selectionSnapFromEditorSelection,
-} from "./internal/editorSelection";
-import {
-  createJsonContentEditableRenderFrame,
-  createJsonContentEditableSelectionFrame,
-  createJsonContentEditable,
-  JSON_ATOM_ATTRIBUTE,
-  JSON_ATOM_REPLACEMENT,
-  JSON_CONTENT_EDITABLE_MIME,
-  JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
-  JSON_TEXT_ATTRIBUTE,
-  moveJsonContentEditableSelectionFrameToLineBoundary,
-  moveJsonContentEditableSelectionFrameVertically,
-  type JsonContentEditableVisualLayout,
-  type JsonContentEditableVisualLayoutSnapshot,
+  ATOM_REPLACEMENT,
+  createRichBlock,
+  createRichDocument,
+  EDITABLE_ATOM_ATTRIBUTE,
+  EDITABLE_TEXT_ATTRIBUTE,
+  RICH_FRAGMENT_MIME,
+  RICH_FRAGMENT_SCHEMA,
 } from "./index";
+import * as PublicCore from "./dom";
+import {
+  createEditableHost,
+  richVisualLineSeedsFromMeasuredLayout,
+  type VisualLayout,
+  type VisualLayoutSnapshot,
+} from "./dom";
+import { createInternalEditableHost } from "./internal/dom/createEditableHost";
+import { RichDocumentSchema } from "./schema";
 
 const TestDocumentSchema = z.object({
   text: z.string(),
@@ -87,19 +74,19 @@ function setup(initial = "Plain") {
   );
   const root = window.document.createElement("div");
   root.contentEditable = "true";
-  root.innerHTML = `<span ${JSON_TEXT_ATTRIBUTE}="/text">${initial}</span>`;
+  root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/text">${initial}</span>`;
   window.document.body.append(root);
-  const textElement = root.querySelector(`[${JSON_TEXT_ATTRIBUTE}]`);
+  const textElement = root.querySelector(`[${EDITABLE_TEXT_ATTRIBUTE}]`);
   if (!(textElement instanceof HTMLElement) || textElement.firstChild === null) {
     throw new Error("Fixture failed to create editable text.");
   }
 
-  const core = createJsonContentEditable({ root, document });
+  const core = createInternalEditableHost({ root, document });
   return { core, document, root, textElement, textNode: textElement.firstChild };
 }
 
 function setupMarkerDocument(initial = "Task text") {
-  const text = `${JSON_ATOM_REPLACEMENT}${initial}`;
+  const text = `${ATOM_REPLACEMENT}${initial}`;
   const document = createJSONDocument(
     MarkerDocumentSchema,
     {
@@ -116,11 +103,11 @@ function setupMarkerDocument(initial = "Task text") {
   );
   const root = window.document.createElement("div");
   root.contentEditable = "true";
-  root.innerHTML = `<div><span ${JSON_TEXT_ATTRIBUTE}="/text"><span ${JSON_ATOM_ATTRIBUTE}="task-marker" contenteditable="false">- [ ] </span>${initial}</span></div>`;
+  root.innerHTML = `<div><span ${EDITABLE_TEXT_ATTRIBUTE}="/text"><span ${EDITABLE_ATOM_ATTRIBUTE}="task-marker" contenteditable="false">- [ ] </span>${initial}</span></div>`;
   window.document.body.append(root);
   const block = root.firstElementChild;
-  const marker = root.querySelector(`[${JSON_ATOM_ATTRIBUTE}="task-marker"]`);
-  const textElement = root.querySelector(`[${JSON_TEXT_ATTRIBUTE}]`);
+  const marker = root.querySelector(`[${EDITABLE_ATOM_ATTRIBUTE}="task-marker"]`);
+  const textElement = root.querySelector(`[${EDITABLE_TEXT_ATTRIBUTE}]`);
   const textNode = marker?.nextSibling ?? null;
   if (
     !(block instanceof HTMLElement) ||
@@ -131,7 +118,7 @@ function setupMarkerDocument(initial = "Task text") {
     throw new Error("Fixture failed to create marker text.");
   }
 
-  const core = createJsonContentEditable({ root, document, atomsPath: "/atoms" });
+  const core = createInternalEditableHost({ root, document, atomsPath: "/atoms" });
   return {
     block,
     core,
@@ -144,7 +131,7 @@ function setupMarkerDocument(initial = "Task text") {
 }
 
 function setupAtomDocument(
-  initial = `A${JSON_ATOM_REPLACEMENT}B`,
+  initial = `A${ATOM_REPLACEMENT}B`,
   atoms: TestAtomRecord = {
     ada: {
       type: "mention" as const,
@@ -161,14 +148,14 @@ function setupAtomDocument(
   );
   const root = window.document.createElement("div");
   root.contentEditable = "true";
-  root.innerHTML = `<span ${JSON_TEXT_ATTRIBUTE}="/text">A<span ${JSON_ATOM_ATTRIBUTE}="ada" contenteditable="false">@Ada</span>B</span>`;
+  root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/text">A<span ${EDITABLE_ATOM_ATTRIBUTE}="ada" contenteditable="false">@Ada</span>B</span>`;
   window.document.body.append(root);
-  const textElement = root.querySelector(`[${JSON_TEXT_ATTRIBUTE}]`);
+  const textElement = root.querySelector(`[${EDITABLE_TEXT_ATTRIBUTE}]`);
   if (!(textElement instanceof HTMLElement)) {
     throw new Error("Fixture failed to create atom text.");
   }
 
-  const core = createJsonContentEditable({
+  const core = createInternalEditableHost({
     root,
     document,
     atomsPath: "/atoms",
@@ -180,7 +167,7 @@ function setupTrailingAtomDocument() {
   const document = createJSONDocument(
     AtomDocumentSchema,
     {
-      text: `A${JSON_ATOM_REPLACEMENT}`,
+      text: `A${ATOM_REPLACEMENT}`,
       atoms: {
         ada: {
           type: "mention",
@@ -194,14 +181,14 @@ function setupTrailingAtomDocument() {
   );
   const root = window.document.createElement("div");
   root.contentEditable = "true";
-  root.innerHTML = `<span ${JSON_TEXT_ATTRIBUTE}="/text">A<span ${JSON_ATOM_ATTRIBUTE}="ada" contenteditable="false">@Ada</span></span>`;
+  root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/text">A<span ${EDITABLE_ATOM_ATTRIBUTE}="ada" contenteditable="false">@Ada</span></span>`;
   window.document.body.append(root);
-  const textElement = root.querySelector(`[${JSON_TEXT_ATTRIBUTE}]`);
+  const textElement = root.querySelector(`[${EDITABLE_TEXT_ATTRIBUTE}]`);
   if (!(textElement instanceof HTMLElement)) {
     throw new Error("Fixture failed to create trailing atom text.");
   }
 
-  const core = createJsonContentEditable({
+  const core = createInternalEditableHost({
     root,
     document,
     atomsPath: "/atoms",
@@ -226,14 +213,14 @@ function setupRangeDocument(
   );
   const root = window.document.createElement("div");
   root.contentEditable = "true";
-  root.innerHTML = `<span ${JSON_TEXT_ATTRIBUTE}="/text">${initial}</span>`;
+  root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/text">${initial}</span>`;
   window.document.body.append(root);
-  const textElement = root.querySelector(`[${JSON_TEXT_ATTRIBUTE}]`);
+  const textElement = root.querySelector(`[${EDITABLE_TEXT_ATTRIBUTE}]`);
   if (!(textElement instanceof HTMLElement) || textElement.firstChild === null) {
     throw new Error("Fixture failed to create range text.");
   }
 
-  const core = createJsonContentEditable({
+  const core = createInternalEditableHost({
     root,
     document,
     rangesPath: "/marks",
@@ -283,79 +270,10 @@ function visualLine({
   };
 }
 
-function selectionSnap(start: number, end: number) {
-  const anchor = { path: "/text", offset: start };
-  const focus = { path: "/text", offset: end };
-  return {
-    selectedPointers: [],
-    selectionRanges: [{ anchor, focus }],
-    primaryIndex: 0,
-    anchor,
-    focus,
-  };
-}
-
-function editorPoint(offset: number, path = "/text"): EditorPoint {
-  return { path, offset, affinity: "before" };
-}
-
-function editorSelection(
-  anchorOffset: number,
-  focusOffset = anchorOffset,
-): EditorSelection {
-  const anchor = editorPoint(anchorOffset);
-  const focus = editorPoint(focusOffset);
-  return {
-    anchor,
-    focus,
-    direction:
-      anchorOffset === focusOffset
-        ? "none"
-        : anchorOffset < focusOffset
-          ? "forward"
-          : "backward",
-    goalX: null,
-  };
-}
-
-function renderBoundary(offset: number, x = offset * 10): RenderBoundary {
-  return {
-    kind: "text",
-    point: editorPoint(offset),
-    x,
-    top: 0,
-    bottom: 10,
-  };
-}
-
-function editorRenderFrame(): RenderFrame {
-  const firstLine = [0, 1, 2, 3].map((offset) => renderBoundary(offset));
-  const secondLine = [4, 5, 6].map((offset) =>
-    renderBoundary(offset, (offset - 4) * 10),
-  );
-  return {
-    lines: [
-      {
-        id: "line-1",
-        start: editorPoint(0),
-        end: editorPoint(3),
-        boundaries: firstLine,
-      },
-      {
-        id: "line-2",
-        start: editorPoint(4),
-        end: editorPoint(6),
-        boundaries: secondLine,
-      },
-    ],
-    boundaries: [...firstLine, ...secondLine],
-  };
-}
-
 function freshVisualLayout(
-  layout: JsonContentEditableVisualLayout | null,
+  layout: VisualLayout | null,
   revision = 1,
-): JsonContentEditableVisualLayoutSnapshot {
+): VisualLayoutSnapshot {
   return {
     ok: true,
     layout,
@@ -363,172 +281,115 @@ function freshVisualLayout(
   };
 }
 
-describe("contenteditable-web json-document bridge", () => {
+describe("editable DOM adapter json-document bridge", () => {
   it("locks the runtime public API surface", () => {
     expect(Object.keys(PublicCore).sort()).toEqual([
-      "JSON_ATOM_ATTRIBUTE",
-      "JSON_ATOM_REPLACEMENT",
-      "JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA",
-      "JSON_CONTENT_EDITABLE_MIME",
-      "JSON_TEXT_ATTRIBUTE",
-      "createJsonContentEditable",
-      "createJsonContentEditableRenderFrame",
-      "createJsonContentEditableSelectionFrame",
-      "createJsonContentEditableVisualLayoutStore",
-      "isJsonContentEditableFragment",
-      "measureJsonContentEditableVisualLayout",
-      "moveJsonContentEditableSelectionFrameToLineBoundary",
-      "moveJsonContentEditableSelectionFrameVertically",
+      "createEditableHost",
+      "createVisualLayoutStore",
+      "measureVisualLayout",
+      "richVisualLineSeedsFromMeasuredLayout",
     ]);
   });
 
-  it("represents editor contract exits as closed results", () => {
-    expect(editorContractOk({ surface: "/text" })).toEqual({
-      ok: true,
-      value: { surface: "/text" },
+  it("dispatches edit intents through the public editable host", () => {
+    const value = createRichDocument({
+      id: "host",
+      blocks: [createRichBlock({ id: "b", text: "Plain" })],
     });
-    expect(
-      editorContractBlocked("unsupported-input", "The event is not text input."),
-    ).toEqual({
-      ok: false,
-      code: "unsupported-input",
-      reason: "The event is not text input.",
+    const document = createJSONDocument(RichDocumentSchema, value, {
+      history: 20,
+      selection: true,
+      trustedInitial: true,
     });
-  });
+    const root = window.document.createElement("div");
+    root.contentEditable = "true";
+    root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text">Plain</span>`;
+    window.document.body.append(root);
+    const host = createEditableHost({ root, document });
 
-  it("converts editor selections to and from json-document selections", () => {
-    const converted = editorSelectionFromSelectionSnap(selectionSnap(1, 3));
-
-    expect(converted).toMatchObject({
-      ok: true,
-      value: {
-        anchor: { path: "/text", offset: 1, affinity: "before" },
-        direction: "forward",
-        focus: { path: "/text", offset: 3, affinity: "before" },
-        goalX: null,
-      },
-    });
-    if (!converted.ok || converted.value === null) {
-      throw new Error("Expected converted editor selection.");
-    }
-    expect(selectionSnapFromEditorSelection(converted.value)).toMatchObject({
+    expect(Object.keys(host).sort()).toEqual([
+      "copy",
+      "cut",
+      "dispatch",
+      "flush",
+      "handle",
+      "paste",
+      "reset",
+      "restoreSelectionToDOM",
+      "syncSelectionFromDOM",
+    ]);
+    const selection = {
+      selectedPointers: [],
       selectionRanges: [
         {
-          anchor: { path: "/text", offset: 1, edge: "before" },
-          focus: { path: "/text", offset: 3, edge: "before" },
+          anchor: { path: "/blocks/0/text", offset: 5 },
+          focus: { path: "/blocks/0/text", offset: 5 },
         },
       ],
-    });
-  });
+      primaryIndex: 0,
+      anchor: { path: "/blocks/0/text", offset: 5 },
+      focus: { path: "/blocks/0/text", offset: 5 },
+    };
 
-  it("moves a collapsed editor selection by caret boundaries", () => {
-    const moved = moveEditorSelection(
-      editorSelection(1),
-      editorRenderFrame(),
-      {
-        type: "move",
-        direction: "forward",
-        extend: false,
-        unit: "grapheme",
-      },
+    const pasted = host.dispatch(
+      { type: "insertFromPaste", data: "!" },
+      { selection },
     );
 
-    expect(moved).toMatchObject({
+    expect(pasted).toMatchObject({
+      flow: "model-to-dom",
+      kind: "text",
       ok: true,
-      value: {
-        anchor: { offset: 2 },
-        direction: "none",
-        focus: { offset: 2 },
-      },
+      render: true,
     });
+    expect(document.value.blocks[0]?.text).toBe("Plain!");
+    expect(host.dispatch({ type: "historyUndo" })).toMatchObject({
+      flow: "model-to-dom",
+      kind: "text",
+      ok: true,
+      render: true,
+    });
+    expect(document.value.blocks[0]?.text).toBe("Plain");
   });
 
-  it("collapses a range before moving when extension is disabled", () => {
-    const moved = moveEditorSelection(
-      editorSelection(1, 4),
-      editorRenderFrame(),
-      {
-        type: "move",
-        direction: "backward",
-        extend: false,
-        unit: "grapheme",
-      },
-    );
-
-    expect(moved).toMatchObject({
-      ok: true,
-      value: {
-        anchor: { offset: 1 },
-        direction: "none",
-        focus: { offset: 1 },
-      },
+  it("derives rich visual line seeds from measured layout", () => {
+    const document = createRichDocument({
+      id: "test",
+      blocks: [
+        createRichBlock({ id: "b1", text: "First" }),
+        createRichBlock({ id: "b2", text: "Second" }),
+      ],
     });
-  });
-
-  it("moves vertically with a stable goal x", () => {
-    const selection = editorSelection(2);
-    selection.goalX = 18;
-    const moved = moveEditorSelection(selection, editorRenderFrame(), {
-      type: "move",
-      direction: "down",
-      extend: false,
-      unit: "visual-line",
-    });
-
-    expect(moved).toMatchObject({
-      ok: true,
-      value: {
-        anchor: { offset: 6 },
-        focus: { offset: 6 },
-        goalX: 18,
-      },
-    });
-  });
-
-  it("recovers editor selection after model text insertion", () => {
-    const recovered = recoverEditorSelectionAfterModelOperations(
-      editorSelection(4),
-      [
+    const seeds = richVisualLineSeedsFromMeasuredLayout(document, {
+      lines: [
         {
-          type: "replaceText",
-          path: "/text",
-          range: { start: 1, end: 1 },
-          text: "abc",
-          selectionAfter: null,
+          id: "line-1",
+          sourceId: "line-1",
+          path: "/blocks/1/text",
+          startOffset: 0,
+          endOffset: 6,
+          kind: "text",
+          top: 0,
+          bottom: 10,
+          box: { x: 0, y: 0, width: 100, height: 10 },
+          carets: [{ path: "/blocks/1/text", offset: 3, x: 12, top: 0, bottom: 10 }],
         },
       ],
-    );
-
-    expect(recovered).toMatchObject({
-      ok: true,
-      value: {
-        anchor: { offset: 7 },
-        focus: { offset: 7 },
-      },
     });
-  });
 
-  it("uses explicit selectionAfter when recovering from model operations", () => {
-    const recovered = recoverEditorSelectionAfterModelOperations(
-      editorSelection(4),
-      [
-        {
-          type: "replaceText",
-          path: "/text",
-          range: { start: 1, end: 3 },
-          text: "x",
-          selectionAfter: editorSelection(2),
-        },
-      ],
-    );
-
-    expect(recovered).toMatchObject({
-      ok: true,
-      value: {
-        anchor: { offset: 2 },
-        focus: { offset: 2 },
+    expect(seeds).toEqual([
+      {
+        id: "line-1",
+        blockId: "b2",
+        blockIndex: 1,
+        path: "/blocks/1/text",
+        startOffset: 0,
+        endOffset: 6,
+        kind: "text",
+        lineIndex: 0,
+        caretMetrics: [{ offset: 3, x: 12 }],
       },
-    });
+    ]);
   });
 
   it("syncs DOM ranges into json-document selection", () => {
@@ -544,76 +405,6 @@ describe("contenteditable-web json-document bridge", () => {
     expect(document.selection?.snapshot().selectionRanges[0]).toMatchObject({
       anchor: { path: "/text", offset: 1 },
       focus: { path: "/text", offset: 4 },
-    });
-  });
-
-  it("moves selection through render frame lines and boundaries without DOM", () => {
-    const renderFrame = createJsonContentEditableRenderFrame({
-      lines: [
-        visualLine({
-          bottom: 10,
-          endOffset: 3,
-          index: 0,
-          startOffset: 0,
-          top: 0,
-          xs: [0, 10, 20, 30],
-        }),
-        visualLine({
-          bottom: 20,
-          endOffset: 8,
-          index: 1,
-          startOffset: 5,
-          top: 10,
-          xs: [0, 9, 18, 27],
-        }),
-      ],
-    });
-    const frame = createJsonContentEditableSelectionFrame({
-      goalX: null,
-      renderFrame,
-      selection: selectionSnap(2, 2),
-    });
-
-    expect(renderFrame?.lines[0]?.boundaries[0]).toMatchObject({
-      lineId: "/text:line:0:0-3",
-      offset: 0,
-      unit: "line-start",
-    });
-    expect(frame?.focus.boundary).toMatchObject({
-      lineId: "/text:line:0:0-3",
-      offset: 2,
-    });
-
-    if (frame === null) {
-      throw new Error("Expected a selection frame.");
-    }
-    const moved = moveJsonContentEditableSelectionFrameVertically(
-      frame,
-      "down",
-      false,
-    );
-    expect(moved?.selection.focus).toMatchObject({
-      path: "/text",
-      offset: 7,
-    });
-
-    const nextFrame = createJsonContentEditableSelectionFrame({
-      goalX: moved?.goalX ?? null,
-      renderFrame,
-      selection: moved?.selection ?? null,
-    });
-    if (nextFrame === null) {
-      throw new Error("Expected a moved selection frame.");
-    }
-    expect(
-      moveJsonContentEditableSelectionFrameToLineBoundary(
-        nextFrame,
-        "line-start",
-        false,
-      )?.selection.focus,
-    ).toMatchObject({
-      path: "/text",
-      offset: 5,
     });
   });
 
@@ -664,14 +455,14 @@ describe("contenteditable-web json-document bridge", () => {
     const clipboard = createClipboardEvent("copy");
     const copied = core.copy(clipboard);
     const payload = JSON.parse(
-      clipboard.clipboardData?.getData(JSON_CONTENT_EDITABLE_MIME) ?? "{}",
+      clipboard.clipboardData?.getData(RICH_FRAGMENT_MIME) ?? "{}",
     );
 
     expect(copied.ok).toBe(true);
     expect(clipboard.clipboardData?.getData("text/plain")).toBe("- [ ] Task text");
     expect(payload).toMatchObject({
-      schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
-      text: `${JSON_ATOM_REPLACEMENT}Task text`,
+      schema: RICH_FRAGMENT_SCHEMA,
+      text: `${ATOM_REPLACEMENT}Task text`,
       atoms: {
         "task-marker": {
           type: "taskMarker",
@@ -697,7 +488,7 @@ describe("contenteditable-web json-document bridge", () => {
 
     expect(result.ok).toBe(true);
     expect(result).toMatchObject({ flow: "dom-to-model", render: false });
-    expect(document.value.text).toBe(`${JSON_ATOM_REPLACEMENT}New Task text`);
+    expect(document.value.text).toBe(`${ATOM_REPLACEMENT}New Task text`);
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
       offset: 4,
@@ -721,9 +512,9 @@ describe("contenteditable-web json-document bridge", () => {
       offset: 1,
     });
 
-    expect(core.undo().ok).toBe(true);
+    expect(core.applyHistoryUndo().ok).toBe(true);
     expect(document.value.text).toBe("Plain");
-    expect(core.redo().ok).toBe(true);
+    expect(core.applyHistoryRedo().ok).toBe(true);
     expect(document.value.text).toBe("가Plain");
   });
 
@@ -786,7 +577,7 @@ describe("contenteditable-web json-document bridge", () => {
     setDOMRange(textNode, 7, textNode, 8);
     core.syncSelectionFromDOM();
 
-    const result = core.pasteText("Z");
+    const result = core.insertText("Z");
 
     expect(result.ok).toBe(true);
     expect(document.value.text).toBe("Plain xZ");
@@ -803,7 +594,7 @@ describe("contenteditable-web json-document bridge", () => {
     core.syncSelectionFromDOM();
     setDOMRange(textNode, 8, textNode, 8);
 
-    const result = core.pasteText("Z");
+    const result = core.insertText("Z");
 
     expect(result.ok).toBe(true);
     expect(document.value.text).toBe("Z xy");
@@ -820,7 +611,7 @@ describe("contenteditable-web json-document bridge", () => {
     core.syncSelectionFromDOM();
     setDOMRange(textNode, 8, textNode, 8);
 
-    const result = core.pasteText("Z");
+    const result = core.insertText("Z");
 
     expect(result.ok).toBe(true);
     expect(document.value.text).toBe("PlZain xy");
@@ -848,7 +639,7 @@ describe("contenteditable-web json-document bridge", () => {
 
   it("moves the caret after a trailing atom for command line-end", () => {
     const { document, root, textElement } = setupTrailingAtomDocument();
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -860,7 +651,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    const core = createJsonContentEditable({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -886,7 +677,7 @@ describe("contenteditable-web json-document bridge", () => {
 
   it("extends the selection through a trailing atom for command-shift line-end", () => {
     const { document, root, textElement } = setupTrailingAtomDocument();
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -898,7 +689,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    const core = createJsonContentEditable({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -928,7 +719,7 @@ describe("contenteditable-web json-document bridge", () => {
   });
 
   it("moves command arrows to measured visual line boundaries", () => {
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -957,7 +748,7 @@ describe("contenteditable-web json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("One\nTwo\nThree");
-    const core = createJsonContentEditable({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -997,7 +788,7 @@ describe("contenteditable-web json-document bridge", () => {
   });
 
   it("maps home and end keys to measured visual line boundaries", () => {
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -1026,7 +817,7 @@ describe("contenteditable-web json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("One\nTwo\nThree");
-    const core = createJsonContentEditable({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1060,7 +851,7 @@ describe("contenteditable-web json-document bridge", () => {
   });
 
   it("moves arrow up and down through a visual layout snapshot", () => {
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -1081,7 +872,7 @@ describe("contenteditable-web json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("abcd\nefgh");
-    const core = createJsonContentEditable({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1122,7 +913,7 @@ describe("contenteditable-web json-document bridge", () => {
   });
 
   it("keeps the original visual x while moving through shorter lines", () => {
-    const visualLayout: JsonContentEditableVisualLayout = {
+    const visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -1151,7 +942,7 @@ describe("contenteditable-web json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("abc\nde\nfgh");
-    const core = createJsonContentEditable({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1183,6 +974,73 @@ describe("contenteditable-web json-document bridge", () => {
     });
   });
 
+  it("dispatches selection intents through the rich kernel with goalX state", () => {
+    const { document, root, textNode } = setup("abcd\nef\nghij");
+    const visualLayout: VisualLayout = {
+      lines: [
+        visualLine({
+          bottom: 10,
+          endOffset: 4,
+          index: 0,
+          startOffset: 0,
+          top: 0,
+          xs: [0, 10, 20, 30, 40],
+        }),
+        visualLine({
+          bottom: 20,
+          endOffset: 7,
+          index: 1,
+          startOffset: 5,
+          top: 10,
+          xs: [0, 10, 20],
+        }),
+        visualLine({
+          bottom: 30,
+          endOffset: 12,
+          index: 2,
+          startOffset: 8,
+          top: 20,
+          xs: [0, 10, 20, 30, 40],
+        }),
+      ],
+    };
+    const core = createInternalEditableHost({
+      root,
+      document,
+      visualLayout: () => freshVisualLayout(visualLayout),
+    });
+
+    setDOMRange(textNode, 3, textNode, 3);
+    const down = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowDown",
+    });
+    expect(core.handle(down)).toMatchObject({
+      flow: "model-to-dom",
+      kind: "selection",
+      render: true,
+    });
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 7,
+    });
+
+    const secondDown = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowDown",
+    });
+    expect(core.handle(secondDown)).toMatchObject({
+      flow: "model-to-dom",
+      kind: "selection",
+    });
+    expect(document.selection?.focus).toMatchObject({
+      path: "/text",
+      offset: 11,
+    });
+  });
+
   it("blocks vertical motion without a fresh visual layout", () => {
     const { core, document, textNode } = setup("first\nsecond");
 
@@ -1199,9 +1057,10 @@ describe("contenteditable-web json-document bridge", () => {
     expect(result).toMatchObject({
       code: "visual_layout_stale",
       command: {
-        direction: "down",
-        extend: false,
-        type: "moveVertical",
+        type: "modifySelection",
+        alter: "move",
+        direction: "forward",
+        granularity: "line",
       },
       ok: false,
     });
@@ -1228,9 +1087,10 @@ describe("contenteditable-web json-document bridge", () => {
     expect(result).toMatchObject({
       code: "visual_layout_stale",
       command: {
-        boundary: "line-end",
-        extend: false,
-        type: "moveLineBoundary",
+        type: "modifySelection",
+        alter: "move",
+        direction: "forward",
+        granularity: "lineboundary",
       },
       ok: false,
     });
@@ -1242,10 +1102,10 @@ describe("contenteditable-web json-document bridge", () => {
 
   it("hands off native IME text before vertical model commands", () => {
     const { document, root, textNode } = setup("top\nbottom");
-    let visualLayout: JsonContentEditableVisualLayout = {
+    let visualLayout: VisualLayout = {
       lines: [],
     };
-    const core = createJsonContentEditable({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1277,9 +1137,10 @@ describe("contenteditable-web json-document bridge", () => {
       kind: "text",
       render: true,
       command: {
-        direction: "down",
-        extend: false,
-        type: "moveVertical",
+        type: "modifySelection",
+        alter: "move",
+        direction: "forward",
+        granularity: "line",
       },
     });
     expect(document.value.text).toBe("반top\nbottom");
@@ -1312,7 +1173,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    expect(core.runCommand(result.command)).toMatchObject({
+    expect(core.dispatchSelectionIntent(result.command)).toMatchObject({
       flow: "model-to-dom",
       kind: "selection",
     });
@@ -1387,10 +1248,10 @@ describe("contenteditable-web json-document bridge", () => {
 
   it("runs command continuations from recovered model selection after IME flush", () => {
     const { document, root, textNode } = setup("Plain\nTail");
-    let visualLayout: JsonContentEditableVisualLayout = {
+    let visualLayout: VisualLayout = {
       lines: [],
     };
-    const core = createJsonContentEditable({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1434,9 +1295,10 @@ describe("contenteditable-web json-document bridge", () => {
       kind: "text",
       render: true,
       command: {
-        direction: "down",
-        extend: false,
-        type: "moveVertical",
+        type: "modifySelection",
+        alter: "move",
+        direction: "forward",
+        granularity: "line",
       },
     });
     expect(document.value.text).toBe("안녕Plain\nTail");
@@ -1473,7 +1335,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    expect(core.runCommand(result.command)).toMatchObject({
+    expect(core.dispatchSelectionIntent(result.command)).toMatchObject({
       flow: "model-to-dom",
       kind: "selection",
     });
@@ -1485,7 +1347,7 @@ describe("contenteditable-web json-document bridge", () => {
 
   it("hands off native IME text before command-arrow movement", () => {
     const { document, root, textNode } = setup("Plain");
-    let visualLayout: JsonContentEditableVisualLayout = {
+    let visualLayout: VisualLayout = {
       lines: [
         visualLine({
           bottom: 10,
@@ -1497,7 +1359,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    const core = createJsonContentEditable({
+    const core = createInternalEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1530,9 +1392,10 @@ describe("contenteditable-web json-document bridge", () => {
       kind: "text",
       render: true,
       command: {
-        boundary: "line-end",
-        extend: false,
-        type: "moveLineBoundary",
+        type: "modifySelection",
+        alter: "move",
+        direction: "forward",
+        granularity: "lineboundary",
       },
     });
     expect(document.value.text).toBe("P반lain");
@@ -1557,7 +1420,7 @@ describe("contenteditable-web json-document bridge", () => {
         }),
       ],
     };
-    expect(core.runCommand(result.command)).toMatchObject({
+    expect(core.dispatchSelectionIntent(result.command)).toMatchObject({
       flow: "model-to-dom",
       kind: "selection",
     });
@@ -1574,14 +1437,14 @@ describe("contenteditable-web json-document bridge", () => {
     const clipboard = createClipboardEvent("copy");
     const copied = core.copy(clipboard);
     const payload = JSON.parse(
-      clipboard.clipboardData?.getData(JSON_CONTENT_EDITABLE_MIME) ?? "{}",
+      clipboard.clipboardData?.getData(RICH_FRAGMENT_MIME) ?? "{}",
     );
 
     expect(copied.ok).toBe(true);
     expect(clipboard.clipboardData?.getData("text/plain")).toBe("@Ada");
     expect(payload).toMatchObject({
-      schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
-      text: JSON_ATOM_REPLACEMENT,
+      schema: RICH_FRAGMENT_SCHEMA,
+      text: ATOM_REPLACEMENT,
       atoms: {
         ada: {
           label: "@Ada",
@@ -1604,10 +1467,10 @@ describe("contenteditable-web json-document bridge", () => {
     const clipboard = createClipboardEvent("paste");
     clipboard.clipboardData?.setData("text/plain", "@Ada");
     clipboard.clipboardData?.setData(
-      JSON_CONTENT_EDITABLE_MIME,
+      RICH_FRAGMENT_MIME,
       JSON.stringify({
-        schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
-        text: JSON_ATOM_REPLACEMENT,
+        schema: RICH_FRAGMENT_SCHEMA,
+        text: ATOM_REPLACEMENT,
         atoms: {
           ada: {
             type: "mention",
@@ -1622,7 +1485,7 @@ describe("contenteditable-web json-document bridge", () => {
     const pasted = core.paste(clipboard);
 
     expect(pasted.ok).toBe(true);
-    expect(document.value.text).toBe(`A${JSON_ATOM_REPLACEMENT}B`);
+    expect(document.value.text).toBe(`A${ATOM_REPLACEMENT}B`);
     expect(document.value.atoms.ada).toMatchObject({
       label: "@Ada",
       offset: 1,
@@ -1643,7 +1506,7 @@ describe("contenteditable-web json-document bridge", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(document.value.text).toBe(`XA${JSON_ATOM_REPLACEMENT}B`);
+    expect(document.value.text).toBe(`XA${ATOM_REPLACEMENT}B`);
     expect(document.value.atoms.ada.offset).toBe(2);
   });
 
@@ -1654,13 +1517,13 @@ describe("contenteditable-web json-document bridge", () => {
     const clipboard = createClipboardEvent("copy");
     const copied = core.copy(clipboard);
     const payload = JSON.parse(
-      clipboard.clipboardData?.getData(JSON_CONTENT_EDITABLE_MIME) ?? "{}",
+      clipboard.clipboardData?.getData(RICH_FRAGMENT_MIME) ?? "{}",
     );
 
     expect(copied.ok).toBe(true);
     expect(clipboard.clipboardData?.getData("text/plain")).toBe("Hello");
     expect(payload).toMatchObject({
-      schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
+      schema: RICH_FRAGMENT_SCHEMA,
       text: "Hello",
       ranges: {
         bold: {
@@ -1684,9 +1547,9 @@ describe("contenteditable-web json-document bridge", () => {
     const clipboard = createClipboardEvent("paste");
     clipboard.clipboardData?.setData("text/plain", "Hi");
     clipboard.clipboardData?.setData(
-      JSON_CONTENT_EDITABLE_MIME,
+      RICH_FRAGMENT_MIME,
       JSON.stringify({
-        schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
+        schema: RICH_FRAGMENT_SCHEMA,
         text: "Hi",
         ranges: {
           bold: {
@@ -1879,7 +1742,7 @@ describe("contenteditable-web json-document bridge", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(result.ok).toBe(true);
     expect(result).toMatchObject({ flow: "model-to-dom", render: true });
-    expect(document.value.text).toBe(`A${JSON_ATOM_REPLACEMENT}\n`);
+    expect(document.value.text).toBe(`A${ATOM_REPLACEMENT}\n`);
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
       offset: 3,
@@ -1905,7 +1768,7 @@ describe("contenteditable-web json-document bridge", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(result.ok).toBe(true);
     expect(result).toMatchObject({ flow: "model-to-dom", render: true });
-    expect(document.value.text).toBe(`A${JSON_ATOM_REPLACEMENT}\n`);
+    expect(document.value.text).toBe(`A${ATOM_REPLACEMENT}\n`);
     expect(document.selection?.focus).toMatchObject({
       path: "/text",
       offset: 3,
@@ -1965,8 +1828,8 @@ describe("contenteditable-web json-document bridge", () => {
 
     const pasteEvent = createClipboardEvent("paste");
     pasteEvent.clipboardData?.setData(
-      JSON_CONTENT_EDITABLE_MIME,
-      copyEvent.clipboardData?.getData(JSON_CONTENT_EDITABLE_MIME) ?? "",
+      RICH_FRAGMENT_MIME,
+      copyEvent.clipboardData?.getData(RICH_FRAGMENT_MIME) ?? "",
     );
     pasteEvent.clipboardData?.setData("text/plain", "Plain");
     setDOMRange(textNode, 5, textNode, 5);

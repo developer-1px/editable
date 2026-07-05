@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as RichDocumentPublic from "./index";
 import {
+  ATOM_REPLACEMENT,
   canonicalEditableAtomAttributes,
   canonicalEditableBlockAttributes,
   applyRichProjectionTextChange,
@@ -16,6 +17,7 @@ import {
   EDITABLE_HEADING_LEVEL_ATTRIBUTE,
   EDITABLE_TEXT_ATTRIBUTE,
   insertRichAtom,
+  isRichTextFragment,
   mergeAdjacentRichBlocks,
   moveRichVirtualSelection,
   replaceRichTextRange,
@@ -30,7 +32,6 @@ import {
   richTextFragmentFromRange,
   richTextSurfaceForBlock,
   richVirtualSelectionRange,
-  RICH_TEXT_ATOM_REPLACEMENT,
   splitRichBlock,
   toggleRichBlockStyleForSelection,
   toggleRichInlineRange,
@@ -46,7 +47,7 @@ function richFixture() {
           id: "b1",
           type: "heading",
           level: 1,
-          text: `Hello ${RICH_TEXT_ATOM_REPLACEMENT} world`,
+          text: `Hello ${ATOM_REPLACEMENT} world`,
         }),
         atoms: {
           tag: {
@@ -88,6 +89,7 @@ function selection(start: number, end: number) {
 describe("rich-document core model", () => {
   it("locks the runtime public API surface", () => {
     expect(Object.keys(RichDocumentPublic).sort()).toEqual([
+      "ATOM_REPLACEMENT",
       "EDITABLE_ATOM_ATTRIBUTE",
       "EDITABLE_ATOM_TYPE_ATTRIBUTE",
       "EDITABLE_BLOCK_ATTRIBUTE",
@@ -97,11 +99,8 @@ describe("rich-document core model", () => {
       "EDITABLE_MARK_ATTRIBUTE",
       "EDITABLE_TEXT_ATTRIBUTE",
       "RICH_DOCUMENT_SCHEMA",
-      "RICH_TEXT_ATOM_REPLACEMENT",
-      "RichBlockSchema",
-      "RichDocumentSchema",
-      "RichInlineAtomSchema",
-      "RichInlineRangeSchema",
+      "RICH_FRAGMENT_MIME",
+      "RICH_FRAGMENT_SCHEMA",
       "applyRichProjectionTextChange",
       "canonicalEditableAtomAttributes",
       "canonicalEditableBlockAttributes",
@@ -114,6 +113,7 @@ describe("rich-document core model", () => {
       "createRichVisualLineSeeds",
       "edit",
       "insertRichAtom",
+      "isRichTextFragment",
       "mergeAdjacentRichBlocks",
       "moveRichVirtualSelection",
       "recoverRichVirtualSelection",
@@ -185,7 +185,7 @@ describe("rich-document core model", () => {
     });
     const block = projection.blocks[0];
 
-    expect(block?.text).toBe(`# **Hello** ${RICH_TEXT_ATOM_REPLACEMENT} world`);
+    expect(block?.text).toBe(`# **Hello** ${ATOM_REPLACEMENT} world`);
     expect(block?.spans).toMatchObject([
       { kind: "syntax", marker: "# ", role: "blockPrefix" },
       { kind: "syntax", marker: "**", role: "rangeOpen" },
@@ -207,7 +207,7 @@ describe("rich-document core model", () => {
       blocks: [
         createRichBlock({
           id: "b1",
-          text: `A\n\n${RICH_TEXT_ATOM_REPLACEMENT}`,
+          text: `A\n\n${ATOM_REPLACEMENT}`,
         }),
       ],
     });
@@ -244,7 +244,7 @@ describe("rich-document core model", () => {
         {
           ...createRichBlock({
             id: "b1",
-            text: `안녕\n${RICH_TEXT_ATOM_REPLACEMENT}Ada`,
+            text: `안녕\n${ATOM_REPLACEMENT}Ada`,
           }),
           atoms: {
             tag: {
@@ -619,9 +619,10 @@ describe("rich-document core model", () => {
   it("extracts a local text fragment with atom and range offsets rebased", () => {
     const fragment = richTextFragmentFromRange(richFixture(), "b1", 6, 13);
 
+    expect(isRichTextFragment(fragment)).toBe(true);
     expect(fragment).toEqual({
-      schema: "interactive-os.rich-document@1",
-      text: `${RICH_TEXT_ATOM_REPLACEMENT} world`,
+      schema: "interactive-os.rich-document/fragment@1",
+      text: `${ATOM_REPLACEMENT} world`,
       atoms: {
         tag: {
           type: "tag",
@@ -642,8 +643,8 @@ describe("rich-document core model", () => {
 
   it("replaces text while rebasing atoms, ranges, and selectionAfter", () => {
     const result = replaceRichTextRange(richFixture(), "b1", 6, 7, {
-      schema: "interactive-os.rich-document@1",
-      text: RICH_TEXT_ATOM_REPLACEMENT,
+      schema: "interactive-os.rich-document/fragment@1",
+      text: ATOM_REPLACEMENT,
       atoms: {
         tag: {
           type: "tag",
@@ -655,7 +656,7 @@ describe("rich-document core model", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.blocks[0]?.text).toBe(`Hello ${RICH_TEXT_ATOM_REPLACEMENT} world`);
+    expect(result.value.blocks[0]?.text).toBe(`Hello ${ATOM_REPLACEMENT} world`);
     expect(result.value.blocks[0]?.atoms).toEqual({
       tag: {
         type: "tag",
@@ -681,7 +682,7 @@ describe("rich-document core model", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.blocks[0]?.text).toBe(`Hello${RICH_TEXT_ATOM_REPLACEMENT}`);
+    expect(result.value.blocks[0]?.text).toBe(`Hello${ATOM_REPLACEMENT}`);
     expect(result.value.blocks[0]?.atoms["mention-ada"]).toEqual({
       type: "mention",
       label: "@Ada",
@@ -762,7 +763,7 @@ describe("rich-document core model", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.blocks.map((block) => block.id)).toEqual(["b1", "b2"]);
-    expect(result.value.blocks[0]?.text).toBe(`Hello ${RICH_TEXT_ATOM_REPLACEMENT}`);
+    expect(result.value.blocks[0]?.text).toBe(`Hello ${ATOM_REPLACEMENT}`);
     expect(result.value.blocks[0]?.atoms.tag?.offset).toBe(6);
     expect(result.value.blocks[1]?.text).toBe(" world");
     expect(result.value.blocks[1]?.ranges.link).toMatchObject({
@@ -782,7 +783,7 @@ describe("rich-document core model", () => {
     if (!merged.ok) return;
     expect(merged.value.blocks).toHaveLength(1);
     expect(merged.value.blocks[0]?.id).toBe("b1");
-    expect(merged.value.blocks[0]?.text).toBe(`Hello ${RICH_TEXT_ATOM_REPLACEMENT} world`);
+    expect(merged.value.blocks[0]?.text).toBe(`Hello ${ATOM_REPLACEMENT} world`);
     expect(merged.value.blocks[0]?.atoms.tag?.offset).toBe(6);
     expect(merged.value.blocks[0]?.ranges.link).toMatchObject({
       start: 8,

@@ -18,8 +18,10 @@ import {
   type RichCursorFrame,
   type RichCursorMoveCommand,
   type RichCursorPoint,
+  type RichBlock,
   type RichDocument,
   type RichDocumentPlan,
+  type RichInlineRange,
   type RichTextFragment,
   type RichVirtualSelection,
   type RichVirtualSelectionRange,
@@ -53,19 +55,23 @@ export type EditGranularity =
 
 export type EditIntent =
   | { type: "insertText"; text: string }
+  | { type: "insertReplacementText"; text: string }
   | { type: "insertLineBreak" }
   | { type: "insertParagraph" }
   | { type: "insertFromPaste"; data: string | RichTextFragment }
+  | { type: "insertFromDrop"; data: string | RichTextFragment }
   | { type: "deleteContentBackward" }
   | { type: "deleteContentForward" }
   | { type: "deleteWordBackward" }
   | { type: "deleteWordForward" }
   | { type: "deleteSoftLineBackward" }
   | { type: "deleteSoftLineForward" }
+  | { type: "deleteByCut" }
   | { type: "formatBold" }
   | { type: "formatItalic" }
   | { type: "formatUnderline" }
   | { type: "formatStrikeThrough" }
+  | { type: "formatRemove" }
   | { type: "historyUndo" }
   | { type: "historyRedo" }
   | {
@@ -123,10 +129,12 @@ export function edit(
     case "setBaseAndExtent":
       return setBaseAndExtent(state, intent, env);
     case "insertText":
+    case "insertReplacementText":
       return insertContent(state, intent.text, env);
     case "insertLineBreak":
       return insertContent(state, "\n", env);
     case "insertFromPaste":
+    case "insertFromDrop":
       return insertContent(state, intent.data, env);
     case "insertParagraph":
       return insertParagraph(state, env);
@@ -142,6 +150,8 @@ export function edit(
       return deleteByGranularity(state, "lineboundary", "backward", env);
     case "deleteSoftLineForward":
       return deleteByGranularity(state, "lineboundary", "forward", env);
+    case "deleteByCut":
+      return deleteSelection(state, env);
     case "formatBold":
       return format(state, "bold");
     case "formatItalic":
@@ -150,6 +160,8 @@ export function edit(
       return format(state, "underline");
     case "formatStrikeThrough":
       return format(state, "strike");
+    case "formatRemove":
+      return formatRemove(state, env);
     default:
       return {
         ok: false,
@@ -321,6 +333,30 @@ function deleteByGranularity(
   };
 }
 
+function deleteSelection(state: EditState, env: EditEnvironment): EditResult {
+  const frame = frameFor(state, env);
+  const selection = virtualSelectionFromState(frame, state);
+  if (selection === null) {
+    return noSelection();
+  }
+  const range = richVirtualSelectionRange(frame, selection);
+  if (range.collapsed) {
+    return emptySelection("deleteByCut requires a non-collapsed selection.");
+  }
+  const deleted = deleteVirtualRange(state.document, frame, range);
+  if (!deleted.ok) {
+    return deleted;
+  }
+  return {
+    ok: true,
+    kind: "text",
+    value: deleted.value,
+    patch: deleted.patch,
+    selectionAfter: deleted.selectionAfter,
+    goalX: null,
+  };
+}
+
 function format(
   state: EditState,
   type: "bold" | "italic" | "strike" | "underline",
@@ -339,6 +375,104 @@ function format(
     selectionAfter: plan.selectionAfter,
     goalX: state.goalX ?? null,
   };
+}
+
+function formatRemove(state: EditState, env: EditEnvironment): EditResult {
+  const frame = frameFor(state, env);
+  const selection = virtualSelectionFromState(frame, state);
+  if (selection === null) {
+    return noSelection();
+  }
+  const range = richVirtualSelectionRange(frame, selection);
+  if (range.collapsed) {
+    return emptySelection("formatRemove requires a non-collapsed selection.");
+  }
+  const startBlock = blockFrameForPath(frame, range.start.path);
+  const endBlock = blockFrameForPath(frame, range.end.path);
+  if (startBlock === null) {
+    return blockNotFound(range.start.path);
+  }
+  if (endBlock === null) {
+    return blockNotFound(range.end.path);
+  }
+
+  let changed = false;
+  const nextBlocks = state.document.blocks.map((block, blockIndex) => {
+    if (
+      blockIndex < startBlock.blockIndex ||
+      blockIndex > endBlock.blockIndex
+    ) {
+      return block;
+    }
+    const start =
+      blockIndex === startBlock.blockIndex ? range.start.offset : 0;
+    const end =
+      blockIndex === endBlock.blockIndex ? range.end.offset : block.text.length;
+    if (start >= end) {
+      return block;
+    }
+    const nextRanges = removeRangesInSpan(block.ranges, start, end);
+    if (nextRanges === block.ranges) {
+      return block;
+    }
+    changed = true;
+    return { ...block, ranges: nextRanges };
+  });
+
+  if (!changed) {
+    return noChange({ ...state, goalX: null });
+  }
+  return {
+    ok: true,
+    kind: "text",
+    value: { ...state.document, blocks: nextBlocks },
+    patch: [{ op: "replace", path: "/blocks", value: nextBlocks }],
+    selectionAfter: state.selection,
+    goalX: null,
+  };
+}
+
+function removeRangesInSpan(
+  ranges: RichBlock["ranges"],
+  start: number,
+  end: number,
+): RichBlock["ranges"] {
+  let changed = false;
+  const nextRanges: Record<string, RichInlineRange> = {};
+  for (const [id, range] of Object.entries(ranges)) {
+    if (range.end <= start || range.start >= end) {
+      nextRanges[id] = range;
+      continue;
+    }
+    changed = true;
+    if (range.start < start) {
+      nextRanges[uniqueRangeId(`${id}-left`, nextRanges)] = {
+        ...range,
+        end: start,
+      };
+    }
+    if (range.end > end) {
+      nextRanges[uniqueRangeId(`${id}-right`, nextRanges)] = {
+        ...range,
+        start: end,
+      };
+    }
+  }
+  return changed ? nextRanges : ranges;
+}
+
+function uniqueRangeId(
+  id: string,
+  ranges: Record<string, RichInlineRange>,
+): string {
+  if (ranges[id] === undefined) {
+    return id;
+  }
+  let suffix = 2;
+  while (ranges[`${id}-${suffix}`] !== undefined) {
+    suffix += 1;
+  }
+  return `${id}-${suffix}`;
 }
 
 type DeleteRangeResult =
@@ -597,6 +731,14 @@ function noSelection(): EditResult {
     ok: false,
     code: "no_selection",
     reason: "Edit intents require a selection.",
+  };
+}
+
+function emptySelection(reason: string): EditResult {
+  return {
+    ok: false,
+    code: "empty_selection",
+    reason,
   };
 }
 

@@ -1,4 +1,3 @@
-import { createFileRoute } from "@tanstack/react-router";
 import {
   AtSign,
   Bold,
@@ -24,24 +23,23 @@ import {
   useState,
 } from "react";
 import {
-  createJsonContentEditable,
-  createJsonContentEditableVisualLayoutStore,
-  isJsonContentEditableFragment,
-  type JsonContentEditable,
-  type JsonContentEditableModelCommand,
-  type JsonContentEditableUpdate,
-  measureJsonContentEditableVisualLayout,
-} from "../../packages/contenteditable-web";
-import {
+  createRichCursorFrame,
   createRichVisualLineSeeds,
+  isRichTextFragment,
   type RichProjection,
-} from "../../packages/rich-document";
+} from "../../packages/editable";
 import {
-  type ContentEditableDemoDocument,
-  contentEditableDemoAtomsPathForTextPath,
+  createEditableHost,
+  createVisualLayoutStore,
+  type EditableHost,
+  type EditableSelectionIntent,
+  type EditableUpdate,
+  measureVisualLayout,
+  richVisualLineSeedsFromMeasuredLayout,
+} from "../../packages/editable/dom";
+import {
   contentEditableDemoHeadingActive,
   contentEditableDemoMarkActive,
-  contentEditableDemoRangesPathForTextPath,
   contentEditableDemoTextProjection,
   createContentEditableDemoDocument,
   createContentEditableDemoProjection,
@@ -53,26 +51,29 @@ import {
   toggleContentEditableDemoHeading,
   toggleContentEditableDemoMark,
   toggleContentEditableDemoTaskMarker,
-} from "../contenteditable-demo/document";
+} from "./document";
 
-export const Route = createFileRoute("/demo")({
-  component: ContentEditableDemo,
-});
-
-function ContentEditableDemo() {
+export function ContentEditableDemo() {
   const document = useMemo(() => createContentEditableDemoDocument(), []);
-  const visualLayoutStore = useMemo(
-    () => createJsonContentEditableVisualLayoutStore(),
-    [],
-  );
+  const visualLayoutStore = useMemo(() => createVisualLayoutStore(), []);
+  const keyDebugEnabled = useMemo(isKeyDebugEnabled, []);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const coreRef =
-    useRef<JsonContentEditable<ContentEditableDemoDocument> | null>(null);
+  const coreRef = useRef<EditableHost | null>(null);
   const projectionRef = useRef<RichProjection | null>(null);
   const composingRef = useRef(false);
   const visualMeasureFrameRef = useRef<number | null>(null);
   const [, refreshState] = useState(0);
   const [isReady, setIsReady] = useState(false);
+  const [keyDebugLog, setKeyDebugLog] = useState<
+    Array<{
+      at: number;
+      defaultPrevented: boolean;
+      key: string;
+      metaKey: boolean;
+      selection: unknown;
+      shiftKey: boolean;
+    }>
+  >([]);
 
   const renderEditorContent = useCallback(() => {
     const root = rootRef.current;
@@ -88,7 +89,7 @@ function ContentEditableDemo() {
     projectionRef.current = projection;
     renderContentEditableDemoContent(root, document.value, projection);
     visualLayoutStore.write(
-      measureJsonContentEditableVisualLayout({
+      measureVisualLayout({
         lineSeeds: createRichVisualLineSeeds(document.value),
         root,
         projection: (path) =>
@@ -114,7 +115,7 @@ function ContentEditableDemo() {
       return;
     }
     visualLayoutStore.write(
-      measureJsonContentEditableVisualLayout({
+      measureVisualLayout({
         lineSeeds: createRichVisualLineSeeds(document.value),
         root,
         projection: (path) =>
@@ -139,13 +140,13 @@ function ContentEditableDemo() {
   );
 
   const replayCommandAfterVisualRefresh = useCallback(
-    (command: JsonContentEditableModelCommand) => {
+    (command: EditableSelectionIntent) => {
       const core = coreRef.current;
       if (core === null) {
         return;
       }
       refresh({ renderText: true });
-      const commandResult = core.runCommand(command);
+      const commandResult = core.dispatch(command);
       if (shouldRefreshDemo(commandResult)) {
         refresh({
           renderText: "render" in commandResult ? commandResult.render : false,
@@ -169,13 +170,11 @@ function ContentEditableDemo() {
     if (root === null) {
       return;
     }
-    coreRef.current = createJsonContentEditable({
+    coreRef.current = createEditableHost({
       root,
       document,
-      atomsPath: contentEditableDemoAtomsPathForTextPath,
       projection: (path) =>
         contentEditableDemoTextProjection(projectionRef.current, path),
-      rangesPath: contentEditableDemoRangesPathForTextPath,
       visualLayout: visualLayoutStore.read,
     });
     renderEditorContent();
@@ -270,8 +269,25 @@ function ContentEditableDemo() {
     [run],
   );
   const handleKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLDivElement>) => run(event.nativeEvent),
-    [run],
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      run(event.nativeEvent);
+      if (!keyDebugEnabled) {
+        return;
+      }
+      const nativeEvent = event.nativeEvent;
+      setKeyDebugLog((entries) => [
+        ...entries.slice(-39),
+        {
+          at: Math.round(performance.now()),
+          defaultPrevented: nativeEvent.defaultPrevented,
+          key: nativeEvent.key,
+          metaKey: nativeEvent.metaKey,
+          selection: document.selection?.snapshot() ?? null,
+          shiftKey: nativeEvent.shiftKey,
+        },
+      ]);
+    },
+    [document, keyDebugEnabled, run],
   );
   const handleCompositionStart = useCallback(
     (event: ReactCompositionEvent<HTMLDivElement>) => {
@@ -307,18 +323,18 @@ function ContentEditableDemo() {
         return;
       }
       const atom = target.closest(
-        "[data-json-atom][data-editable-atom-type='taskMarker']",
+        "[data-editable-atom][data-editable-atom-type='taskMarker']",
       );
       if (!(atom instanceof HTMLElement) || !root.contains(atom)) {
         return;
       }
-      const atomId = atom.getAttribute("data-json-atom");
+      const atomId = atom.getAttribute("data-editable-atom");
       if (atomId === null) {
         return;
       }
 
       event.preventDefault();
-      coreRef.current?.flushDOMToModel({ label: "toggle task" });
+      coreRef.current?.flush({ label: "toggle task" });
       toggleContentEditableDemoTaskMarker(
         document,
         atomId,
@@ -360,38 +376,44 @@ function ContentEditableDemo() {
       } else if (name === "cut") {
         core.cut();
       } else if (name === "mention") {
-        core.pasteFragment(createMentionFragment(), commandSelection);
+        core.dispatch(
+          { type: "insertFromPaste", data: createMentionFragment() },
+          { selection: commandSelection },
+        );
       } else if (name === "h1") {
-        core.flushDOMToModel({ label: "format heading" });
+        core.flush({ label: "format heading" });
         if (commandSelection !== null) {
           document.selection?.restore(commandSelection);
         }
         toggleContentEditableDemoHeading(document, commandSelection);
       } else if (name === "bold" || name === "underline") {
-        core.flushDOMToModel({ label: `format ${name}` });
+        core.flush({ label: `format ${name}` });
         if (commandSelection !== null) {
           document.selection?.restore(commandSelection);
         }
         toggleContentEditableDemoMark(document, name, commandSelection);
       } else if (name === "paste") {
         const internalPayload = document.clipboard.read();
-        if (
-          internalPayload.ok &&
-          isJsonContentEditableFragment(internalPayload.payload)
-        ) {
-          core.pasteFragment(internalPayload.payload, commandSelection);
+        if (internalPayload.ok && isRichTextFragment(internalPayload.payload)) {
+          core.dispatch(
+            { type: "insertFromPaste", data: internalPayload.payload },
+            { selection: commandSelection },
+          );
         } else {
           const text = await readBrowserClipboardText();
           if (text === null) {
             core.paste();
           } else {
-            core.pasteText(text, commandSelection);
+            core.dispatch(
+              { type: "insertFromPaste", data: text },
+              { selection: commandSelection },
+            );
           }
         }
       } else if (name === "undo") {
-        core.undo();
+        core.dispatch({ type: "historyUndo" });
       } else if (name === "redo") {
-        core.redo();
+        core.dispatch({ type: "historyRedo" });
       } else {
         document.reset(createContentEditableDemoValue());
         core.reset();
@@ -415,6 +437,17 @@ function ContentEditableDemo() {
     "underline",
   );
   const visualLayout = visualLayoutStore.read();
+  const cursorFrame = createRichCursorFrame(
+    document.value,
+    visualLayout.ok && visualLayout.layout !== null
+      ? {
+          lineSeeds: richVisualLineSeedsFromMeasuredLayout(
+            document.value,
+            visualLayout.layout,
+          ),
+        }
+      : undefined,
+  );
 
   return (
     <main className="contenteditable-shell">
@@ -550,10 +583,36 @@ function ContentEditableDemo() {
               redoDepth: document.history.redoDepth,
             }}
           />
+          <StateBlock
+            label="cursor frame"
+            value={{
+              blocks: cursorFrame.blocks.map((block) => ({
+                blockId: block.blockId,
+                blockIndex: block.blockIndex,
+                caretCount: block.caretOffsets.length,
+                textLength: block.textLength,
+              })),
+              caretCount: cursorFrame.carets.length,
+              lines: cursorFrame.lines.map((line) => ({
+                blockId: line.blockId,
+                caretCount: line.carets.length,
+                endOffset: line.endOffset,
+                startOffset: line.startOffset,
+              })),
+            }}
+          />
+          <StateBlock label="key debug log" value={keyDebugLog} />
         </aside>
       </section>
     </main>
   );
+}
+
+function isKeyDebugEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).has("debugKeys");
 }
 
 async function readBrowserClipboardText(): Promise<string | null> {
@@ -568,9 +627,7 @@ async function readBrowserClipboardText(): Promise<string | null> {
 }
 
 function shouldRefreshDemo(
-  result:
-    | ReturnType<JsonContentEditable<ContentEditableDemoDocument>["handle"]>
-    | undefined,
+  result: ReturnType<EditableHost["handle"]> | undefined,
 ): boolean {
   if (result === undefined || !result.ok) {
     return false;
@@ -584,7 +641,7 @@ function shouldRefreshDemo(
 function isVisualLayoutStaleCommand(
   result: unknown,
 ): result is Extract<
-  JsonContentEditableUpdate,
+  EditableUpdate,
   { ok: false; code: "visual_layout_stale" }
 > {
   return (
