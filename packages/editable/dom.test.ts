@@ -342,6 +342,10 @@ describe("editable DOM adapter json-document bridge", () => {
       ok: true,
       render: true,
     });
+    if (!pasted.ok || !("patch" in pasted)) {
+      throw new Error("Expected a patch-carrying update.");
+    }
+    expect(pasted.patch.length).toBeGreaterThan(0);
     expect(document.value.blocks[0]?.text).toBe("Plain!");
     expect(host.dispatch({ type: "historyUndo" })).toMatchObject({
       flow: "model-to-dom",
@@ -350,6 +354,179 @@ describe("editable DOM adapter json-document bridge", () => {
       render: true,
     });
     expect(document.value.blocks[0]?.text).toBe("Plain");
+  });
+
+  it("passes kernel error codes through the public dispatch", () => {
+    const value = createRichDocument({
+      id: "host",
+      blocks: [createRichBlock({ id: "b", text: "Plain" })],
+    });
+    const document = createJSONDocument(RichDocumentSchema, value, {
+      history: 20,
+      selection: true,
+      trustedInitial: true,
+    });
+    const root = window.document.createElement("div");
+    root.contentEditable = "true";
+    root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text">Plain</span>`;
+    window.document.body.append(root);
+    const host = createEditableHost({ root, document });
+    const caret = {
+      selectedPointers: [],
+      selectionRanges: [
+        {
+          anchor: { path: "/blocks/0/text", offset: 2 },
+          focus: { path: "/blocks/0/text", offset: 2 },
+        },
+      ],
+      primaryIndex: 0,
+      anchor: { path: "/blocks/0/text", offset: 2 },
+      focus: { path: "/blocks/0/text", offset: 2 },
+    };
+
+    document.selection?.restore(caret);
+    expect(host.dispatch({ type: "formatBold" })).toMatchObject({
+      ok: false,
+      code: "empty_selection",
+    });
+    expect(
+      host.dispatch({ type: "someFutureIntent" } as never),
+    ).toMatchObject({
+      ok: false,
+      code: "unsupported_intent",
+    });
+  });
+
+  it("clears the vertical goal when a kernel-path intent moves the caret", () => {
+    const value = createRichDocument({
+      id: "host",
+      blocks: [createRichBlock({ id: "b", text: "abc\nde\nfgh" })],
+    });
+    const document = createJSONDocument(RichDocumentSchema, value, {
+      history: 20,
+      selection: true,
+      trustedInitial: true,
+    });
+    const root = window.document.createElement("div");
+    root.contentEditable = "true";
+    root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text">abc\nde\nfgh</span>`;
+    window.document.body.append(root);
+    const path = "/blocks/0/text";
+    const line = (
+      index: number,
+      startOffset: number,
+      xs: number[],
+    ) => ({
+      id: `${path}:line:${index}`,
+      sourceId: `${path}:line:${index}`,
+      path,
+      startOffset,
+      endOffset: startOffset + xs.length - 1,
+      kind: "text" as const,
+      lineIndex: index,
+      top: index * 10,
+      bottom: index * 10 + 10,
+      box: { x: 0, y: index * 10, width: xs.at(-1) ?? 0, height: 10 },
+      carets: xs.map((x, column) => ({
+        path,
+        offset: startOffset + column,
+        x,
+        top: index * 10,
+        bottom: index * 10 + 10,
+      })),
+    });
+    const host = createEditableHost({
+      root,
+      document,
+      visualLayout: () => ({
+        ok: true,
+        layout: {
+          lines: [
+            line(0, 0, [0, 10, 20, 30]),
+            line(1, 4, [0, 10, 20]),
+            line(2, 7, [0, 10, 20, 30]),
+          ],
+        },
+        revision: 1,
+      }),
+    });
+    const caretAt = (offset: number) => ({
+      selectedPointers: [],
+      selectionRanges: [
+        { anchor: { path, offset }, focus: { path, offset } },
+      ],
+      primaryIndex: 0,
+      anchor: { path, offset },
+      focus: { path, offset },
+    });
+
+    document.selection?.restore(caretAt(2));
+    const down = host.dispatch({
+      type: "modifySelection",
+      alter: "move",
+      direction: "forward",
+      granularity: "line",
+    });
+    expect(down.ok).toBe(true);
+    expect(document.selection?.focus).toMatchObject({ path, offset: 6 });
+
+    const left = host.dispatch({
+      type: "modifySelection",
+      alter: "move",
+      direction: "backward",
+      granularity: "character",
+    });
+    expect(left.ok).toBe(true);
+    expect(document.selection?.focus).toMatchObject({ path, offset: 5 });
+
+    const secondDown = host.dispatch({
+      type: "modifySelection",
+      alter: "move",
+      direction: "forward",
+      granularity: "line",
+    });
+    expect(secondDown.ok).toBe(true);
+    expect(document.selection?.focus).toMatchObject({ path, offset: 8 });
+  });
+
+  it("does not write the document clipboard on insertFromDrop", () => {
+    const value = createRichDocument({
+      id: "host",
+      blocks: [createRichBlock({ id: "b", text: "Plain" })],
+    });
+    const document = createJSONDocument(RichDocumentSchema, value, {
+      history: 20,
+      selection: true,
+      trustedInitial: true,
+    });
+    const root = window.document.createElement("div");
+    root.contentEditable = "true";
+    root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text">Plain</span>`;
+    window.document.body.append(root);
+    const host = createEditableHost({ root, document });
+    const before = document.clipboard.read();
+
+    const dropped = host.dispatch(
+      { type: "insertFromDrop", data: "X" },
+      {
+        selection: {
+          selectedPointers: [],
+          selectionRanges: [
+            {
+              anchor: { path: "/blocks/0/text", offset: 0 },
+              focus: { path: "/blocks/0/text", offset: 0 },
+            },
+          ],
+          primaryIndex: 0,
+          anchor: { path: "/blocks/0/text", offset: 0 },
+          focus: { path: "/blocks/0/text", offset: 0 },
+        },
+      },
+    );
+
+    expect(dropped).toMatchObject({ ok: true, kind: "text" });
+    expect(document.value.blocks[0]?.text).toBe("XPlain");
+    expect(document.clipboard.read()).toEqual(before);
   });
 
   it("derives rich visual line seeds from measured layout", () => {

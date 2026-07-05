@@ -11,6 +11,7 @@ import {
   EDITABLE_TEXT_ATTRIBUTE,
   RICH_FRAGMENT_MIME,
   RICH_FRAGMENT_SCHEMA,
+  type EditErrorCode,
   type EditIntent,
   type RichDocument,
   type RichInlineAtom,
@@ -174,9 +175,9 @@ export type HostUpdate =
         | "missing_text_path"
         | "not_string"
         | "commit_failed"
-        | "empty_selection"
         | "clipboard_unavailable"
-        | "invalid_payload";
+        | "invalid_payload"
+        | EditErrorCode;
       reason: string;
     }
   | {
@@ -273,6 +274,8 @@ export type InternalEditableController = {
   ): InternalClipboardResult;
   applyHistoryUndo(): JSONCapabilityResult;
   applyHistoryRedo(): JSONCapabilityResult;
+  verticalGoal(): number | null;
+  setVerticalGoal(goalX: number | null): void;
   reset(): void;
 };
 
