@@ -195,6 +195,53 @@ test.describe("focus and selectionchange event-order traces", () => {
   });
 });
 
+test.describe("mark boundary composition traces", () => {
+  test("records IME composition at rich mark boundaries", async ({ page }) => {
+    const traces = await runMarkBoundaryCompositionTrace(page);
+
+    expect(traces.map((trace) => trace.name)).toEqual([
+      "bold-start-ko",
+      "bold-end-ja",
+      "italic-start-zh",
+      "code-end-ko",
+      "link-start-ja",
+      "bold-active-caret-ko",
+      "bold-boundary-range-ko",
+      "code-start-ko-space-commit",
+      "italic-end-ko-enter-after-commit",
+    ]);
+
+    for (const trace of traces) {
+      expect(trace.eventOrder).toEqual(
+        expect.arrayContaining(["compositionstart", "input", "compositionend"]),
+      );
+      expect(traceEventOrder(trace.eventOrder, "compositionstart")).toBeLessThan(
+        traceEventOrder(trace.eventOrder, "compositionend"),
+      );
+      expect(trace.documentText).toContain(trace.data.trim());
+      expect(trace.finalNativeSelection.focusInSurface).toBe(true);
+      expect(markTraceSelectionOffset(trace)).not.toBeNull();
+      expect(
+        trace.trace.some(
+          (entry) =>
+            entry.nativeSelection.focusInSurface &&
+            entry.documentText.includes(trace.data.trim()),
+        ),
+      ).toBe(true);
+    }
+
+    const rangeTrace = traces.find(
+      (trace) => trace.name === "bold-boundary-range-ko",
+    );
+    expect(rangeTrace?.trace[0]?.nativeSelection.isCollapsed).toBe(false);
+
+    const enterTrace = traces.find(
+      (trace) => trace.name === "italic-end-ko-enter-after-commit",
+    );
+    expect(enterTrace?.documentText).toContain("끝\n");
+  });
+});
+
 test("contenteditable demo exposes model surfaces and canonical DOM anchors", async ({
   page,
 }) => {
@@ -1440,6 +1487,35 @@ type FocusSelectionTraceEntry = {
   time: number;
 };
 
+type MarkBoundaryCompositionTrace = {
+  boundary: "end" | "inside" | "range" | "start";
+  data: string;
+  documentText: string;
+  eventOrder: string[];
+  finalCanonicalSelection: unknown;
+  finalNativeSelection: {
+    anchorInSurface: boolean;
+    focusInSurface: boolean;
+    isCollapsed: boolean;
+    text: string;
+  };
+  mark: "bold" | "code" | "italic" | "link";
+  name: string;
+  trace: Array<{
+    canonicalSelection: unknown;
+    documentText: string;
+    eventType: string;
+    nativeSelection: {
+      anchorInSurface: boolean;
+      focusInSurface: boolean;
+      isCollapsed: boolean;
+      text: string;
+    };
+    phase: string;
+    target: string | null;
+  }>;
+};
+
 async function runCrossRootFixture(
   page: Page,
   rootKind: CrossRootKind,
@@ -1483,6 +1559,48 @@ function expectCrossRootTrace(
   expect(trace.geometry.lineCount).toBeGreaterThan(0);
   expect(trace.geometry.overlayOwnerDocumentMatched).toBe(true);
   expect(trace.geometry.rootOwnerDocumentMatched).toBe(true);
+}
+
+async function runMarkBoundaryCompositionTrace(
+  page: Page,
+): Promise<MarkBoundaryCompositionTrace[]> {
+  return page.evaluate(async () => {
+    const fixturePath =
+      "/tests/browser/fixtures/markBoundaryCompositionTrace.ts";
+    const fixture = await import(/* @vite-ignore */ fixturePath);
+    return fixture.runMarkBoundaryCompositionTrace();
+  });
+}
+
+function traceEventOrder(
+  eventOrder: ReadonlyArray<string>,
+  eventType: string,
+) {
+  const index = eventOrder.indexOf(eventType);
+  if (index < 0) {
+    throw new Error(`Missing event in mark boundary trace: ${eventType}`);
+  }
+  return index;
+}
+
+function markTraceSelectionOffset(
+  trace: MarkBoundaryCompositionTrace,
+): number | null {
+  const selection = trace.finalCanonicalSelection;
+  if (
+    typeof selection !== "object" ||
+    selection === null ||
+    !("focus" in selection)
+  ) {
+    return null;
+  }
+  const focus = selection.focus;
+  return typeof focus === "object" &&
+    focus !== null &&
+    "offset" in focus &&
+    typeof focus.offset === "number"
+    ? focus.offset
+    : null;
 }
 
 async function installFocusSelectionTrace(page: Page) {
