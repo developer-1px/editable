@@ -3,10 +3,11 @@ import type {
   Pointer,
   SelectionSnap,
 } from "@interactive-os/json-document";
-import { z } from "zod";
 
 export const RICH_DOCUMENT_SCHEMA = "interactive-os.rich-document@1";
-export const RICH_TEXT_ATOM_REPLACEMENT = "\uFFFC";
+export const RICH_FRAGMENT_SCHEMA = "interactive-os.rich-document/fragment@1";
+export const RICH_FRAGMENT_MIME = "application/x-rich-document-fragment";
+export const ATOM_REPLACEMENT = "\uFFFC";
 
 export const EDITABLE_DOCUMENT_ATTRIBUTE = "data-editable-document";
 export const EDITABLE_BLOCK_ATTRIBUTE = "data-editable-block";
@@ -14,8 +15,8 @@ export const EDITABLE_BLOCK_TYPE_ATTRIBUTE = "data-editable-block-type";
 export const EDITABLE_HEADING_LEVEL_ATTRIBUTE = "data-editable-heading-level";
 export const EDITABLE_ATOM_TYPE_ATTRIBUTE = "data-editable-atom-type";
 export const EDITABLE_MARK_ATTRIBUTE = "data-editable-mark";
-export const EDITABLE_TEXT_ATTRIBUTE = "data-json-text";
-export const EDITABLE_ATOM_ATTRIBUTE = "data-json-atom";
+export const EDITABLE_TEXT_ATTRIBUTE = "data-editable-text";
+export const EDITABLE_ATOM_ATTRIBUTE = "data-editable-atom";
 
 export type JSONPrimitive = string | number | boolean | null;
 export type JSONValue =
@@ -141,16 +142,26 @@ export type RichDocument = {
 };
 
 export type RichTextFragment = {
-  schema: typeof RICH_DOCUMENT_SCHEMA;
+  schema: typeof RICH_FRAGMENT_SCHEMA;
   text: string;
   atoms?: Record<string, RichInlineAtom>;
   ranges?: Record<string, RichInlineRange>;
 };
 
 export type RichBlockFragment = {
-  schema: typeof RICH_DOCUMENT_SCHEMA;
+  schema: typeof RICH_FRAGMENT_SCHEMA;
   blocks: RichBlock[];
 };
+
+export function isRichTextFragment(value: unknown): value is RichTextFragment {
+  return (
+    isPlainRecord(value) &&
+    value.schema === RICH_FRAGMENT_SCHEMA &&
+    typeof value.text === "string" &&
+    (value.atoms === undefined || isPlainRecord(value.atoms)) &&
+    (value.ranges === undefined || isPlainRecord(value.ranges))
+  );
+}
 
 export type RichBlockStyle =
   | { type: "paragraph" }
@@ -238,6 +249,11 @@ export type RichProjectionSpan =
 
 export type RichVisualLineKind = "text" | "empty" | "atom-only";
 
+export type RichVisualCaretMetric = {
+  offset: number;
+  x: number;
+};
+
 export type RichVisualLineSeed = {
   id: string;
   blockId: string;
@@ -247,6 +263,7 @@ export type RichVisualLineSeed = {
   endOffset: number;
   kind: RichVisualLineKind;
   lineIndex: number;
+  caretMetrics?: ReadonlyArray<RichVisualCaretMetric>;
 };
 
 export type RichCursorAffinity = "before" | "after";
@@ -264,12 +281,23 @@ export type RichCursorMoveCommand = {
   extend?: boolean;
 };
 
+export type RichCursorVisualAffinityEdge = "start" | "end" | "inside";
+
+export type RichCursorVisualAffinity = {
+  lineId: string;
+  lineIndex: number;
+  lineOrder: number;
+  edge: RichCursorVisualAffinityEdge;
+  column: number;
+};
+
 export type RichCursorPoint = {
   blockId: string;
   path: Pointer;
   offset: number;
   affinity: RichCursorAffinity;
   order: number;
+  visualAffinity: RichCursorVisualAffinity | null;
 };
 
 export type RichVirtualSelection = {
@@ -334,6 +362,10 @@ export type RichCursorFrame = {
   carets: RichCursorCaret[];
 };
 
+export type RichCursorFrameOptions = {
+  lineSeeds?: ReadonlyArray<RichVisualLineSeed>;
+};
+
 export type RichProjectionTextChange =
   | {
       ok: true;
@@ -361,89 +393,6 @@ export type RichBlockInput =
   | { type: "quote"; id: string; text?: string }
   | { type: "code"; id: string; language?: string; text?: string }
   | { type: "extension"; id: string; kind: string; data?: JSONRecord; text?: string };
-
-const JSONValueSchema: z.ZodType<JSONValue> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(JSONValueSchema),
-    z.record(z.string(), JSONValueSchema),
-  ]),
-);
-
-export const RichInlineAtomSchema = z
-  .object({
-    type: z.string(),
-    offset: z.number().int().nonnegative(),
-    label: z.string().optional(),
-    text: z.string().optional(),
-    target: z.string().optional(),
-    href: z.string().optional(),
-    data: z.record(z.string(), JSONValueSchema).optional(),
-  })
-  .catchall(JSONValueSchema.optional());
-
-export const RichInlineRangeSchema = z
-  .object({
-    type: z.string(),
-    start: z.number().int().nonnegative(),
-    end: z.number().int().nonnegative(),
-    href: z.string().optional(),
-    data: z.record(z.string(), JSONValueSchema).optional(),
-  })
-  .catchall(JSONValueSchema.optional());
-
-const RichTextBlockBaseSchema = z.object({
-  id: z.string().min(1),
-  text: z.string(),
-  atoms: z.record(z.string(), RichInlineAtomSchema),
-  ranges: z.record(z.string(), RichInlineRangeSchema),
-  metadata: z.record(z.string(), JSONValueSchema).optional(),
-});
-
-export const RichBlockSchema = z.discriminatedUnion("type", [
-  RichTextBlockBaseSchema.extend({ type: z.literal("paragraph") }),
-  RichTextBlockBaseSchema.extend({
-    type: z.literal("heading"),
-    level: z.union([
-      z.literal(1),
-      z.literal(2),
-      z.literal(3),
-      z.literal(4),
-      z.literal(5),
-      z.literal(6),
-    ]),
-  }),
-  RichTextBlockBaseSchema.extend({
-    type: z.literal("listItem"),
-    listKind: z.union([
-      z.literal("bullet"),
-      z.literal("ordered"),
-      z.literal("task"),
-    ]),
-    indent: z.number().int().nonnegative(),
-    checked: z.boolean().optional(),
-  }),
-  RichTextBlockBaseSchema.extend({ type: z.literal("quote") }),
-  RichTextBlockBaseSchema.extend({
-    type: z.literal("code"),
-    language: z.string().optional(),
-  }),
-  RichTextBlockBaseSchema.extend({
-    type: z.literal("extension"),
-    kind: z.string().min(1),
-    data: z.record(z.string(), JSONValueSchema).optional(),
-  }),
-]);
-
-export const RichDocumentSchema = z.object({
-  schema: z.literal(RICH_DOCUMENT_SCHEMA),
-  id: z.string().min(1),
-  blocks: z.array(RichBlockSchema),
-  metadata: z.record(z.string(), JSONValueSchema).optional(),
-});
 
 export function createRichDocument({
   blocks = [],
@@ -687,15 +636,29 @@ function richVisualLineKind(text: string): RichVisualLineKind {
   if (text.length === 0) {
     return "empty";
   }
-  return Array.from(text).every((character) => character === RICH_TEXT_ATOM_REPLACEMENT)
+  return Array.from(text).every((character) => character === ATOM_REPLACEMENT)
     ? "atom-only"
     : "text";
 }
 
-export function createRichCursorFrame(document: RichDocument): RichCursorFrame {
+export function createRichCursorFrame(
+  document: RichDocument,
+  options: RichCursorFrameOptions = {},
+): RichCursorFrame {
   const blocks: RichCursorBlockFrame[] = [];
   const lines: RichCursorLineFrame[] = [];
   const carets: RichCursorCaret[] = [];
+  const lineSeeds = options.lineSeeds ?? createRichVisualLineSeeds(document);
+  const lineSeedsByBlock = new Map<string, RichVisualLineSeed[]>();
+  for (const seed of lineSeeds) {
+    const key = `${seed.blockId}:${seed.path}`;
+    const current = lineSeedsByBlock.get(key);
+    if (current === undefined) {
+      lineSeedsByBlock.set(key, [seed]);
+    } else {
+      current.push(seed);
+    }
+  }
   let lineOrder = 0;
 
   document.blocks.forEach((block, blockIndex) => {
@@ -716,41 +679,36 @@ export function createRichCursorFrame(document: RichDocument): RichCursorFrame {
       words,
     });
 
-    let lineIndex = 0;
-    let startOffset = 0;
-    for (let offset = 0; offset < block.text.length; offset += 1) {
-      if (block.text[offset] !== "\n") {
-        continue;
-      }
+    const blockLineSeeds =
+      lineSeedsByBlock.get(`${block.id}:${path}`) ??
+      createRichVisualLineSeeds(createRichDocument({ id: document.id, blocks: [block] }))
+        .map((seed) => ({
+          ...seed,
+          blockIndex,
+          path,
+        }));
+    const sortedLineSeeds = [...blockLineSeeds].sort(
+      (left, right) =>
+        left.lineIndex - right.lineIndex ||
+        left.startOffset - right.startOffset ||
+        left.endOffset - right.endOffset,
+    );
+    sortedLineSeeds.forEach((seed, fallbackLineIndex) => {
       appendRichCursorLine({
         block,
         blockIndex,
         path,
-        lineIndex,
+        caretMetrics: seed.caretMetrics,
+        lineIndex: seed.lineIndex ?? fallbackLineIndex,
         lineOrder,
-        startOffset,
-        endOffset: offset,
+        startOffset: Math.max(0, Math.min(seed.startOffset, block.text.length)),
+        endOffset: Math.max(0, Math.min(seed.endOffset, block.text.length)),
         caretOffsets,
         carets,
         lines,
       });
-      lineIndex += 1;
       lineOrder += 1;
-      startOffset = offset + 1;
-    }
-    appendRichCursorLine({
-      block,
-      blockIndex,
-      path,
-      lineIndex,
-      lineOrder,
-      startOffset,
-      endOffset: block.text.length,
-      caretOffsets,
-      carets,
-      lines,
     });
-    lineOrder += 1;
   });
 
   return {
@@ -1146,7 +1104,7 @@ export function richTextFragmentFromRange(
   }
 
   const fragment: RichTextFragment = {
-    schema: RICH_DOCUMENT_SCHEMA,
+    schema: RICH_FRAGMENT_SCHEMA,
     text: located.block.text.slice(start, end),
   };
   const atoms = selectAtoms(located.block.atoms, start, end);
@@ -1196,8 +1154,8 @@ export function insertRichAtom(
   atom: RichInlineAtomInput,
 ): RichDocumentPlan {
   return replaceRichTextRange(document, blockId, offset, offset, {
-    schema: RICH_DOCUMENT_SCHEMA,
-    text: RICH_TEXT_ATOM_REPLACEMENT,
+    schema: RICH_FRAGMENT_SCHEMA,
+    text: ATOM_REPLACEMENT,
     atoms: {
       [atomId]: { ...atom, offset: 0 },
     },
@@ -1419,6 +1377,7 @@ type IntlWithSegmenter = typeof Intl & {
 function appendRichCursorLine({
   block,
   blockIndex,
+  caretMetrics,
   path,
   lineIndex,
   lineOrder,
@@ -1430,6 +1389,7 @@ function appendRichCursorLine({
 }: {
   block: RichBlock;
   blockIndex: number;
+  caretMetrics?: ReadonlyArray<RichVisualCaretMetric>;
   path: Pointer;
   lineIndex: number;
   lineOrder: number;
@@ -1444,22 +1404,33 @@ function appendRichCursorLine({
   const offsets = caretOffsets.filter(
     (offset) => startOffset <= offset && offset <= endOffset,
   );
+  const measuredXByOffset = richMeasuredCaretXByOffset(caretMetrics);
   offsets.forEach((offset, column) => {
+    const isLineStart = offset === startOffset;
+    const isLineEnd = offset === endOffset;
+    const x = measuredXByOffset.get(offset) ?? column;
     const caret: RichCursorCaret = {
       blockId: block.id,
       path,
       offset,
       affinity: "after",
       order: carets.length,
+      visualAffinity: {
+        lineId,
+        lineIndex,
+        lineOrder,
+        edge: richCursorVisualAffinityEdge(isLineStart, isLineEnd),
+        column,
+      },
       lineId,
       lineIndex,
       lineOrder,
       column,
-      x: column,
+      x,
       y: lineOrder,
       atomId: atomAtCaretOffset(block, offset),
-      isLineStart: offset === startOffset,
-      isLineEnd: offset === endOffset,
+      isLineStart,
+      isLineEnd,
     };
     carets.push(caret);
     lineCarets.push(caret);
@@ -1475,6 +1446,21 @@ function appendRichCursorLine({
     endOffset,
     carets: lineCarets,
   });
+}
+
+function richMeasuredCaretXByOffset(
+  caretMetrics: ReadonlyArray<RichVisualCaretMetric> | undefined,
+): Map<number, number> {
+  const measuredXByOffset = new Map<number, number>();
+  if (caretMetrics === undefined) {
+    return measuredXByOffset;
+  }
+  for (const metric of caretMetrics) {
+    if (Number.isFinite(metric.offset) && Number.isFinite(metric.x)) {
+      measuredXByOffset.set(metric.offset, metric.x);
+    }
+  }
+  return measuredXByOffset;
 }
 
 function richGraphemeBoundaryOffsets(text: string): number[] {
@@ -1533,7 +1519,36 @@ function richCursorPointFromCaret(
     offset: caret.offset,
     affinity,
     order: caret.order,
+    visualAffinity: richCursorVisualAffinityFromCaret(caret),
   };
+}
+
+function richCursorVisualAffinityFromCaret(
+  caret: Pick<
+    RichCursorCaret,
+    "column" | "isLineEnd" | "isLineStart" | "lineId" | "lineIndex" | "lineOrder"
+  >,
+): RichCursorVisualAffinity {
+  return {
+    lineId: caret.lineId,
+    lineIndex: caret.lineIndex,
+    lineOrder: caret.lineOrder,
+    edge: richCursorVisualAffinityEdge(caret.isLineStart, caret.isLineEnd),
+    column: caret.column,
+  };
+}
+
+function richCursorVisualAffinityEdge(
+  isLineStart: boolean,
+  isLineEnd: boolean,
+): RichCursorVisualAffinityEdge {
+  if (isLineStart && !isLineEnd) {
+    return "start";
+  }
+  if (isLineEnd && !isLineStart) {
+    return "end";
+  }
+  return "inside";
 }
 
 function recoverRichCursorPoint(
@@ -1549,6 +1564,7 @@ function recoverRichCursorPoint(
       block,
       point.offset,
       point.affinity,
+      point.visualAffinity ?? null,
     );
     if (caret !== null) {
       return richCursorPointFromCaret(caret, point.affinity);
@@ -1564,38 +1580,30 @@ function closestRichCaretInBlock(
   block: RichCursorBlockFrame,
   offset: number,
   affinity: RichCursorAffinity,
+  visualAffinity: RichCursorVisualAffinity | null = null,
 ): RichCursorCaret | null {
   const clamped = clampOffset(offset, block.textLength);
-  const exact = frame.carets.find(
-    (caret) => caret.blockId === block.blockId && caret.offset === clamped,
-  );
-  if (exact !== undefined) {
-    return exact;
-  }
-
   const blockCarets = frame.carets.filter(
     (caret) => caret.blockId === block.blockId,
   );
   if (blockCarets.length === 0) {
     return null;
   }
-  return blockCarets.reduce((best, candidate) => {
-    const bestDistance = Math.abs(best.offset - clamped);
-    const candidateDistance = Math.abs(candidate.offset - clamped);
-    if (candidateDistance < bestDistance) {
-      return candidate;
+
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let candidates: RichCursorCaret[] = [];
+  for (const caret of blockCarets) {
+    const distance = Math.abs(caret.offset - clamped);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      candidates = [caret];
+      continue;
     }
-    if (candidateDistance > bestDistance) {
-      return best;
+    if (distance === bestDistance) {
+      candidates.push(caret);
     }
-    return affinity === "before"
-      ? candidate.offset < best.offset
-        ? candidate
-        : best
-      : candidate.offset > best.offset
-        ? candidate
-        : best;
-  });
+  }
+  return preferredRichCaretCandidate(candidates, affinity, visualAffinity);
 }
 
 function closestRichCaretByOrder(
@@ -1613,13 +1621,17 @@ function richCaretForPoint(
   frame: RichCursorFrame,
   point: RichCursorPoint,
 ): RichCursorCaret | null {
-  const exact = frame.carets.find(
-    (caret) =>
-      caret.blockId === point.blockId &&
-      caret.path === point.path &&
-      caret.offset === point.offset,
+  const exact = preferredRichCaretCandidate(
+    frame.carets.filter(
+      (caret) =>
+        caret.blockId === point.blockId &&
+        caret.path === point.path &&
+        caret.offset === point.offset,
+    ),
+    point.affinity,
+    point.visualAffinity ?? null,
   );
-  if (exact !== undefined) {
+  if (exact !== null) {
     return exact;
   }
   const block =
@@ -1627,7 +1639,78 @@ function richCaretForPoint(
     frame.blocks.find((candidate) => candidate.path === point.path);
   return block === undefined
     ? closestRichCaretByOrder(frame, point.order)
-    : closestRichCaretInBlock(frame, block, point.offset, point.affinity);
+    : closestRichCaretInBlock(
+        frame,
+        block,
+        point.offset,
+        point.affinity,
+        point.visualAffinity ?? null,
+      );
+}
+
+function preferredRichCaretCandidate(
+  candidates: RichCursorCaret[],
+  affinity: RichCursorAffinity,
+  visualAffinity: RichCursorVisualAffinity | null,
+): RichCursorCaret | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+  if (visualAffinity !== null) {
+    const sameLineId = candidates.find(
+      (caret) => caret.lineId === visualAffinity.lineId,
+    );
+    if (sameLineId !== undefined) {
+      return sameLineId;
+    }
+
+    const sameLineOrderAndEdge = candidates.find(
+      (caret) =>
+        caret.lineOrder === visualAffinity.lineOrder &&
+        richCursorVisualAffinityFromCaret(caret).edge === visualAffinity.edge,
+    );
+    if (sameLineOrderAndEdge !== undefined) {
+      return sameLineOrderAndEdge;
+    }
+
+    const sameLineIndexAndEdge = candidates.find(
+      (caret) =>
+        caret.lineIndex === visualAffinity.lineIndex &&
+        richCursorVisualAffinityFromCaret(caret).edge === visualAffinity.edge,
+    );
+    if (sameLineIndexAndEdge !== undefined) {
+      return sameLineIndexAndEdge;
+    }
+
+    const sameLineOrder = candidates.find(
+      (caret) => caret.lineOrder === visualAffinity.lineOrder,
+    );
+    if (sameLineOrder !== undefined) {
+      return sameLineOrder;
+    }
+
+    const sameLineIndex = candidates.find(
+      (caret) => caret.lineIndex === visualAffinity.lineIndex,
+    );
+    if (sameLineIndex !== undefined) {
+      return sameLineIndex;
+    }
+
+    const sameEdge = candidates.find(
+      (caret) =>
+        richCursorVisualAffinityFromCaret(caret).edge === visualAffinity.edge,
+    );
+    if (sameEdge !== undefined) {
+      return sameEdge;
+    }
+  }
+
+  const affinityEdge: RichCursorVisualAffinityEdge =
+    affinity === "before" ? "end" : "start";
+  const sameAffinityEdge = candidates.find(
+    (caret) => richCursorVisualAffinityFromCaret(caret).edge === affinityEdge,
+  );
+  return sameAffinityEdge ?? candidates[0] ?? null;
 }
 
 function collapsesRangeBeforeMove(command: RichCursorMoveCommand): boolean {
@@ -1896,10 +1979,10 @@ function createRichProjectionBlock(
       const atom = atomsByOffset.get(offset);
       if (
         atom !== undefined &&
-        block.text[offset] === RICH_TEXT_ATOM_REPLACEMENT
+        block.text[offset] === ATOM_REPLACEMENT
       ) {
         const projectionStart = text.length;
-        text += RICH_TEXT_ATOM_REPLACEMENT;
+        text += ATOM_REPLACEMENT;
         spans.push({
           kind: "atom",
           projectionStart,
@@ -1917,7 +2000,7 @@ function createRichProjectionBlock(
         offset < end &&
         !(
           atomsByOffset.has(offset) &&
-          block.text[offset] === RICH_TEXT_ATOM_REPLACEMENT
+          block.text[offset] === ATOM_REPLACEMENT
         )
       ) {
         offset += 1;
@@ -2158,7 +2241,7 @@ function remapAtomsToText(
 ): Record<string, RichInlineAtom> {
   const offsets: number[] = [];
   for (let index = 0; index < text.length; index += 1) {
-    if (text[index] === RICH_TEXT_ATOM_REPLACEMENT) {
+    if (text[index] === ATOM_REPLACEMENT) {
       offsets.push(index);
     }
   }
@@ -2377,8 +2460,12 @@ function emptyTextBlock(id: string, text: string): RichTextBlockBase {
 
 function normalizeTextFragment(replacement: string | RichTextFragment): RichTextFragment {
   return typeof replacement === "string"
-    ? { schema: RICH_DOCUMENT_SCHEMA, text: replacement }
+    ? { schema: RICH_FRAGMENT_SCHEMA, text: replacement }
     : replacement;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function replaceBlockRange(
@@ -2683,3 +2770,17 @@ function emptySelection(): RichDocumentPlan {
     reason: "No rich document selection is available.",
   };
 }
+
+// The single editing interface. See edit.ts.
+export {
+  edit,
+  type EditAlter,
+  type EditDirection,
+  type EditEnvironment,
+  type EditErrorCode,
+  type EditGranularity,
+  type EditIntent,
+  type EditPoint,
+  type EditResult,
+  type EditState,
+} from "./edit";

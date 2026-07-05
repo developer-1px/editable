@@ -4,7 +4,7 @@ import type {
   Pointer,
   SelectionSnap,
 } from "@interactive-os/json-document";
-import type { JsonContentEditableAtomRecord } from "../contract";
+import type { InternalEditableAtomRecord } from "../contract";
 import { atomOffsetsInElement } from "./domText";
 import { isRecord } from "./record";
 import { isTextPoint } from "./selection";
@@ -14,9 +14,9 @@ export function selectedAtoms<T>(
   atomsPath: Pointer | null,
   start: number,
   end: number,
-): Record<string, JsonContentEditableAtomRecord> {
+): Record<string, InternalEditableAtomRecord> {
   const atoms = readAtomRecords(document, atomsPath);
-  const selected: Record<string, JsonContentEditableAtomRecord> = {};
+  const selected: Record<string, InternalEditableAtomRecord> = {};
   for (const [id, atom] of Object.entries(atoms)) {
     if (atom.offset >= start && atom.offset < end) {
       selected[id] = { ...atom, offset: atom.offset - start };
@@ -34,7 +34,7 @@ export function atomReplacementPatches<T>({
 }: {
   atomsPath: Pointer | null;
   document: JSONDocument<T>;
-  insertedAtoms: Record<string, JsonContentEditableAtomRecord> | null;
+  insertedAtoms: Record<string, InternalEditableAtomRecord> | null;
   insertedTextLength: number;
   selection: SelectionSnap | null;
 }): JSONPatchOperation[] {
@@ -135,7 +135,7 @@ function textRangeFromSelection(
 function readAtomRecords<T>(
   document: JSONDocument<T>,
   atomsPath: Pointer | null,
-): Record<string, JsonContentEditableAtomRecord> {
+): Record<string, InternalEditableAtomRecord> {
   if (atomsPath === null) {
     return {};
   }
@@ -143,10 +143,10 @@ function readAtomRecords<T>(
   if (!result.ok || !isRecord(result.value)) {
     return {};
   }
-  const atoms: Record<string, JsonContentEditableAtomRecord> = {};
+  const atoms: Record<string, InternalEditableAtomRecord> = {};
   for (const [id, value] of Object.entries(result.value)) {
     if (isRecord(value) && typeof value.offset === "number") {
-      atoms[id] = value as JsonContentEditableAtomRecord;
+      atoms[id] = value as InternalEditableAtomRecord;
     }
   }
   return atoms;
@@ -154,7 +154,7 @@ function readAtomRecords<T>(
 
 function uniqueAtomId(
   id: string,
-  atoms: Record<string, JsonContentEditableAtomRecord>,
+  atoms: Record<string, InternalEditableAtomRecord>,
   patch: ReadonlyArray<JSONPatchOperation>,
   atomsPath: Pointer,
 ): string {

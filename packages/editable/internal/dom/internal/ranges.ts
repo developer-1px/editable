@@ -4,7 +4,7 @@ import type {
   Pointer,
   SelectionSnap,
 } from "@interactive-os/json-document";
-import type { JsonContentEditableRangeRecord } from "../contract";
+import type { InternalEditableRangeRecord } from "../contract";
 import { isRecord } from "./record";
 import { isTextPoint } from "./selection";
 
@@ -13,9 +13,9 @@ export function selectedRanges<T>(
   rangesPath: Pointer | null,
   start: number,
   end: number,
-): Record<string, JsonContentEditableRangeRecord> {
+): Record<string, InternalEditableRangeRecord> {
   const ranges = readRangeRecords(document, rangesPath);
-  const selected: Record<string, JsonContentEditableRangeRecord> = {};
+  const selected: Record<string, InternalEditableRangeRecord> = {};
   for (const [id, range] of Object.entries(ranges)) {
     const clippedStart = Math.max(range.start, start);
     const clippedEnd = Math.min(range.end, end);
@@ -38,7 +38,7 @@ export function rangeReplacementPatches<T>({
   selection,
 }: {
   document: JSONDocument<T>;
-  insertedRanges: Record<string, JsonContentEditableRangeRecord> | null;
+  insertedRanges: Record<string, InternalEditableRangeRecord> | null;
   insertedTextLength: number;
   rangesPath: Pointer | null;
   selection: SelectionSnap | null;
@@ -91,7 +91,7 @@ function rangeReplacementPatchesForRange<T>({
   replacement,
 }: {
   document: JSONDocument<T>;
-  insertedRanges: Record<string, JsonContentEditableRangeRecord> | null;
+  insertedRanges: Record<string, InternalEditableRangeRecord> | null;
   insertedTextLength: number;
   rangesPath: Pointer;
   replacement: TextReplacementRange;
@@ -198,7 +198,7 @@ function mapRangeEnd(
 function readRangeRecords<T>(
   document: JSONDocument<T>,
   rangesPath: Pointer | null,
-): Record<string, JsonContentEditableRangeRecord> {
+): Record<string, InternalEditableRangeRecord> {
   if (rangesPath === null) {
     return {};
   }
@@ -206,14 +206,14 @@ function readRangeRecords<T>(
   if (!result.ok || !isRecord(result.value)) {
     return {};
   }
-  const ranges: Record<string, JsonContentEditableRangeRecord> = {};
+  const ranges: Record<string, InternalEditableRangeRecord> = {};
   for (const [id, value] of Object.entries(result.value)) {
     if (
       isRecord(value) &&
       typeof value.start === "number" &&
       typeof value.end === "number"
     ) {
-      ranges[id] = value as JsonContentEditableRangeRecord;
+      ranges[id] = value as InternalEditableRangeRecord;
     }
   }
   return ranges;
@@ -221,7 +221,7 @@ function readRangeRecords<T>(
 
 function uniqueRangeId(
   id: string,
-  ranges: Record<string, JsonContentEditableRangeRecord>,
+  ranges: Record<string, InternalEditableRangeRecord>,
   patch: ReadonlyArray<JSONPatchOperation>,
   rangesPath: Pointer,
 ): string {

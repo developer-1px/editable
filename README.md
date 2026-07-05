@@ -1,11 +1,11 @@
-# JSON Document Contenteditable Web
+# Interactive OS Editable
 
-This repo is a small `@interactive-os/json-document` contenteditable bridge and
-rich document model lab. It is not a full editor product.
+This repo is the `@interactive-os/editable` rich document editing kit in
+progress. It is not a full editor product.
 
-The package lives in `packages/contenteditable-web`, following the same naming
-shape as `../json-document/packages/contenteditable-web`. It provides the thin
-web layer that is hard to rebuild correctly:
+The public source package lives in `packages/editable`. It exposes a headless
+kernel at `packages/editable` and a DOM adapter at `packages/editable/dom`.
+Together they provide the thin editing layer that is hard to rebuild correctly:
 
 - DOM selection to `json-document` selection mapping
 - native contenteditable text and IME lease/flush
@@ -15,14 +15,14 @@ web layer that is hard to rebuild correctly:
 - range metadata rebasing for marks or other inline annotations
 - undo/redo through `json-document` history
 
-The demo route at `/demo` is only a smoke surface for the core protocol.
+The root route at `/` is only a smoke surface for the core protocol.
 Product editor concerns such as toolbar frameworks, markdown policy, app
 document schemas, overlays, debug recorders, and legacy editor history are not
 part of this repo.
 
-`packages/rich-document` holds the headless typed document model that can be
-projected to canonical editable HTML. It does not parse arbitrary HTML and does
-not use DOM APIs.
+The headless kernel holds the typed document model that can be projected to
+canonical editable HTML. It does not parse arbitrary HTML and does not use DOM
+APIs.
 
 ## Run
 
@@ -31,7 +31,7 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:3000/demo`.
+Open `http://localhost:3000/`.
 
 ## Verify
 
@@ -41,21 +41,44 @@ pnpm run verify:browser
 pnpm run verify:internal
 ```
 
-`test:core` runs the jsdom contract tests for the package API. `verify:browser`
-runs the `/demo` browser smoke tests. `verify:internal` runs TypeScript,
+`test:core` runs the jsdom contract tests for the package interface. `verify:browser`
+runs the root browser smoke tests. `verify:internal` runs TypeScript,
 Vitest, Biome, and production build checks.
 
 ## Public Surface
 
-Use `packages/contenteditable-web` for the DOM adapter and
-`packages/rich-document` for the headless typed model.
+Use `packages/editable/dom` for the DOM adapter and `packages/editable` for the
+headless typed model. Use `packages/editable/schema` only when runtime zod
+validation is needed.
 
-The public API is intentionally small:
+[GitHub issue #104](https://github.com/developer-1px/editable/issues/104) is
+the canon for the collapsed package surface: surface A is the headless model in
+`packages/editable` plus schema validation in `packages/editable/schema`;
+surface B is the DOM adapter in `packages/editable/dom`. The sample app is
+intentionally one root route backed by `src/editable-lab`.
 
-- `createJsonContentEditable`
-- `isJsonContentEditableFragment`
+The single editing interface is `edit` from `packages/editable`:
+
+```
+edit({ document, selection, goalX }, intent, { lineSeeds? })
+  -> { patch, selectionAfter, goalX } | { kind: "history", command } | error
+```
+
+Its intent vocabulary is not invented: text intents are W3C Input Events
+`inputType` values (`insertText`, `deleteContentBackward`, `formatBold`, ...)
+and selection intents are the Selection API (`modifySelection` with the
+`alter`/`direction`/`granularity` triple, `setBaseAndExtent`). Output is JSON
+Patch plus `selectionAfter`. Adapters translate events to intents; hosts apply
+patches and own history.
+
+The rest of the public API is intentionally small:
+
+- `createEditableHost`
+- `createVisualLayoutStore`
+- `measureVisualLayout`
+- `isRichTextFragment`
 - constants for text, atom, and clipboard attributes
-- types in `packages/contenteditable-web/contract.ts`
+- rich document adapter types from `packages/editable/dom`
+- zod schemas from `packages/editable/schema`
 
-Anything under `packages/contenteditable-web/internal` is private
-implementation detail.
+Anything under `packages/editable/internal` is private implementation detail.
