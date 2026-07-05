@@ -59,6 +59,50 @@ test.describe("chromium clipboard integration", () => {
   });
 });
 
+test.describe("cross-root editor fixtures", () => {
+  test.skip(
+    ({ browserName }) => browserName === "firefox",
+    "Issue #90 requires minimum Chrome/Safari traces for cross-root browser fixtures.",
+  );
+
+  test("same-origin iframe keeps editor selection, clipboard, and overlay sources scoped to the iframe document", async ({
+    page,
+  }) => {
+    const trace = await runCrossRootFixture(page, "iframe");
+
+    expectCrossRootTrace(trace, "iframe");
+    expect(trace.activeElement.documentActiveElement).toBe("iframe-editable");
+    expect(trace.clipboard.parentSelectionText).toBe("parent selection");
+  });
+
+  test("shadow root records Chromium support and the WebKit native selection gap", async ({
+    browserName,
+    page,
+  }) => {
+    const trace = await runCrossRootFixture(page, "shadow");
+
+    if (browserName === "webkit") {
+      expectWebKitShadowSelectionGap(trace);
+    } else {
+      expectCrossRootTrace(trace, "shadow");
+    }
+    expect(trace.activeElement.documentActiveElement).toBe(
+      "cross-root-shadow-host",
+    );
+    expect(trace.activeElement.shadowActiveElement).toBe("shadow-editable");
+  });
+
+  test("portal document keeps clipboard source scoped away from the parent document selection", async ({
+    page,
+  }) => {
+    const trace = await runCrossRootFixture(page, "portal");
+
+    expectCrossRootTrace(trace, "portal");
+    expect(trace.activeElement.documentActiveElement).toBe("portal-editable");
+    expect(trace.clipboard.parentSelectionText).toBe("parent selection");
+  });
+});
+
 test("contenteditable demo exposes model surfaces and canonical DOM anchors", async ({
   page,
 }) => {
@@ -1241,6 +1285,115 @@ async function selectMentionAtom(page: Page) {
     selection?.removeAllRanges();
     selection?.addRange(range);
   });
+}
+
+type CrossRootKind = "iframe" | "portal" | "shadow";
+
+type CrossRootTrace = {
+  activeElement: {
+    documentActiveElement: string | null;
+    shadowActiveElement: string | null;
+  };
+  clipboard: {
+    copiedText: string;
+    cutText: string;
+    ownerDocumentMatched: boolean;
+    ownerWindowMatched: boolean;
+    parentSelectionText: string;
+  };
+  composition: {
+    afterCommit: string;
+    ownerDocumentMatched: boolean;
+  };
+  geometry: {
+    lineCount: number;
+    overlayOwnerDocumentMatched: boolean;
+    rootOwnerDocumentMatched: boolean;
+  };
+  rootKind: CrossRootKind;
+  selection: {
+    afterArrowRight: CrossRootSelectionSnapshot | null;
+    afterShiftArrowRight: CrossRootSelectionSnapshot | null;
+    sourceDocumentMatched: boolean;
+    text: string;
+  };
+  textAfterDrop: string;
+  textAfterPaste: string;
+};
+
+type CrossRootSelectionSnapshot = {
+  anchor?: unknown;
+  focus?: { offset?: number; path?: string } | null;
+  primaryIndex?: number;
+};
+
+async function runCrossRootFixture(
+  page: Page,
+  rootKind: CrossRootKind,
+): Promise<CrossRootTrace> {
+  return page.evaluate(async (kind) => {
+    const fixturePath = "/tests/browser/fixtures/crossRootFixture.ts";
+    const fixture = await import(/* @vite-ignore */ fixturePath);
+    if (kind === "iframe") {
+      return fixture.runIframeCrossRootTrace();
+    }
+    if (kind === "shadow") {
+      return fixture.runShadowCrossRootTrace();
+    }
+    return fixture.runPortalDocumentTrace();
+  }, rootKind);
+}
+
+function expectCrossRootTrace(
+  trace: CrossRootTrace,
+  rootKind: CrossRootKind,
+) {
+  expect(trace.rootKind).toBe(rootKind);
+  expect(trace.selection.afterArrowRight?.focus).toMatchObject({
+    offset: 1,
+    path: "/blocks/0/text",
+  });
+  expect(trace.selection.afterShiftArrowRight?.focus).toMatchObject({
+    offset: 2,
+    path: "/blocks/0/text",
+  });
+  expect(trace.selection.sourceDocumentMatched).toBe(true);
+  expect(trace.selection.text).toBe("Plain");
+  expect(trace.clipboard.copiedText).toBe("Plain");
+  expect(trace.clipboard.cutText).toBe("Plain");
+  expect(trace.clipboard.ownerDocumentMatched).toBe(true);
+  expect(trace.clipboard.ownerWindowMatched).toBe(true);
+  expect(trace.textAfterPaste).toBe("Paste  text");
+  expect(trace.textAfterDrop).toBe("Paste Drop  text");
+  expect(trace.composition.afterCommit).toBe("가Paste Drop  text");
+  expect(trace.composition.ownerDocumentMatched).toBe(true);
+  expect(trace.geometry.lineCount).toBeGreaterThan(0);
+  expect(trace.geometry.overlayOwnerDocumentMatched).toBe(true);
+  expect(trace.geometry.rootOwnerDocumentMatched).toBe(true);
+}
+
+function expectWebKitShadowSelectionGap(trace: CrossRootTrace) {
+  expect(trace.rootKind).toBe("shadow");
+  expect(trace.selection.afterArrowRight).toMatchObject({
+    anchor: null,
+    focus: null,
+    primaryIndex: -1,
+  });
+  expect(trace.selection.afterShiftArrowRight).toMatchObject({
+    anchor: null,
+    focus: null,
+    primaryIndex: -1,
+  });
+  expect(trace.selection.sourceDocumentMatched).toBe(false);
+  expect(trace.selection.text).toBe("");
+  expect(trace.clipboard.copiedText).toBe("");
+  expect(trace.clipboard.cutText).toBe("");
+  expect(trace.textAfterPaste).toBe("Plain text");
+  expect(trace.textAfterDrop).toBe("Plain text");
+  expect(trace.composition.afterCommit).toBe("Plain text");
+  expect(trace.geometry.lineCount).toBeGreaterThan(0);
+  expect(trace.geometry.overlayOwnerDocumentMatched).toBe(true);
+  expect(trace.geometry.rootOwnerDocumentMatched).toBe(true);
 }
 
 async function platformPasteShortcut(page: Page): Promise<string> {

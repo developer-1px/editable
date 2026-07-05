@@ -174,7 +174,7 @@ function textSurfaceElements(
     elements.push(root);
   }
   for (const element of Array.from(root.querySelectorAll(`[${textAttribute}]`))) {
-    if (element instanceof HTMLElement) {
+    if (isHTMLElement(element)) {
       elements.push(element);
     }
   }
@@ -449,6 +449,10 @@ function usableRect(rect: DOMRect): boolean {
     Number.isFinite(rect.bottom) &&
     rect.bottom > rect.top
   );
+}
+
+function isHTMLElement(element: Element): element is HTMLElement {
+  return typeof (element as HTMLElement).style === "object";
 }
 
 function synthesizeLineFromSeed({

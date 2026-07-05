@@ -89,11 +89,9 @@ export function closestAttributeElement(
   node: Node,
   attribute: string,
 ): HTMLElement | null {
-  const start = node instanceof HTMLElement ? node : node.parentElement;
+  const start = isHTMLElement(node) ? node : node.parentElement;
   const element = start?.closest(`[${attribute}]`) ?? null;
-  return element instanceof HTMLElement && root.contains(element)
-    ? element
-    : null;
+  return isHTMLElement(element) && root.contains(element) ? element : null;
 }
 
 export function findElementByAttribute(
@@ -106,7 +104,7 @@ export function findElementByAttribute(
   }
   for (const element of Array.from(root.querySelectorAll(`[${attribute}]`))) {
     if (
-      element instanceof HTMLElement &&
+      isHTMLElement(element) &&
       element.getAttribute(attribute) === value
     ) {
       return element;
@@ -208,7 +206,7 @@ function textDOMPositionInChildren(
       continue;
     }
 
-    if (child instanceof Element) {
+    if (isElement(child)) {
       const length = editableTextLength(child, atomAttribute);
       if (remaining <= length) {
         return textDOMPositionInChildren(child, remaining, atomAttribute);
@@ -223,7 +221,19 @@ function isAtomElement(
   node: Node,
   atomAttribute: string,
 ): node is HTMLElement {
-  return node instanceof HTMLElement && node.hasAttribute(atomAttribute);
+  return isHTMLElement(node) && node.hasAttribute(atomAttribute);
+}
+
+function isElement(node: Node): node is Element {
+  return node.nodeType === Node.ELEMENT_NODE;
+}
+
+function isHTMLElement(node: Node | null): node is HTMLElement {
+  return (
+    node !== null &&
+    node.nodeType === Node.ELEMENT_NODE &&
+    typeof (node as HTMLElement).hasAttribute === "function"
+  );
 }
 
 function indexInParent(element: Element): number {
