@@ -242,6 +242,35 @@ test.describe("mark boundary composition traces", () => {
   });
 });
 
+test.describe("BiDi and RTL cursor geometry matrix", () => {
+  test("separates logical movement from browser visual left/right traces", async ({
+    page,
+  }) => {
+    const trace = await runBidiRtlTrace(page);
+
+    expect(trace.policy).toEqual({
+      geometry: "dom-rect-trace-only",
+      horizontalArrow: "browser-native-visual-sync",
+      modelMovement: "logical-forward-backward",
+    });
+    expect(trace.text).toContain("שלום");
+    expect(trace.text).toContain("مرحبا");
+    expect(trace.logicalForwardOffsets).toEqual([0, 1, 2, 3]);
+    expect(trace.logicalBackwardOffsets).toEqual([3, 2, 1, 0]);
+    expect(trace.geometry.lineCount).toBeGreaterThan(0);
+    expect(trace.geometry.carets).toHaveLength(5);
+    for (const caret of trace.geometry.carets) {
+      expect(Number.isFinite(caret.x)).toBe(true);
+      expect(Number.isFinite(caret.top)).toBe(true);
+      expect(Number.isFinite(caret.bottom)).toBe(true);
+    }
+    if (trace.nativeVisualMovement.supported) {
+      expect(trace.nativeVisualMovement.leftOffset).not.toBeNull();
+      expect(trace.nativeVisualMovement.rightOffset).not.toBeNull();
+    }
+  });
+});
+
 test("contenteditable demo exposes model surfaces and canonical DOM anchors", async ({
   page,
 }) => {
@@ -1639,6 +1668,31 @@ type MarkBoundaryCompositionTrace = {
   }>;
 };
 
+type BidiRtlTrace = {
+  geometry: {
+    carets: Array<{
+      bottom: number;
+      offset: number;
+      top: number;
+      x: number;
+    }>;
+    lineCount: number;
+  };
+  logicalBackwardOffsets: number[];
+  logicalForwardOffsets: number[];
+  nativeVisualMovement: {
+    leftOffset: number | null;
+    rightOffset: number | null;
+    supported: boolean;
+  };
+  policy: {
+    geometry: "dom-rect-trace-only";
+    horizontalArrow: "browser-native-visual-sync";
+    modelMovement: "logical-forward-backward";
+  };
+  text: string;
+};
+
 async function runCrossRootFixture(
   page: Page,
   rootKind: CrossRootKind,
@@ -1682,6 +1736,14 @@ function expectCrossRootTrace(
   expect(trace.geometry.lineCount).toBeGreaterThan(0);
   expect(trace.geometry.overlayOwnerDocumentMatched).toBe(true);
   expect(trace.geometry.rootOwnerDocumentMatched).toBe(true);
+}
+
+async function runBidiRtlTrace(page: Page): Promise<BidiRtlTrace> {
+  return page.evaluate(async () => {
+    const fixturePath = "/tests/browser/fixtures/bidiRtlFixture.ts";
+    const fixture = await import(/* @vite-ignore */ fixturePath);
+    return fixture.runBidiRtlTrace();
+  });
 }
 
 async function runMarkBoundaryCompositionTrace(
