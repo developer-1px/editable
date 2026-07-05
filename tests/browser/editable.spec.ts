@@ -302,6 +302,54 @@ test.describe("nested editable and iframe focus handoff traces", () => {
   });
 });
 
+test.describe("drag/drop selection and clipboard data traces", () => {
+  test("records drag source, drop point, and multi-range selection behavior", async ({
+    browserName,
+    page,
+  }) => {
+    const trace = await runDragDropTrace(page);
+
+    expect(trace.policy).toEqual({
+      history: "single-command-after-drop",
+      nativeDomMutation: "ignored-until-model-command",
+      selectionSource: "drop-point-over-dragstart-selection",
+    });
+    expect(trace.dataTransfer.constructorSupported).toBe(true);
+    expect(trace.dataTransfer.setDragImageSupported).toBe(true);
+    expect(trace.eventOrder).toContain("dragover");
+    if (browserName !== "firefox") {
+      expect(trace.eventOrder).toEqual(
+        expect.arrayContaining(["dragstart", "drop", "dragend"]),
+      );
+    }
+    expect(trace.sources.map((source) => source.source)).toEqual([
+      "text-range",
+      "mention",
+      "figure",
+      "block-boundary",
+    ]);
+    for (const source of trace.sources) {
+      expect(source.afterText).toBe(source.beforeText);
+      expect(source.types).toContain("text/plain");
+    }
+    expect(trace.sources[1]?.types).toContain("application/x-editable-atom");
+    expect(trace.sources[2]?.types).toContain("application/x-editable-block");
+
+    expect(trace.dropPoint.method).not.toBe("none");
+    expect(trace.dropPoint.offset).not.toBeNull();
+    expect(trace.dropPoint.text).toContain("Alpha beta gamma");
+
+    expect(trace.multiRange.requestedRanges).toBe(2);
+    expect(trace.multiRange.rangeTexts).toContain("Alpha");
+    if (browserName === "firefox") {
+      expect(trace.multiRange.rangeCount).toBeGreaterThanOrEqual(2);
+      expect(trace.multiRange.rangeTexts).toContain("Delta");
+    } else {
+      expect(trace.multiRange.rangeCount).toBe(1);
+    }
+  });
+});
+
 test("contenteditable demo exposes model surfaces and canonical DOM anchors", async ({
   page,
 }) => {
@@ -1744,6 +1792,57 @@ type NestedEditableTrace = {
   };
 };
 
+type DragDropTrace = {
+  dataTransfer: {
+    constructorSupported: boolean;
+    setDragImageSupported: boolean;
+  };
+  dropPoint: {
+    clientX: number;
+    clientY: number;
+    method: "caretPositionFromPoint" | "caretRangeFromPoint" | "none";
+    offset: number | null;
+    target: string | null;
+    text: string | null;
+  };
+  eventOrder: string[];
+  events: Array<{
+    clientX: number;
+    clientY: number;
+    data: {
+      html: string;
+      plain: string;
+      types: string[];
+    };
+    dropEffect: string;
+    effectAllowed: string;
+    selection: {
+      rangeCount: number;
+      text: string;
+    };
+    target: string | null;
+    type: string;
+  }>;
+  multiRange: {
+    rangeCount: number;
+    rangeTexts: string[];
+    requestedRanges: number;
+    selectionText: string;
+  };
+  policy: {
+    history: "single-command-after-drop";
+    nativeDomMutation: "ignored-until-model-command";
+    selectionSource: "drop-point-over-dragstart-selection";
+  };
+  sources: Array<{
+    afterText: string;
+    beforeText: string;
+    source: "block-boundary" | "figure" | "mention" | "text-range";
+    target: string | null;
+    types: string[];
+  }>;
+};
+
 async function runCrossRootFixture(
   page: Page,
   rootKind: CrossRootKind,
@@ -1802,6 +1901,14 @@ async function runNestedEditableTrace(page: Page): Promise<NestedEditableTrace> 
     const fixturePath = "/tests/browser/fixtures/nestedEditableFixture.ts";
     const fixture = await import(/* @vite-ignore */ fixturePath);
     return fixture.runNestedEditableTrace();
+  });
+}
+
+async function runDragDropTrace(page: Page): Promise<DragDropTrace> {
+  return page.evaluate(async () => {
+    const fixturePath = "/tests/browser/fixtures/dragDropFixture.ts";
+    const fixture = await import(/* @vite-ignore */ fixturePath);
+    return fixture.runDragDropTrace();
   });
 }
 
