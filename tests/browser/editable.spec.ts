@@ -350,6 +350,59 @@ test.describe("drag/drop selection and clipboard data traces", () => {
   });
 });
 
+test.describe("stray br and hard break traces", () => {
+  test("separates editor DOM kludges from paste-time line breaks", async ({
+    page,
+  }) => {
+    const trace = await runStrayBreakTrace(page);
+
+    expect(trace.policy).toEqual({
+      editorDomBreak: "ignore",
+      modelLineBreak: "text-newline",
+      pasteBreak: "contextual-newline",
+    });
+    expect(trace.cases.map((entry) => entry.name)).toEqual([
+      "empty-paragraph-placeholder",
+      "native-enter-editor-dom",
+      "atom-boundary-kludge",
+      "list-parent-stray-break",
+      "inline-hard-break-paste",
+      "inline-trailing-break-paste",
+      "code-block-paste",
+    ]);
+
+    expect(strayBreakCase(trace, "empty-paragraph-placeholder")).toMatchObject({
+      brCount: 1,
+      classification: "ignored-kludge",
+      policyText: "",
+    });
+    expect(strayBreakCase(trace, "native-enter-editor-dom")).toMatchObject({
+      classification: "ignored-kludge",
+      policyText: "before",
+    });
+    expect(strayBreakCase(trace, "atom-boundary-kludge")).toMatchObject({
+      classification: "ignored-kludge",
+      policyText: `A${ATOM}`,
+    });
+    expect(strayBreakCase(trace, "list-parent-stray-break")).toMatchObject({
+      classification: "ignored-kludge",
+      policyText: "item",
+    });
+    expect(strayBreakCase(trace, "inline-hard-break-paste")).toMatchObject({
+      classification: "meaningful-newline",
+      policyText: "first\nsecond",
+    });
+    expect(strayBreakCase(trace, "inline-trailing-break-paste")).toMatchObject({
+      classification: "meaningful-newline",
+      policyText: "inline\n",
+    });
+    expect(strayBreakCase(trace, "code-block-paste")).toMatchObject({
+      classification: "meaningful-newline",
+      policyText: "line 1\nline 2",
+    });
+  });
+});
+
 test("contenteditable demo exposes model surfaces and canonical DOM anchors", async ({
   page,
 }) => {
@@ -1843,6 +1896,31 @@ type DragDropTrace = {
   }>;
 };
 
+type StrayBreakTrace = {
+  cases: Array<{
+    brCount: number;
+    browserInnerText: string;
+    browserTextContent: string;
+    classification: "ignored-kludge" | "meaningful-newline";
+    html: string;
+    mode: "editor-dom" | "html-paste";
+    name:
+      | "atom-boundary-kludge"
+      | "code-block-paste"
+      | "empty-paragraph-placeholder"
+      | "inline-hard-break-paste"
+      | "inline-trailing-break-paste"
+      | "list-parent-stray-break"
+      | "native-enter-editor-dom";
+    policyText: string;
+  }>;
+  policy: {
+    editorDomBreak: "ignore";
+    modelLineBreak: "text-newline";
+    pasteBreak: "contextual-newline";
+  };
+};
+
 async function runCrossRootFixture(
   page: Page,
   rootKind: CrossRootKind,
@@ -1912,6 +1990,14 @@ async function runDragDropTrace(page: Page): Promise<DragDropTrace> {
   });
 }
 
+async function runStrayBreakTrace(page: Page): Promise<StrayBreakTrace> {
+  return page.evaluate(async () => {
+    const fixturePath = "/tests/browser/fixtures/strayBreakFixture.ts";
+    const fixture = await import(/* @vite-ignore */ fixturePath);
+    return fixture.runStrayBreakTrace();
+  });
+}
+
 async function runMarkBoundaryCompositionTrace(
   page: Page,
 ): Promise<MarkBoundaryCompositionTrace[]> {
@@ -1952,6 +2038,17 @@ function markTraceSelectionOffset(
     typeof focus.offset === "number"
     ? focus.offset
     : null;
+}
+
+function strayBreakCase(
+  trace: StrayBreakTrace,
+  name: StrayBreakTrace["cases"][number]["name"],
+) {
+  const entry = trace.cases.find((candidate) => candidate.name === name);
+  if (entry === undefined) {
+    throw new Error(`Missing stray break trace case: ${name}`);
+  }
+  return entry;
 }
 
 async function installFocusSelectionTrace(page: Page) {
