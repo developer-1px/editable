@@ -103,6 +103,98 @@ test.describe("cross-root editor fixtures", () => {
   });
 });
 
+test.describe("focus and selectionchange event-order traces", () => {
+  test("records focus restore, blur, toolbar, drag, and history ordering", async ({
+    page,
+  }) => {
+    const editor = page.getByRole("textbox", { name: "JSON document text" });
+    await installFocusSelectionTrace(page);
+    await ensureFocusSelectionOutsideInput(page);
+
+    await editor.focus();
+    await selectEditorText(page, 0, 0);
+    await syncEditorDOMSelection(page);
+    await recordFocusSelectionCheckpoint(page, "after-focus-restore");
+
+    await page.keyboard.type("Z");
+    await waitForBrowserTraceFrame(page);
+    await recordFocusSelectionCheckpoint(page, "after-native-input");
+
+    await page.getByLabel("Outside focus target").click();
+    await waitForBrowserTraceFrame(page);
+    await recordFocusSelectionCheckpoint(page, "after-outside-focus");
+
+    await editor.focus();
+    await selectEditorText(page, 1, 6);
+    await syncEditorDOMSelection(page);
+    await page.getByRole("button", { name: "Bold" }).click();
+    await waitForBrowserTraceFrame(page);
+    await recordFocusSelectionCheckpoint(page, "after-toolbar-click");
+
+    await dragInsideEditor(page);
+    await recordFocusSelectionCheckpoint(page, "after-pointer-drag");
+
+    await editor.focus();
+    await selectEditorText(page, 0, 0);
+    await syncEditorDOMSelection(page);
+    await page.keyboard.type("Y");
+    await waitForBrowserTraceFrame(page);
+    await recordFocusSelectionCheckpoint(page, "after-history-insert");
+    await page.keyboard.press(await platformUndoShortcut(page));
+    await waitForBrowserTraceFrame(page);
+    await recordFocusSelectionCheckpoint(page, "after-history-undo");
+    await page.keyboard.press(await platformRedoShortcut(page));
+    await waitForBrowserTraceFrame(page);
+    await recordFocusSelectionCheckpoint(page, "after-history-redo");
+
+    const trace = await readFocusSelectionTrace(page);
+
+    expect(trace.length).toBeGreaterThan(20);
+    expectTraceHasEvent(trace, "focusin", "editor");
+    expectTraceHasEvent(trace, "selectionchange");
+    expectTraceHasEvent(trace, "focusout", "editor");
+    expectTraceHasEvent(trace, "click", "outside-focus-input");
+    expectTraceHasEvent(trace, "pointerdown", "toolbar:Bold");
+    expectTraceHasEvent(trace, "click", "toolbar:Bold");
+    expectTraceHasEvent(trace, "pointerup", "editor");
+    expectTraceHasEvent(trace, "keydown", "editor");
+
+    const focusRestore = traceCheckpoint(trace, "after-focus-restore");
+    expect(focusRestore.activeElement).toBe("editor");
+    expect(focusRestore.domSelection.anchorInEditor).toBe(true);
+    expect(focusRestore.domSelection.focusInEditor).toBe(true);
+    expect(focusRestore.overlay.visualLineCount).toBeGreaterThan(0);
+    expect(focusRestore.overlay.cursorLineCount).toBeGreaterThan(0);
+
+    const nativeInput = traceCheckpoint(trace, "after-native-input");
+    expect(nativeInput.documentText).toBe(`Z${INITIAL_MODEL}`);
+    expect(selectionFocusOffset(nativeInput)).toBe(1);
+
+    const outsideFocus = traceCheckpoint(trace, "after-outside-focus");
+    expect(outsideFocus.activeElement).toBe("outside-focus-input");
+    expect(selectionFocusOffset(outsideFocus)).toBe(1);
+
+    const toolbarDown = traceEventIndex(trace, "pointerdown", "toolbar:Bold");
+    const toolbarClick = traceEventIndex(trace, "click", "toolbar:Bold");
+    expect(toolbarDown).toBeGreaterThanOrEqual(0);
+    expect(toolbarClick).toBeGreaterThan(toolbarDown);
+    const toolbarCheckpoint = traceCheckpoint(trace, "after-toolbar-click");
+    expect(toolbarCheckpoint.activeElement).toBe("editor");
+    expect(toolbarCheckpoint.overlay.visualLayoutOk).toBe(true);
+
+    const dragPointerDown = traceEventIndex(trace, "pointerdown", "editor");
+    const dragPointerUp = traceEventIndex(trace, "pointerup", "editor");
+    expect(dragPointerDown).toBeGreaterThanOrEqual(0);
+    expect(dragPointerUp).toBeGreaterThan(dragPointerDown);
+
+    const afterUndo = traceCheckpoint(trace, "after-history-undo");
+    const afterRedo = traceCheckpoint(trace, "after-history-redo");
+    expect(afterUndo.documentText.startsWith("Y")).toBe(false);
+    expect(afterRedo.documentText.startsWith("Y")).toBe(true);
+    expect(afterRedo.domSelection.focusInEditor).toBe(true);
+  });
+});
+
 test("contenteditable demo exposes model surfaces and canonical DOM anchors", async ({
   page,
 }) => {
@@ -1327,6 +1419,27 @@ type CrossRootSelectionSnapshot = {
   primaryIndex?: number;
 };
 
+type FocusSelectionTraceEntry = {
+  activeElement: string | null;
+  canonicalSelection: unknown;
+  documentText: string;
+  domSelection: {
+    anchorInEditor: boolean;
+    focusInEditor: boolean;
+    isCollapsed: boolean;
+    text: string;
+  };
+  eventType: string;
+  label: string;
+  overlay: {
+    cursorLineCount: number;
+    visualLineCount: number;
+    visualLayoutOk: boolean;
+  };
+  target: string | null;
+  time: number;
+};
+
 async function runCrossRootFixture(
   page: Page,
   rootKind: CrossRootKind,
@@ -1372,6 +1485,128 @@ function expectCrossRootTrace(
   expect(trace.geometry.rootOwnerDocumentMatched).toBe(true);
 }
 
+async function installFocusSelectionTrace(page: Page) {
+  await page.evaluate(async () => {
+    const fixturePath = "/tests/browser/fixtures/focusSelectionTrace.ts";
+    const fixture = await import(/* @vite-ignore */ fixturePath);
+    fixture.installFocusSelectionTrace();
+  });
+}
+
+async function ensureFocusSelectionOutsideInput(page: Page) {
+  await page.evaluate(async () => {
+    const fixturePath = "/tests/browser/fixtures/focusSelectionTrace.ts";
+    const fixture = await import(/* @vite-ignore */ fixturePath);
+    fixture.ensureFocusSelectionOutsideInput();
+  });
+}
+
+async function recordFocusSelectionCheckpoint(page: Page, label: string) {
+  await waitForBrowserTraceFrame(page);
+  await page.evaluate(async (checkpointLabel) => {
+    const fixturePath = "/tests/browser/fixtures/focusSelectionTrace.ts";
+    const fixture = await import(/* @vite-ignore */ fixturePath);
+    fixture.recordFocusSelectionCheckpoint(checkpointLabel);
+  }, label);
+}
+
+async function readFocusSelectionTrace(
+  page: Page,
+): Promise<FocusSelectionTraceEntry[]> {
+  return page.evaluate(async () => {
+    const fixturePath = "/tests/browser/fixtures/focusSelectionTrace.ts";
+    const fixture = await import(/* @vite-ignore */ fixturePath);
+    return fixture.readFocusSelectionTrace();
+  });
+}
+
+async function syncEditorDOMSelection(page: Page) {
+  await page.evaluate(() => {
+    const editor = document.querySelector(".contenteditable-editor");
+    if (editor === null) {
+      throw new Error("Missing contenteditable editor.");
+    }
+    editor.dispatchEvent(new Event("select", { bubbles: true }));
+  });
+  await waitForBrowserTraceFrame(page);
+}
+
+async function dragInsideEditor(page: Page) {
+  const editor = page.getByRole("textbox", { name: "JSON document text" });
+  const box = await editor.boundingBox();
+  if (box === null) {
+    throw new Error("Missing contenteditable editor box.");
+  }
+  const y = box.y + Math.min(18, box.height / 2);
+  await page.mouse.move(box.x + 12, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + Math.min(180, box.width - 12), y, {
+    steps: 4,
+  });
+  await page.mouse.up();
+  await waitForBrowserTraceFrame(page);
+}
+
+async function waitForBrowserTraceFrame(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+}
+
+function traceCheckpoint(
+  trace: ReadonlyArray<FocusSelectionTraceEntry>,
+  label: string,
+) {
+  const entry = trace.find(
+    (candidate) => candidate.label === `checkpoint:${label}`,
+  );
+  if (entry === undefined) {
+    throw new Error(`Missing trace checkpoint: ${label}`);
+  }
+  return entry;
+}
+
+function expectTraceHasEvent(
+  trace: ReadonlyArray<FocusSelectionTraceEntry>,
+  eventType: string,
+  target?: string,
+) {
+  expect(traceEventIndex(trace, eventType, target)).toBeGreaterThanOrEqual(0);
+}
+
+function traceEventIndex(
+  trace: ReadonlyArray<FocusSelectionTraceEntry>,
+  eventType: string,
+  target?: string,
+) {
+  return trace.findIndex(
+    (entry) =>
+      entry.eventType === eventType &&
+      (target === undefined || entry.target === target),
+  );
+}
+
+function selectionFocusOffset(entry: FocusSelectionTraceEntry): number | null {
+  const selection = entry.canonicalSelection;
+  if (
+    typeof selection !== "object" ||
+    selection === null ||
+    !("focus" in selection)
+  ) {
+    return null;
+  }
+  const focus = selection.focus;
+  return typeof focus === "object" &&
+    focus !== null &&
+    "offset" in focus &&
+    typeof focus.offset === "number"
+    ? focus.offset
+    : null;
+}
+
 function expectWebKitShadowSelectionGap(trace: CrossRootTrace) {
   expect(trace.rootKind).toBe("shadow");
   expect(trace.selection.afterArrowRight).toMatchObject({
@@ -1406,6 +1641,18 @@ async function platformCutShortcut(page: Page): Promise<string> {
   return (await page.evaluate(() => navigator.platform.includes("Mac")))
     ? "Meta+X"
     : "Control+X";
+}
+
+async function platformUndoShortcut(page: Page): Promise<string> {
+  return (await page.evaluate(() => navigator.platform.includes("Mac")))
+    ? "Meta+Z"
+    : "Control+Z";
+}
+
+async function platformRedoShortcut(page: Page): Promise<string> {
+  return (await page.evaluate(() => navigator.platform.includes("Mac")))
+    ? "Meta+Shift+Z"
+    : "Control+Y";
 }
 
 async function expectContentEditableFirstBlockText(page: Page, text: string) {
