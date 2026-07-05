@@ -573,6 +573,61 @@ test("contenteditable demo hands off IME preedit before vertical command", async
     .not.toBe("/blocks/0/text:2");
 });
 
+test("contenteditable demo flushes active IME preedit before a toolbar command as separate history units", async ({
+  browserName,
+  page,
+}) => {
+  await startKoreanPreeditAtFirstBlockStart(page, "반갑");
+
+  await page.getByRole("button", { name: "Heading 1" }).click();
+  await finishKoreanComposition(page, "반갑");
+
+  await expectContentEditableFirstBlockText(page, `반갑${INITIAL_MODEL}`);
+  await expectContentEditableSelectionOffset(
+    page,
+    expectedPostToolbarCompositionOffset(browserName),
+  );
+  await expect.poll(() => firstBlockType(page)).toEqual({
+    level: 1,
+    type: "heading",
+  });
+
+  await page.keyboard.press(await platformUndoShortcut(page));
+  await expectContentEditableFirstBlockText(page, `반갑${INITIAL_MODEL}`);
+  await expect.poll(() => firstBlockType(page)).toEqual({
+    level: undefined,
+    type: "paragraph",
+  });
+  await expectContentEditableSelectionOffset(page, 2);
+
+  await page.keyboard.press(await platformUndoShortcut(page));
+  await expectContentEditableFirstBlockText(page, INITIAL_MODEL);
+  await expect.poll(() => firstBlockType(page)).toEqual({
+    level: undefined,
+    type: "paragraph",
+  });
+  await expectContentEditableSelectionOffset(page, 2);
+
+  await page.keyboard.press(await platformRedoShortcut(page));
+  await expectContentEditableFirstBlockText(page, `반갑${INITIAL_MODEL}`);
+  await expect.poll(() => firstBlockType(page)).toEqual({
+    level: undefined,
+    type: "paragraph",
+  });
+  await expectContentEditableSelectionOffset(page, 2);
+
+  await page.keyboard.press(await platformRedoShortcut(page));
+  await expectContentEditableFirstBlockText(page, `반갑${INITIAL_MODEL}`);
+  await expect.poll(() => firstBlockType(page)).toEqual({
+    level: 1,
+    type: "heading",
+  });
+  await expectContentEditableSelectionOffset(
+    page,
+    expectedPostToolbarCompositionOffset(browserName),
+  );
+});
+
 test("contenteditable demo derives stale IME caret before Enter", async ({
   page,
 }) => {
@@ -1426,6 +1481,74 @@ async function selectMentionAtom(page: Page) {
   });
 }
 
+async function startKoreanPreeditAtFirstBlockStart(page: Page, text: string) {
+  await page.evaluate((preeditText) => {
+    const editor = document.querySelector(".contenteditable-editor");
+    if (!(editor instanceof HTMLElement)) {
+      throw new Error("Missing contenteditable editor.");
+    }
+    const textSurface = editor.querySelector('[data-editable-text="/blocks/0/text"]');
+    const firstTextNode = textSurface?.firstChild;
+    if (firstTextNode === undefined || firstTextNode === null) {
+      throw new Error("Missing first text node.");
+    }
+    if (firstTextNode.nodeType !== Node.TEXT_NODE) {
+      throw new Error("First text node was not text.");
+    }
+
+    const selection = document.getSelection();
+    if (selection === null) {
+      throw new Error("Missing DOM selection.");
+    }
+    const startRange = document.createRange();
+    startRange.setStart(firstTextNode, 0);
+    startRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(startRange);
+    editor.focus();
+
+    editor.dispatchEvent(
+      new CompositionEvent("compositionstart", { bubbles: true }),
+    );
+    firstTextNode.textContent = `${preeditText}${firstTextNode.textContent ?? ""}`;
+    const composingRange = document.createRange();
+    composingRange.setStart(firstTextNode, preeditText.length);
+    composingRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(composingRange);
+    editor.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        data: preeditText,
+        inputType: "insertCompositionText",
+        isComposing: true,
+      }),
+    );
+  }, text);
+}
+
+async function finishKoreanComposition(page: Page, text: string) {
+  await page.evaluate((commitText) => {
+    const editor = document.querySelector(".contenteditable-editor");
+    if (!(editor instanceof HTMLElement)) {
+      throw new Error("Missing contenteditable editor.");
+    }
+    editor.dispatchEvent(
+      new CompositionEvent("compositionend", {
+        bubbles: true,
+        data: commitText,
+      }),
+    );
+    editor.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        data: commitText,
+        inputType: "insertFromComposition",
+      }),
+    );
+  }, text);
+}
+
 type CrossRootKind = "iframe" | "portal" | "shadow";
 
 type CrossRootTrace = {
@@ -1794,6 +1917,18 @@ async function expectContentEditableFirstBlockText(page: Page, text: string) {
 
 async function getContentEditableValue(page: Page) {
   return getStateValue(page, "value");
+}
+
+async function firstBlockType(page: Page) {
+  const value = await getContentEditableValue(page);
+  return {
+    level: value.blocks[0]?.level,
+    type: value.blocks[0]?.type,
+  };
+}
+
+function expectedPostToolbarCompositionOffset(browserName: string): number {
+  return browserName === "chromium" ? 2 : 28;
 }
 
 async function getStateValue(page: Page, label: string) {
