@@ -437,16 +437,22 @@ export function ContentEditableDemo() {
     "underline",
   );
   const visualLayout = visualLayoutStore.read();
-  const cursorFrame = createRichCursorFrame(
-    document.value,
-    visualLayout.ok && visualLayout.layout !== null
-      ? {
-          lineSeeds: richVisualLineSeedsFromMeasuredLayout(
-            document.value,
-            visualLayout.layout,
-          ),
-        }
-      : undefined,
+  const cursorFrameDocument = document.value;
+  const cursorFrameLayout = visualLayout.ok ? visualLayout.layout : null;
+  const cursorFrame = useMemo(
+    () =>
+      createRichCursorFrame(
+        cursorFrameDocument,
+        cursorFrameLayout === null
+          ? undefined
+          : {
+              lineSeeds: richVisualLineSeedsFromMeasuredLayout(
+                cursorFrameDocument,
+                cursorFrameLayout,
+              ),
+            },
+      ),
+    [cursorFrameDocument, cursorFrameLayout],
   );
 
   return (

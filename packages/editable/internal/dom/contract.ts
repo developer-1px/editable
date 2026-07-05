@@ -215,7 +215,7 @@ export type EditableHost = {
 
 export type InternalEditableHostOptions = {
   root: HTMLElement;
-  document: JSONDocument<unknown>;
+  document: JSONDocument<RichDocument>;
   atomsPath?: InternalEditableRelatedPath | null;
   rangesPath?: InternalEditableRelatedPath | null;
   atomAttribute?: string;
@@ -262,16 +262,16 @@ export type InternalEditableController = {
   syncSelectionFromDOM(): SelectionSnap | null;
   restoreSelectionToDOM(selection?: SelectionSnap): boolean;
   copy(event?: ClipboardEvent): InternalClipboardResult;
-  cut(event?: ClipboardEvent): InternalClipboardResult;
-  paste(event?: ClipboardEvent): InternalClipboardResult;
+  cut(event?: ClipboardEvent): InternalEditableUpdate | InternalClipboardResult;
+  paste(event?: ClipboardEvent): InternalEditableUpdate;
   insertFragment(
     fragment: RichTextFragment,
     selection?: SelectionSnap | null,
-  ): InternalClipboardResult;
+  ): InternalEditableUpdate;
   insertText(
     text: string,
     selection?: SelectionSnap | null,
-  ): InternalClipboardResult;
+  ): InternalEditableUpdate;
   applyHistoryUndo(): JSONCapabilityResult;
   applyHistoryRedo(): JSONCapabilityResult;
   verticalGoal(): number | null;
