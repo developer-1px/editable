@@ -2,11 +2,9 @@ import type {
   JSONDocument,
   JSONPatchOperation,
   Pointer,
-  SelectionSnap,
 } from "@interactive-os/json-document";
 import type { InternalEditableRangeRecord } from "../contract";
 import { isRecord } from "./record";
-import { isTextPoint } from "./selection";
 
 export function selectedRanges<T>(
   document: JSONDocument<T>,
@@ -28,35 +26,6 @@ export function selectedRanges<T>(
     }
   }
   return selected;
-}
-
-export function rangeReplacementPatches<T>({
-  document,
-  insertedRanges,
-  insertedTextLength,
-  rangesPath,
-  selection,
-}: {
-  document: JSONDocument<T>;
-  insertedRanges: Record<string, InternalEditableRangeRecord> | null;
-  insertedTextLength: number;
-  rangesPath: Pointer | null;
-  selection: SelectionSnap | null;
-}): JSONPatchOperation[] {
-  if (rangesPath === null || selection === null) {
-    return [];
-  }
-  const replacement = textRangeFromSelection(selection);
-  if (replacement === null) {
-    return [];
-  }
-  return rangeReplacementPatchesForRange({
-    document,
-    insertedRanges,
-    insertedTextLength,
-    rangesPath,
-    replacement,
-  });
 }
 
 export function rangeSyncPatchesFromTextChange<T>({
@@ -134,24 +103,6 @@ type TextReplacementRange = {
   start: number;
   end: number;
 };
-
-function textRangeFromSelection(
-  selection: SelectionSnap,
-): TextReplacementRange | null {
-  const range = selection.selectionRanges[selection.primaryIndex];
-  if (
-    range === undefined ||
-    !isTextPoint(range.anchor) ||
-    !isTextPoint(range.focus) ||
-    range.anchor.path !== range.focus.path
-  ) {
-    return null;
-  }
-  return {
-    start: Math.min(range.anchor.offset, range.focus.offset),
-    end: Math.max(range.anchor.offset, range.focus.offset),
-  };
-}
 
 function changedTextRange(
   before: string,
