@@ -1,14 +1,14 @@
 import type {
-  InternalVisualLayout,
-  InternalVisualLayoutSnapshot,
-  InternalVisualLayoutStore,
+  VisualLayout,
+  VisualLayoutSnapshot,
+  VisualLayoutStore,
 } from "../contract";
 
 export function createVisualLayoutStore(
-  initial: InternalVisualLayout | null = null,
-): InternalVisualLayoutStore {
+  initial: VisualLayout | null = null,
+): VisualLayoutStore {
   let revision = 0;
-  let current: InternalVisualLayoutSnapshot =
+  let current: VisualLayoutSnapshot =
     initial === null
       ? staleSnapshot(null, revision, "Visual layout has not been measured.")
       : freshSnapshot(initial, revision);
@@ -31,9 +31,9 @@ export function createVisualLayoutStore(
 }
 
 function freshSnapshot(
-  layout: InternalVisualLayout | null,
+  layout: VisualLayout | null,
   revision: number,
-): InternalVisualLayoutSnapshot {
+): VisualLayoutSnapshot {
   return {
     ok: true,
     layout,
@@ -42,10 +42,10 @@ function freshSnapshot(
 }
 
 function staleSnapshot(
-  layout: InternalVisualLayout | null,
+  layout: VisualLayout | null,
   revision: number,
   reason: string,
-): InternalVisualLayoutSnapshot {
+): VisualLayoutSnapshot {
   return {
     ok: false,
     code: "visual_layout_stale",

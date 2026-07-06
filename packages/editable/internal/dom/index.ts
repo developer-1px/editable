@@ -1,13 +1,10 @@
 export type {
   EditableDispatchOptions,
-  EditableFlow,
   EditableHost,
   EditableHostOptions,
   EditableSelectionIntent,
   EditableUpdate,
   FlushOptions,
-  HostUpdate,
-  RichTextProjection,
   TextChange,
   TextProjection,
   TextProjectionProvider,

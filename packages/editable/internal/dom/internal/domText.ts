@@ -1,8 +1,8 @@
-import { JSON_ATOM_REPLACEMENT } from "../contract";
+import { ATOM_REPLACEMENT } from "../../model";
 
 export function editableTextContent(node: Node, atomAttribute: string): string {
   if (isAtomElement(node, atomAttribute)) {
-    return JSON_ATOM_REPLACEMENT;
+    return ATOM_REPLACEMENT;
   }
   if (node.nodeType === Node.TEXT_NODE) {
     return node.textContent ?? "";

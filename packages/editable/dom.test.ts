@@ -12,8 +12,6 @@ import {
   RICH_FRAGMENT_SCHEMA,
   type RichInlineAtom,
   type RichInlineRange,
-  richAtomsPathForTextPath,
-  richRangesPathForTextPath,
 } from "./index";
 import * as PublicCore from "./dom";
 import {
@@ -22,7 +20,6 @@ import {
   type VisualLayout,
   type VisualLayoutSnapshot,
 } from "./dom";
-import { createInternalEditableHost } from "./internal/dom/createEditableHost";
 import { RichDocumentSchema } from "./schema";
 
 type TestAtomRecord = Record<string, RichInlineAtom>;
@@ -54,7 +51,7 @@ function setup(initial = "Plain") {
     throw new Error("Fixture failed to create editable text.");
   }
 
-  const core = createInternalEditableHost({ root, document });
+  const core = createEditableHost({ root, document });
   return { core, document, root, textElement, textNode: textElement.firstChild };
 }
 
@@ -84,11 +81,7 @@ function setupMarkerDocument(initial = "Task text") {
     throw new Error("Fixture failed to create marker text.");
   }
 
-  const core = createInternalEditableHost({
-    root,
-    document,
-    atomsPath: richAtomsPathForTextPath,
-  });
+  const core = createEditableHost({ root, document });
   return {
     block,
     core,
@@ -121,11 +114,7 @@ function setupAtomDocument(
     throw new Error("Fixture failed to create atom text.");
   }
 
-  const core = createInternalEditableHost({
-    root,
-    document,
-    atomsPath: richAtomsPathForTextPath,
-  });
+  const core = createEditableHost({ root, document });
   return { core, document, root, textElement };
 }
 
@@ -147,11 +136,7 @@ function setupTrailingAtomDocument() {
     throw new Error("Fixture failed to create trailing atom text.");
   }
 
-  const core = createInternalEditableHost({
-    root,
-    document,
-    atomsPath: richAtomsPathForTextPath,
-  });
+  const core = createEditableHost({ root, document });
   return { core, document, root, textElement };
 }
 
@@ -175,11 +160,7 @@ function setupRangeDocument(
     throw new Error("Fixture failed to create range text.");
   }
 
-  const core = createInternalEditableHost({
-    root,
-    document,
-    rangesPath: richRangesPathForTextPath,
-  });
+  const core = createEditableHost({ root, document });
   return { core, document, root, textElement, textNode: textElement.firstChild };
 }
 
@@ -644,9 +625,9 @@ describe("editable DOM adapter json-document bridge", () => {
       offset: 1,
     });
 
-    expect(core.applyHistoryUndo().ok).toBe(true);
+    expect(core.dispatch({ type: "historyUndo" }).ok).toBe(true);
     expect(document.value.blocks[0]?.text).toBe("Plain");
-    expect(core.applyHistoryRedo().ok).toBe(true);
+    expect(core.dispatch({ type: "historyRedo" }).ok).toBe(true);
     expect(document.value.blocks[0]?.text).toBe("가Plain");
   });
 
@@ -709,7 +690,7 @@ describe("editable DOM adapter json-document bridge", () => {
     setDOMRange(textNode, 7, textNode, 8);
     core.syncSelectionFromDOM();
 
-    const result = core.insertText("Z");
+    const result = core.dispatch({ type: "insertFromPaste", data: "Z" });
 
     expect(result.ok).toBe(true);
     expect(document.value.blocks[0]?.text).toBe("Plain xZ");
@@ -726,7 +707,7 @@ describe("editable DOM adapter json-document bridge", () => {
     core.syncSelectionFromDOM();
     setDOMRange(textNode, 8, textNode, 8);
 
-    const result = core.insertText("Z");
+    const result = core.dispatch({ type: "insertFromPaste", data: "Z" });
 
     expect(result.ok).toBe(true);
     expect(document.value.blocks[0]?.text).toBe("Z xy");
@@ -741,9 +722,13 @@ describe("editable DOM adapter json-document bridge", () => {
 
     setDOMRange(textNode, 2, textNode, 2);
     core.syncSelectionFromDOM();
+    const commandSelection = document.selection?.snapshot() ?? null;
     setDOMRange(textNode, 8, textNode, 8);
 
-    const result = core.insertText("Z");
+    const result = core.dispatch(
+      { type: "insertFromPaste", data: "Z" },
+      { selection: commandSelection },
+    );
 
     expect(result.ok).toBe(true);
     expect(document.value.blocks[0]?.text).toBe("PlZain xy");
@@ -783,7 +768,7 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -821,7 +806,7 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -880,7 +865,7 @@ describe("editable DOM adapter json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("One\nTwo\nThree");
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -949,7 +934,7 @@ describe("editable DOM adapter json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("One\nTwo\nThree");
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1004,7 +989,7 @@ describe("editable DOM adapter json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("abcd\nefgh");
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1074,7 +1059,7 @@ describe("editable DOM adapter json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("abc\nde\nfgh");
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1136,7 +1121,7 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1237,7 +1222,7 @@ describe("editable DOM adapter json-document bridge", () => {
     let visualLayout: VisualLayout = {
       lines: [],
     };
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1305,7 +1290,7 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    expect(core.dispatchSelectionIntent(result.command)).toMatchObject({
+    expect(core.dispatch(result.command)).toMatchObject({
       flow: "model-to-dom",
       kind: "selection",
     });
@@ -1383,7 +1368,7 @@ describe("editable DOM adapter json-document bridge", () => {
     let visualLayout: VisualLayout = {
       lines: [],
     };
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1467,7 +1452,7 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    expect(core.dispatchSelectionIntent(result.command)).toMatchObject({
+    expect(core.dispatch(result.command)).toMatchObject({
       flow: "model-to-dom",
       kind: "selection",
     });
@@ -1491,7 +1476,7 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1552,7 +1537,7 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    expect(core.dispatchSelectionIntent(result.command)).toMatchObject({
+    expect(core.dispatch(result.command)).toMatchObject({
       flow: "model-to-dom",
       kind: "selection",
     });

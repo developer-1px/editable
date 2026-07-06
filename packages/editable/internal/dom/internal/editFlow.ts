@@ -3,8 +3,8 @@ import type {
   SelectionSnap,
 } from "@interactive-os/json-document";
 import type {
-  InternalSelectionIntent,
-  InternalEditableUpdate,
+  EditableSelectionIntent,
+  EditableUpdate,
 } from "../contract";
 
 export type SelectionIntent =
@@ -19,12 +19,12 @@ export function domToModelUpdate({
   render = false,
   selection,
 }: {
-  command?: InternalSelectionIntent;
+  command?: EditableSelectionIntent;
   kind: "no-change" | "selection" | "text";
   patch?: ReadonlyArray<JSONPatchOperation>;
   render?: boolean;
   selection: SelectionSnap | null;
-}): InternalEditableUpdate {
+}): EditableUpdate {
   const update = {
     ok: true,
     flow: "dom-to-model",
@@ -46,7 +46,7 @@ export function modelToDomUpdate({
   patch?: ReadonlyArray<JSONPatchOperation>;
   render: boolean;
   selection: SelectionSnap | null;
-}): InternalEditableUpdate {
+}): EditableUpdate {
   return {
     ok: true,
     flow: "model-to-dom",
