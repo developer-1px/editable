@@ -7,17 +7,19 @@ import type {
 } from "@interactive-os/json-document";
 import { JSON_ATOM_ATTRIBUTE, JSON_TEXT_ATTRIBUTE } from "./contract";
 import {
+  edit,
+  type EditIntent,
+  type RichVisualLineSeed,
+} from "../kernel";
+import {
   createRichBlock,
   createRichDocument,
-  edit,
   RICH_DOCUMENT_SCHEMA,
   richAtomsPathForTextPath,
   richRangesPathForTextPath,
   richTextPathForBlock,
-  type EditIntent,
   type RichDocument,
-  type RichVisualLineSeed,
-} from "../kernel";
+} from "../model";
 import type {
   EditableDispatchOptions,
   EditableHost,

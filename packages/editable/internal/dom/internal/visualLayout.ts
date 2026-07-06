@@ -2,7 +2,9 @@ import type { Pointer } from "@interactive-os/json-document";
 import {
   richBlockIndexFromTextPath,
   type RichDocument,
-  type RichVisualLineSeed,
+} from "../../model";
+import type {
+  RichVisualLineSeed,
 } from "../../kernel";
 import type {
   InternalProjectionProvider,

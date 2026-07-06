@@ -4,29 +4,31 @@ import type {
   SelectionSnap,
 } from "@interactive-os/json-document";
 import {
-  createRichCursorFrame,
   mergeAdjacentRichBlocks,
-  moveRichVirtualSelection,
   replaceRichTextRange,
-  richCursorPointAt,
   richTextPathForBlock,
-  richVirtualSelectionRange,
   splitRichBlock,
   toggleRichInlineRangeForSelection,
-  type RichCursorAffinity,
-  type RichCursorBlockFrame,
-  type RichCursorFrame,
-  type RichCursorMoveCommand,
-  type RichCursorPoint,
   type RichBlock,
   type RichDocument,
   type RichDocumentPlan,
   type RichInlineRange,
   type RichTextFragment,
+} from "../model";
+import {
+  createRichCursorFrame,
+  moveRichVirtualSelection,
+  richCursorPointAt,
+  richVirtualSelectionRange,
+  type RichCursorAffinity,
+  type RichCursorBlockFrame,
+  type RichCursorFrame,
+  type RichCursorMoveCommand,
+  type RichCursorPoint,
   type RichVirtualSelection,
   type RichVirtualSelectionRange,
   type RichVisualLineSeed,
-} from "./index";
+} from "./cursor";
 
 // The single editing interface.
 //

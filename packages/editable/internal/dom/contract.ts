@@ -7,16 +7,18 @@ import type {
 } from "@interactive-os/json-document";
 import {
   ATOM_REPLACEMENT,
-  EDITABLE_ATOM_ATTRIBUTE,
-  EDITABLE_TEXT_ATTRIBUTE,
   RICH_FRAGMENT_MIME,
   RICH_FRAGMENT_SCHEMA,
-  type EditIntent,
   type RichDocument,
   type RichInlineAtom,
   type RichInlineRange,
   type RichTextFragment,
-} from "../kernel";
+} from "../model";
+import {
+  EDITABLE_ATOM_ATTRIBUTE,
+  EDITABLE_TEXT_ATTRIBUTE,
+} from "../projection";
+import type { EditIntent } from "../kernel";
 
 export const JSON_TEXT_ATTRIBUTE = EDITABLE_TEXT_ATTRIBUTE;
 export const JSON_ATOM_ATTRIBUTE = EDITABLE_ATOM_ATTRIBUTE;
