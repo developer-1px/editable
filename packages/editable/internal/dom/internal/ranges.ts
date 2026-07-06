@@ -2,20 +2,18 @@ import type {
   JSONDocument,
   JSONPatchOperation,
   Pointer,
-  SelectionSnap,
 } from "@interactive-os/json-document";
-import type { InternalEditableRangeRecord } from "../contract";
+import type { RichInlineRange } from "../../model";
 import { isRecord } from "./record";
-import { isTextPoint } from "./selection";
 
 export function selectedRanges<T>(
   document: JSONDocument<T>,
   rangesPath: Pointer | null,
   start: number,
   end: number,
-): Record<string, InternalEditableRangeRecord> {
+): Record<string, RichInlineRange> {
   const ranges = readRangeRecords(document, rangesPath);
-  const selected: Record<string, InternalEditableRangeRecord> = {};
+  const selected: Record<string, RichInlineRange> = {};
   for (const [id, range] of Object.entries(ranges)) {
     const clippedStart = Math.max(range.start, start);
     const clippedEnd = Math.min(range.end, end);
@@ -28,35 +26,6 @@ export function selectedRanges<T>(
     }
   }
   return selected;
-}
-
-export function rangeReplacementPatches<T>({
-  document,
-  insertedRanges,
-  insertedTextLength,
-  rangesPath,
-  selection,
-}: {
-  document: JSONDocument<T>;
-  insertedRanges: Record<string, InternalEditableRangeRecord> | null;
-  insertedTextLength: number;
-  rangesPath: Pointer | null;
-  selection: SelectionSnap | null;
-}): JSONPatchOperation[] {
-  if (rangesPath === null || selection === null) {
-    return [];
-  }
-  const replacement = textRangeFromSelection(selection);
-  if (replacement === null) {
-    return [];
-  }
-  return rangeReplacementPatchesForRange({
-    document,
-    insertedRanges,
-    insertedTextLength,
-    rangesPath,
-    replacement,
-  });
 }
 
 export function rangeSyncPatchesFromTextChange<T>({
@@ -91,7 +60,7 @@ function rangeReplacementPatchesForRange<T>({
   replacement,
 }: {
   document: JSONDocument<T>;
-  insertedRanges: Record<string, InternalEditableRangeRecord> | null;
+  insertedRanges: Record<string, RichInlineRange> | null;
   insertedTextLength: number;
   rangesPath: Pointer;
   replacement: TextReplacementRange;
@@ -134,24 +103,6 @@ type TextReplacementRange = {
   start: number;
   end: number;
 };
-
-function textRangeFromSelection(
-  selection: SelectionSnap,
-): TextReplacementRange | null {
-  const range = selection.selectionRanges[selection.primaryIndex];
-  if (
-    range === undefined ||
-    !isTextPoint(range.anchor) ||
-    !isTextPoint(range.focus) ||
-    range.anchor.path !== range.focus.path
-  ) {
-    return null;
-  }
-  return {
-    start: Math.min(range.anchor.offset, range.focus.offset),
-    end: Math.max(range.anchor.offset, range.focus.offset),
-  };
-}
 
 function changedTextRange(
   before: string,
@@ -198,7 +149,7 @@ function mapRangeEnd(
 function readRangeRecords<T>(
   document: JSONDocument<T>,
   rangesPath: Pointer | null,
-): Record<string, InternalEditableRangeRecord> {
+): Record<string, RichInlineRange> {
   if (rangesPath === null) {
     return {};
   }
@@ -206,14 +157,14 @@ function readRangeRecords<T>(
   if (!result.ok || !isRecord(result.value)) {
     return {};
   }
-  const ranges: Record<string, InternalEditableRangeRecord> = {};
+  const ranges: Record<string, RichInlineRange> = {};
   for (const [id, value] of Object.entries(result.value)) {
     if (
       isRecord(value) &&
       typeof value.start === "number" &&
       typeof value.end === "number"
     ) {
-      ranges[id] = value as InternalEditableRangeRecord;
+      ranges[id] = value as RichInlineRange;
     }
   }
   return ranges;
@@ -221,7 +172,7 @@ function readRangeRecords<T>(
 
 function uniqueRangeId(
   id: string,
-  ranges: Record<string, InternalEditableRangeRecord>,
+  ranges: Record<string, RichInlineRange>,
   patch: ReadonlyArray<JSONPatchOperation>,
   rangesPath: Pointer,
 ): string {

@@ -7,28 +7,26 @@ import type {
   RichVisualLineSeed,
 } from "../../kernel";
 import type {
-  InternalProjectionProvider,
-  InternalVisualCaret,
-  InternalVisualLayout,
-  InternalVisualLine,
-  InternalVisualLineKind,
-  InternalVisualLineSeed,
-  InternalVisualLayoutOptions,
+  TextProjectionProvider,
+  VisualCaret,
   VisualLayout,
   VisualLayoutOptions,
+  VisualLine,
+  VisualLineKind,
+  VisualLineSeed,
 } from "../contract";
+import { ATOM_REPLACEMENT } from "../../model";
 import {
-  JSON_ATOM_ATTRIBUTE,
-  JSON_ATOM_REPLACEMENT,
-  JSON_TEXT_ATTRIBUTE,
-} from "../contract";
+  EDITABLE_ATOM_ATTRIBUTE,
+  EDITABLE_TEXT_ATTRIBUTE,
+} from "../../projection";
 import {
   editableTextContent,
   textDOMPositionForOffset,
 } from "./domText";
 import type { TextOffsetMapper } from "./selection";
 
-export function measureVisualLayout({
+function measureVisualLayoutWithMapper({
   atomAttribute,
   lineSeeds = null,
   mapper,
@@ -36,12 +34,12 @@ export function measureVisualLayout({
   textAttribute,
 }: {
   atomAttribute: string;
-  lineSeeds?: ReadonlyArray<InternalVisualLineSeed> | null;
+  lineSeeds?: ReadonlyArray<VisualLineSeed> | null;
   mapper: TextOffsetMapper | null;
   root: HTMLElement;
   textAttribute: string;
-}): InternalVisualLayout | null {
-  const lines: InternalVisualLine[] = [];
+}): VisualLayout | null {
+  const lines: VisualLine[] = [];
   const seedsByPath = lineSeedsByTextPath(lineSeeds);
   for (const element of textSurfaceElements(root, textAttribute)) {
     const path = element.getAttribute(textAttribute);
@@ -70,39 +68,23 @@ export function measureVisualLayout({
   return sorted.length === 0 ? null : { lines: sorted };
 }
 
-export function measureInternalVisualLayout({
-  atomAttribute = JSON_ATOM_ATTRIBUTE,
-  lineSeeds = null,
-  projection = null,
-  root,
-  textAttribute = JSON_TEXT_ATTRIBUTE,
-}: InternalVisualLayoutOptions): InternalVisualLayout | null {
-  return measureVisualLayout({
-    atomAttribute,
-    lineSeeds,
-    mapper: offsetMapperFromProjection(projection),
-    root,
-    textAttribute,
-  });
-}
-
 export function measureEditableVisualLayout({
   lineSeeds = null,
   projection = null,
   root,
 }: VisualLayoutOptions): VisualLayout | null {
-  return measureInternalVisualLayout({
-    atomAttribute: JSON_ATOM_ATTRIBUTE,
+  return measureVisualLayoutWithMapper({
+    atomAttribute: EDITABLE_ATOM_ATTRIBUTE,
     lineSeeds,
-    projection,
+    mapper: offsetMapperFromProjection(projection),
     root,
-    textAttribute: JSON_TEXT_ATTRIBUTE,
+    textAttribute: EDITABLE_TEXT_ATTRIBUTE,
   });
 }
 
 export function richVisualLineSeedsFromMeasuredLayout(
   document: RichDocument,
-  layout: InternalVisualLayout,
+  layout: VisualLayout,
 ): RichVisualLineSeed[] {
   const seeds: RichVisualLineSeed[] = [];
   const lineIndexByBlock = new Map<string, number>();
@@ -133,7 +115,7 @@ export function richVisualLineSeedsFromMeasuredLayout(
 }
 
 function offsetMapperFromProjection(
-  projection: InternalProjectionProvider | null,
+  projection: TextProjectionProvider | null,
 ): TextOffsetMapper | null {
   return projection === null
     ? null
@@ -148,9 +130,9 @@ function offsetMapperFromProjection(
 }
 
 function lineSeedsByTextPath(
-  lineSeeds: ReadonlyArray<InternalVisualLineSeed> | null,
-): Map<Pointer, InternalVisualLineSeed[]> {
-  const grouped = new Map<Pointer, InternalVisualLineSeed[]>();
+  lineSeeds: ReadonlyArray<VisualLineSeed> | null,
+): Map<Pointer, VisualLineSeed[]> {
+  const grouped = new Map<Pointer, VisualLineSeed[]>();
   for (const seed of lineSeeds ?? []) {
     const seeds = grouped.get(seed.path) ?? [];
     seeds.push(seed);
@@ -187,8 +169,8 @@ function hardLineSeedsFromEditableText(
   path: Pointer,
   editableText: string,
   mapper: TextOffsetMapper | null,
-): InternalVisualLineSeed[] {
-  const seeds: InternalVisualLineSeed[] = [];
+): VisualLineSeed[] {
+  const seeds: VisualLineSeed[] = [];
   let lineIndex = 0;
   let start = 0;
   for (let index = 0; index < editableText.length; index += 1) {
@@ -212,7 +194,7 @@ function createFallbackSeed(
   editableEnd: number,
   editableText: string,
   mapper: TextOffsetMapper | null,
-): InternalVisualLineSeed {
+): VisualLineSeed {
   const startOffset =
     mapper?.editableOffsetToDocumentOffset(path, editableStart) ?? editableStart;
   const endOffset =
@@ -227,11 +209,11 @@ function createFallbackSeed(
   };
 }
 
-function visualLineKind(text: string): InternalVisualLineKind {
+function visualLineKind(text: string): VisualLineKind {
   if (text.length === 0) {
     return "empty";
   }
-  return Array.from(text).every((character) => character === JSON_ATOM_REPLACEMENT)
+  return Array.from(text).every((character) => character === ATOM_REPLACEMENT)
     ? "atom-only"
     : "text";
 }
@@ -248,9 +230,9 @@ function measureSeedLine({
   editableText: string;
   element: HTMLElement;
   mapper: TextOffsetMapper | null;
-  previousLines: ReadonlyArray<InternalVisualLine>;
-  seed: InternalVisualLineSeed;
-}): InternalVisualLine[] {
+  previousLines: ReadonlyArray<VisualLine>;
+  seed: VisualLineSeed;
+}): VisualLine[] {
   const startEditable = clampOffset(
     mapper?.documentOffsetToEditableOffset(seed.path, seed.startOffset) ??
       seed.startOffset,
@@ -263,7 +245,7 @@ function measureSeedLine({
   );
   const start = Math.min(startEditable, endEditable);
   const end = Math.max(startEditable, endEditable);
-  const carets: InternalVisualCaret[] = [];
+  const carets: VisualCaret[] = [];
   for (let editableOffset = start; editableOffset <= end; editableOffset += 1) {
     const caret = measureCaret({
       atomAttribute,
@@ -307,7 +289,7 @@ function measureCaret({
   element: HTMLElement;
   mapper: TextOffsetMapper | null;
   path: Pointer;
-}): InternalVisualCaret | null {
+}): VisualCaret | null {
   const position = textDOMPositionForOffset(
     element,
     editableOffset,
@@ -465,9 +447,9 @@ function synthesizeLineFromSeed({
 }: {
   editableOffset: number;
   element: HTMLElement;
-  previousLines: ReadonlyArray<InternalVisualLine>;
-  seed: InternalVisualLineSeed;
-}): InternalVisualLine {
+  previousLines: ReadonlyArray<VisualLine>;
+  seed: VisualLineSeed;
+}): VisualLine {
   const previous = [...previousLines]
     .filter((line) => line.path === seed.path)
     .sort(compareVisualLines)
@@ -499,14 +481,14 @@ function synthesizeLineFromSeed({
 }
 
 function groupCaretsIntoLines(
-  seed: InternalVisualLineSeed,
-  carets: InternalVisualCaret[],
-): InternalVisualLine[] {
+  seed: VisualLineSeed,
+  carets: VisualCaret[],
+): VisualLine[] {
   const sorted = [...carets].sort((left, right) => {
     const lineOrder = lineCenter(left) - lineCenter(right);
     return lineOrder === 0 ? left.x - right.x : lineOrder;
   });
-  const grouped: InternalVisualCaret[][] = [];
+  const grouped: VisualCaret[][] = [];
 
   for (const caret of sorted) {
     const existing = grouped.find((line) => sameLine(lineBounds(line), caret));
@@ -528,15 +510,15 @@ function groupCaretsIntoLines(
 }
 
 function lineFromCarets(
-  seed: InternalVisualLineSeed,
-  carets: InternalVisualCaret[],
+  seed: VisualLineSeed,
+  carets: VisualCaret[],
   wrapIndex: number,
   identity: {
     id: string;
     sourceId: string;
     editableOffset?: number;
   },
-): InternalVisualLine {
+): VisualLine {
   const sorted = [...carets].sort((left, right) => {
     if (left.x !== right.x) {
       return left.x - right.x;
@@ -573,7 +555,7 @@ function lineFromCarets(
 }
 
 function lineBounds(
-  carets: ReadonlyArray<InternalVisualCaret>,
+  carets: ReadonlyArray<VisualCaret>,
 ): { top: number; bottom: number } {
   return {
     top: Math.min(...carets.map((caret) => caret.top)),
@@ -582,8 +564,8 @@ function lineBounds(
 }
 
 function sameLine(
-  line: Pick<InternalVisualLine, "top" | "bottom">,
-  caret: InternalVisualCaret,
+  line: Pick<VisualLine, "top" | "bottom">,
+  caret: VisualCaret,
 ): boolean {
   const center = lineCenter(caret);
   return line.top - 2 <= center && center <= line.bottom + 2;
@@ -616,8 +598,8 @@ function lineStartX(element: HTMLElement): number {
 }
 
 function compareVisualLines(
-  left: InternalVisualLine,
-  right: InternalVisualLine,
+  left: VisualLine,
+  right: VisualLine,
 ): number {
   const visualOrder = lineCenter(left) - lineCenter(right);
   if (visualOrder !== 0) {

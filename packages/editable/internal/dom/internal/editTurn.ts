@@ -1,10 +1,10 @@
-import type { InternalSelectionIntent } from "../contract";
+import type { EditableSelectionIntent } from "../contract";
 import type { SelectionIntent } from "./editFlow";
 
 export type EditModelInstruction =
   | {
       type: "command";
-      command: InternalSelectionIntent;
+      command: EditableSelectionIntent;
     }
   | {
       type: "insertText";
@@ -308,7 +308,7 @@ function lineBoundaryCommandFromKey(
 
 function modelCommandFromKey(
   event: KeyboardEvent,
-): InternalSelectionIntent | null {
+): EditableSelectionIntent | null {
   const alter = event.shiftKey ? "extend" : "move";
   const verticalMotionCommand = verticalMotionCommandFromKey(event);
   if (verticalMotionCommand !== null) {
@@ -343,7 +343,7 @@ function runModelInstructionEditTurn(
 }
 
 function commandInstruction(
-  command: InternalSelectionIntent,
+  command: EditableSelectionIntent,
 ): EditModelInstruction {
   return {
     type: "command",

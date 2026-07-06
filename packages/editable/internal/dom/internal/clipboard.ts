@@ -4,12 +4,12 @@ import type {
   SelectionSnap,
 } from "@interactive-os/json-document";
 import {
-  JSON_ATOM_REPLACEMENT,
-  JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
-  JSON_CONTENT_EDITABLE_MIME,
-  type InternalEditableAtomRecord,
+  ATOM_REPLACEMENT,
+  RICH_FRAGMENT_MIME,
+  RICH_FRAGMENT_SCHEMA,
+  type RichInlineAtom,
   type RichTextFragment,
-} from "../contract";
+} from "../../model";
 import { selectedAtoms } from "./atoms";
 import { readString } from "./jsonDocument";
 import { selectedRanges } from "./ranges";
@@ -50,7 +50,7 @@ export function selectedFragment<T>(
   }
 
   const payload: RichTextFragment = {
-    schema: JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA,
+    schema: RICH_FRAGMENT_SCHEMA,
     text,
   };
   if (Object.keys(atoms).length > 0) {
@@ -75,7 +75,7 @@ export function isRichTextFragmentPayload(
 ): value is RichTextFragment {
   return (
     isRecord(value) &&
-    value.schema === JSON_CONTENT_EDITABLE_FRAGMENT_SCHEMA &&
+    value.schema === RICH_FRAGMENT_SCHEMA &&
     typeof value.text === "string" &&
     (value.atoms === undefined || isRecord(value.atoms)) &&
     (value.ranges === undefined || isRecord(value.ranges))
@@ -85,11 +85,11 @@ export function isRichTextFragmentPayload(
 export function plainTextFromFragment(fragment: RichTextFragment): string {
   let text = "";
   for (let index = 0; index < fragment.text.length; index += 1) {
-    if (fragment.text[index] === JSON_ATOM_REPLACEMENT) {
+    if (fragment.text[index] === ATOM_REPLACEMENT) {
       const atom = Object.values(fragment.atoms ?? {}).find(
         (candidate) => candidate.offset === index,
       );
-      text += atom === undefined ? JSON_ATOM_REPLACEMENT : atomPlainText(atom);
+      text += atom === undefined ? ATOM_REPLACEMENT : atomPlainText(atom);
     } else {
       text += fragment.text[index];
     }
@@ -104,7 +104,7 @@ export function writeBrowserClipboard(
 ) {
   event?.clipboardData?.setData("text/plain", plainText);
   event?.clipboardData?.setData(
-    JSON_CONTENT_EDITABLE_MIME,
+    RICH_FRAGMENT_MIME,
     JSON.stringify(payload),
   );
 }
@@ -112,7 +112,7 @@ export function writeBrowserClipboard(
 export function readBrowserJSONPayload(
   event: ClipboardEvent | undefined,
 ): unknown | null {
-  const raw = event?.clipboardData?.getData(JSON_CONTENT_EDITABLE_MIME) ?? "";
+  const raw = event?.clipboardData?.getData(RICH_FRAGMENT_MIME) ?? "";
   if (raw.length === 0) {
     return null;
   }
@@ -123,7 +123,7 @@ export function readBrowserJSONPayload(
   }
 }
 
-function atomPlainText(atom: InternalEditableAtomRecord): string {
+function atomPlainText(atom: RichInlineAtom): string {
   if (typeof atom.label === "string") {
     return atom.label;
   }
@@ -133,5 +133,5 @@ function atomPlainText(atom: InternalEditableAtomRecord): string {
   if (typeof atom.name === "string") {
     return atom.name;
   }
-  return JSON_ATOM_REPLACEMENT;
+  return ATOM_REPLACEMENT;
 }

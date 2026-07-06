@@ -5,46 +5,35 @@ import type {
   Pointer,
   SelectionSnap,
 } from "@interactive-os/json-document";
-import { JSON_ATOM_ATTRIBUTE, JSON_TEXT_ATTRIBUTE } from "./contract";
 import {
   edit,
   type EditIntent,
   type RichVisualLineSeed,
 } from "../kernel";
 import {
-  createRichBlock,
-  createRichDocument,
-  RICH_DOCUMENT_SCHEMA,
   richAtomsPathForTextPath,
   richRangesPathForTextPath,
-  richTextPathForBlock,
   type RichDocument,
 } from "../model";
+import {
+  EDITABLE_ATOM_ATTRIBUTE,
+  EDITABLE_TEXT_ATTRIBUTE,
+} from "../projection";
 import type {
   EditableDispatchOptions,
   EditableHost,
-  EditableUpdate,
   EditableHostOptions,
+  EditableSelectionIntent,
+  EditableUpdate,
   FlushOptions,
-  InternalClipboardResult,
-  RichTextFragment,
-  InternalEditableHost,
-  InternalEditableHostOptions,
-  InternalEditableRelatedPath,
-  InternalSelectionIntent,
-  InternalTextProjection,
-  InternalEditableUpdate,
-  InternalVisualLayout,
-  InternalVisualLayoutSnapshot,
-  VisualLayoutProvider,
+  NativeTextLease,
+  TextProjection,
+  VisualLayout,
+  VisualLayoutSnapshot,
 } from "./contract";
-import {
-  atomReplacementPatches,
-  atomSyncPatchesFromDOM,
-} from "./internal/atoms";
+import { atomSyncPatchesFromDOM } from "./internal/atoms";
 import {
   isRichTextFragmentPayload,
-  plainTextFromFragment,
   readBrowserJSONPayload,
   readDocumentClipboard,
   selectedFragment,
@@ -59,7 +48,6 @@ import {
   modelToDomUpdate,
   type SelectionIntent,
 } from "./internal/editFlow";
-import type { NativeTextLease } from "./internal/editorContract";
 import {
   editTurnPreventsDefault,
   editTurnResetsVerticalGoal,
@@ -67,10 +55,7 @@ import {
   type EditModelInstruction,
 } from "./internal/editTurn";
 import { readString } from "./internal/jsonDocument";
-import {
-  rangeReplacementPatches,
-  rangeSyncPatchesFromTextChange,
-} from "./internal/ranges";
+import { rangeSyncPatchesFromTextChange } from "./internal/ranges";
 import {
   chooseSelection,
   restoreDOMSelection,
@@ -88,16 +73,14 @@ type CommitTextOptions = FlushOptions & {
   resetVerticalGoal?: boolean;
 };
 
-export function createInternalEditableHost({
-  atomAttribute = JSON_ATOM_ATTRIBUTE,
-  atomsPath = null,
+export function createEditableHost({
   document,
-  rangesPath = null,
   root,
-  textAttribute = JSON_TEXT_ATTRIBUTE,
   projection = null,
   visualLayout = null,
-}: InternalEditableHostOptions): InternalEditableHost {
+}: EditableHostOptions): EditableHost {
+  const atomAttribute = EDITABLE_ATOM_ATTRIBUTE;
+  const textAttribute = EDITABLE_TEXT_ATTRIBUTE;
   let lease: NativeTextLease | null = null;
   let suppressNextCompositionCommit = false;
   let verticalGoalX: number | null = null;
@@ -107,7 +90,7 @@ export function createInternalEditableHost({
 
   const projectionForPath = (
     path: Pointer | null,
-  ): InternalTextProjection | null =>
+  ): TextProjection | null =>
     path === null ? null : projection?.(path) ?? null;
 
   const offsetMapper: TextOffsetMapper = {
@@ -161,7 +144,7 @@ export function createInternalEditableHost({
     return selection;
   };
 
-  const readVisualLayoutSnapshot = (): InternalVisualLayoutSnapshot =>
+  const readVisualLayoutSnapshot = (): VisualLayoutSnapshot =>
     visualLayout?.() ?? {
       ok: false,
       code: "visual_layout_stale",
@@ -173,7 +156,7 @@ export function createInternalEditableHost({
   const commitTextFromDOM = (
     selectionIntent: SelectionIntent,
     options: CommitTextOptions = {},
-  ): InternalEditableUpdate => {
+  ): EditableUpdate => {
     if (options.resetVerticalGoal !== false) {
       verticalGoalX = null;
     }
@@ -232,7 +215,7 @@ export function createInternalEditableHost({
 
     const atomSyncPatch = atomSyncPatchesFromDOM(
       document,
-      relatedPath(atomsPath, path),
+      richAtomsPathForTextPath(path),
       textElement,
       atomAttribute,
       textProjection === null
@@ -243,7 +226,7 @@ export function createInternalEditableHost({
       document,
       nextText,
       previousText: current.value,
-      rangesPath: relatedPath(rangesPath, path),
+      rangesPath: richRangesPathForTextPath(path),
     });
 
     if (
@@ -339,7 +322,7 @@ export function createInternalEditableHost({
     });
   };
 
-  const flushDOMToModel = (options: FlushOptions = {}): InternalEditableUpdate =>
+  const flushDOMToModel = (options: FlushOptions = {}): EditableUpdate =>
     commitTextFromDOM("range-command", {
       ...options,
       resetVerticalGoal: false,
@@ -347,7 +330,7 @@ export function createInternalEditableHost({
 
   const flushNativeTextForModelInstruction = (
     instruction: EditModelInstruction,
-  ): InternalEditableUpdate => {
+  ): EditableUpdate => {
     const mergeKey = lease === null ? undefined : `native:${lease.surface}`;
     const committed = commitTextFromDOM("composition-commit", {
       label: `flush before ${modelInstructionLabel(instruction)}`,
@@ -371,7 +354,7 @@ export function createInternalEditableHost({
 
   const runModelInstructionAfterDOMFlush = (
     instruction: EditModelInstruction,
-  ): InternalEditableUpdate => {
+  ): EditableUpdate => {
     const flushed = flushDOMToModel({
       label: `prepare ${modelInstructionLabel(instruction)}`,
     });
@@ -391,7 +374,7 @@ export function createInternalEditableHost({
     return runModelInstructionAtCurrentSelection(instruction);
   };
 
-  const copy = (event?: ClipboardEvent): InternalClipboardResult => {
+  const copy = (event?: ClipboardEvent): EditableUpdate => {
     flushDOMToModel({ label: "copy selection" });
     const selection = document.selection?.snapshot() ?? null;
     const selectionPath = textPathFromSelection(selection);
@@ -401,16 +384,17 @@ export function createInternalEditableHost({
         : selectedFragment(
             document,
             selection,
-            relatedPath(atomsPath, selectionPath),
-            relatedPath(rangesPath, selectionPath),
+            selectionPath === null ? null : richAtomsPathForTextPath(selectionPath),
+            selectionPath === null ? null : richRangesPathForTextPath(selectionPath),
           );
     if (fragment !== null) {
       writeBrowserClipboard(event, fragment.plainText, fragment.payload);
       document.clipboard.write(fragment.payload, { trustedPayload: true });
-      return {
-        ok: true,
-        value: document.value,
-      };
+      return modelToDomUpdate({
+        kind: "no-change",
+        render: false,
+        selection: document.selection?.snapshot() ?? null,
+      });
     }
 
     return {
@@ -420,56 +404,72 @@ export function createInternalEditableHost({
     };
   };
 
-  const cut = (event?: ClipboardEvent): InternalClipboardResult => {
-    let result: InternalClipboardResult | null = null;
+  // The single content-edit funnel: every insertion/deletion the host applies
+  // is decided by the kernel; the host only commits and restores selections.
+  const applyKernelContentEdit = (
+    intent: EditIntent,
+    label: string,
+    selection: SelectionSnap | null = document.selection?.snapshot() ?? null,
+  ): EditableUpdate => {
+    verticalGoalX = null;
+    if (selection !== null) {
+      document.selection?.restore(selection);
+    }
+    const result = edit(
+      { document: document.value, selection, goalX: null },
+      intent,
+    );
+    if (!result.ok) {
+      return { ok: false, code: result.code, reason: result.reason };
+    }
+    if (result.kind === "history") {
+      return capabilityToUpdate(
+        result.command === "undo" ? applyHistoryUndo() : applyHistoryRedo(),
+      );
+    }
+    if (result.patch.length > 0) {
+      const commit = document.commit(result.patch, {
+        label,
+        origin: "contenteditable",
+        selectionAfter: result.selectionAfter ?? undefined,
+      });
+      if (!commit.ok) {
+        return {
+          ok: false,
+          code: "commit_failed",
+          reason: commit.reason ?? commit.code,
+        };
+      }
+    } else if (result.selectionAfter !== null) {
+      document.selection?.restore(result.selectionAfter);
+    }
+    if (result.selectionAfter !== null) {
+      restoreDOMSelection(
+        root,
+        result.selectionAfter,
+        textAttribute,
+        atomAttribute,
+        offsetMapper,
+      );
+    }
+    lease = null;
+    return modelToDomUpdate({
+      kind: result.kind,
+      patch: result.patch,
+      render: result.kind !== "no-change",
+      selection: result.selectionAfter,
+    });
+  };
+
+  const cut = (event?: ClipboardEvent): EditableUpdate => {
+    let result: EditableUpdate | null = null;
     document.history.transaction({ label: "cut", origin: "contenteditable" }, () => {
       const copyResult = copy(event);
       if (!copyResult.ok) {
         result = copyResult;
         return;
       }
-
-      const textPatch = document.selection?.textPatch("");
-      if (textPatch?.ok) {
-        const selection = document.selection?.snapshot() ?? null;
-        const selectionPath = textPathFromSelection(selection);
-        const atomPatch = atomReplacementPatches({
-          atomsPath: relatedPath(atomsPath, selectionPath),
-          document,
-          insertedAtoms: null,
-          insertedTextLength: 0,
-          selection,
-        });
-        const rangePatch = rangeReplacementPatches({
-          document,
-          insertedRanges: null,
-          insertedTextLength: 0,
-          rangesPath: relatedPath(rangesPath, selectionPath),
-          selection,
-        });
-        const commit = document.commit(
-          [...textPatch.patch, ...atomPatch, ...rangePatch],
-          {
-            label: "cut text",
-            origin: "contenteditable",
-            selectionAfter: textPatch.selection,
-          },
-        );
-        result = commit.ok
-          ? { ok: true, value: document.value }
-          : {
-              ok: false,
-              code: "invalid_payload",
-              reason: commit.reason ?? commit.code,
-            };
-        return;
-      }
-
-      result = {
-        ok: false,
-        code: "empty_selection",
-        reason: "No text or atom range was cut.",
-      };
+      result = applyKernelContentEdit({ type: "deleteByCut" }, "cut text");
     });
 
     return (
@@ -489,15 +489,12 @@ export function createInternalEditableHost({
     clipboardText: string;
     jsonPayload: unknown | null;
     selection?: SelectionSnap | null;
-  }): InternalClipboardResult => {
-    let result: InternalClipboardResult | null = null;
+  }): EditableUpdate => {
+    let result: EditableUpdate | null = null;
     document.history.transaction(
       { label: "paste", origin: "contenteditable" },
       () => {
         flushDOMToModel({ label: "prepare paste" });
-        if (selection !== undefined && selection !== null) {
-          document.selection?.restore(selection);
-        }
 
         if (jsonPayload !== null) {
           const write = document.clipboard.write(jsonPayload, {
@@ -519,58 +516,20 @@ export function createInternalEditableHost({
           ? jsonPayload
           : null;
         const replacementText = fragment?.text ?? clipboardText;
-        const insertedAtoms = fragment?.atoms ?? null;
-        const insertedRanges = fragment?.ranges ?? null;
-
-        if (replacementText.length > 0 && document.selection !== undefined) {
-          const selection = document.selection.snapshot();
-          const selectionPath = textPathFromSelection(selection);
-          const textPatch = document.selection.textPatch(replacementText);
-          if (textPatch.ok) {
-            const atomPatch = atomReplacementPatches({
-              atomsPath: relatedPath(atomsPath, selectionPath),
-              document,
-              insertedAtoms,
-              insertedTextLength: replacementText.length,
-              selection,
-            });
-            const rangePatch = rangeReplacementPatches({
-              document,
-              insertedRanges,
-              insertedTextLength: replacementText.length,
-              rangesPath: relatedPath(rangesPath, selectionPath),
-              selection,
-            });
-            const commit = document.commit(
-              [...textPatch.patch, ...atomPatch, ...rangePatch],
-              {
-                label: "paste text",
-                origin: "contenteditable",
-                selectionAfter: textPatch.selection,
-              },
-            );
-            result = commit.ok
-              ? { ok: true, value: document.value }
-              : {
-                  ok: false,
-                  code: "invalid_payload",
-                  reason: commit.reason ?? commit.code,
-                };
-            return;
-          }
+        if (replacementText.length === 0) {
+          result = {
+            ok: false,
+            code: "clipboard_unavailable",
+            reason: "No paste payload was available.",
+          };
+          return;
         }
 
-        result = {
-          ok: false,
-          code:
-            replacementText.length === 0
-              ? "clipboard_unavailable"
-              : "invalid_payload",
-          reason:
-            replacementText.length === 0
-              ? "No paste payload was available."
-              : "The current selection cannot accept text.",
-        };
+        result = applyKernelContentEdit(
+          { type: "insertFromPaste", data: fragment ?? clipboardText },
+          "paste text",
+          selection ?? document.selection?.snapshot() ?? null,
+        );
       },
     );
 
@@ -585,38 +544,16 @@ export function createInternalEditableHost({
 
   const paste = (
     event?: ClipboardEvent,
-  ): InternalClipboardResult =>
+  ): EditableUpdate =>
     pastePayload({
       clipboardText: event?.clipboardData?.getData("text/plain") ?? "",
       jsonPayload:
         event === undefined ? readDocumentClipboard(document) : readBrowserJSONPayload(event),
     });
 
-  const insertFragment = (
-    fragment: RichTextFragment,
-    selection = document.selection?.snapshot() ?? null,
-  ): InternalClipboardResult =>
-    pastePayload({
-      clipboardText: plainTextFromFragment(fragment),
-      jsonPayload: fragment,
-      selection,
-    });
-
-  const insertText = (
-    text: string,
-    selection = document.selection?.snapshot() ?? null,
-  ): InternalClipboardResult => {
-    const payload = readDocumentClipboard(document);
-    const fragment =
-      isRichTextFragmentPayload(payload) && plainTextFromFragment(payload) === text
-        ? payload
-        : null;
-    return pastePayload({ clipboardText: text, jsonPayload: fragment, selection });
-  };
-
   const runModelInstructionAtCurrentSelection = (
     instruction: EditModelInstruction,
-  ): InternalEditableUpdate => {
+  ): EditableUpdate => {
     if (instruction.type === "command") {
       return dispatchSelectionIntent(instruction.command);
     }
@@ -631,63 +568,20 @@ export function createInternalEditableHost({
     replacementText: string,
     label: string,
     selection: SelectionSnap | null,
-  ): InternalEditableUpdate => {
-    verticalGoalX = null;
-    if (selection === null || document.selection === undefined) {
+  ): EditableUpdate => {
+    if (selection === null) {
+      verticalGoalX = null;
       return modelToDomUpdate({
         kind: "no-change",
         render: false,
         selection: document.selection?.snapshot() ?? null,
       });
     }
-
-    document.selection.restore(selection);
-    const selectionPath = textPathFromSelection(selection);
-    const textPatch = document.selection.textPatch(replacementText);
-    if (!textPatch.ok) {
-      return {
-        ok: false,
-        code: "commit_failed",
-        reason: textPatch.reason ?? textPatch.code,
-      };
-    }
-
-    const patch = [
-      ...textPatch.patch,
-      ...atomReplacementPatches({
-        atomsPath: relatedPath(atomsPath, selectionPath),
-        document,
-        insertedAtoms: null,
-        insertedTextLength: replacementText.length,
-        selection,
-      }),
-      ...rangeReplacementPatches({
-        document,
-        insertedRanges: null,
-        insertedTextLength: replacementText.length,
-        rangesPath: relatedPath(rangesPath, selectionPath),
-        selection,
-      }),
-    ];
-    const commit = document.commit(patch, {
+    return applyKernelContentEdit(
+      { type: "insertText", text: replacementText },
       label,
-      origin: "contenteditable",
-      selectionAfter: textPatch.selection,
-    });
-    lease = null;
-    if (!commit.ok) {
-      return {
-        ok: false,
-        code: "commit_failed",
-        reason: commit.reason ?? commit.code,
-      };
-    }
-    return modelToDomUpdate({
-      kind: "text",
-      render: true,
-      selection: textPatch.selection,
-      patch,
-    });
+      selection,
+    );
   };
 
   return {
@@ -812,10 +706,8 @@ export function createInternalEditableHost({
         selection: document.selection?.snapshot() ?? null,
       });
     },
-    dispatch: dispatchSelectionIntent,
+    dispatch,
     flush: flushDOMToModel,
-    flushDOMToModel,
-    dispatchSelectionIntent,
     syncSelectionFromDOM,
     restoreSelectionToDOM(selection = document.selection?.snapshot()) {
       return selection === undefined
@@ -831,16 +723,120 @@ export function createInternalEditableHost({
     copy,
     cut,
     paste,
-    insertFragment,
-    insertText,
-    applyHistoryUndo,
-    applyHistoryRedo,
     reset() {
       lease = null;
       suppressNextCompositionCommit = false;
       verticalGoalX = null;
     },
   };
+
+  function dispatch(
+    intent: EditIntent,
+    options: EditableDispatchOptions = {},
+  ): EditableUpdate {
+    if (intent.type === "historyUndo") {
+      return capabilityToUpdate(applyHistoryUndo());
+    }
+    if (intent.type === "historyRedo") {
+      return capabilityToUpdate(applyHistoryRedo());
+    }
+    if (
+      intent.type === "modifySelection" &&
+      (intent.granularity === "line" || intent.granularity === "lineboundary")
+    ) {
+      return dispatchSelectionIntent(intent);
+    }
+    return dispatchKernelIntent(intent, options);
+  }
+
+  function dispatchKernelIntent(
+    intent: EditIntent,
+    options: EditableDispatchOptions,
+  ): EditableUpdate {
+    const flushed = flushDOMToModel({
+      label: `prepare ${options.label ?? intent.type}`,
+    });
+    if (!flushed.ok) {
+      return flushed;
+    }
+
+    const selection =
+      options.selection === undefined
+        ? document.selection?.snapshot() ?? null
+        : options.selection;
+    if (options.selection !== undefined && options.selection !== null) {
+      document.selection?.restore(options.selection);
+    }
+
+    // Only soft-line deletion consumes visual geometry on this path; line and
+    // lineboundary movement is routed to dispatchSelectionIntent before here.
+    const needsLineSeeds =
+      intent.type === "deleteSoftLineBackward" ||
+      intent.type === "deleteSoftLineForward";
+    const layout = needsLineSeeds ? readVisualLayoutSnapshot() : undefined;
+    const result = edit(
+      {
+        document: document.value,
+        selection,
+        goalX: verticalGoalX,
+      },
+      intent,
+      {
+        lineSeeds:
+          layout?.ok === true && layout.layout !== null
+            ? richVisualLineSeedsFromMeasuredLayout(document.value, layout.layout)
+            : null,
+      },
+    );
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        code: result.code,
+        reason: result.reason,
+      };
+    }
+    if (result.kind === "history") {
+      return capabilityToUpdate(
+        result.command === "undo" ? applyHistoryUndo() : applyHistoryRedo(),
+      );
+    }
+    verticalGoalX = result.goalX;
+
+    if (result.patch.length > 0) {
+      const commit = document.commit(result.patch, {
+        label: options.label ?? intent.type,
+        origin: "contenteditable",
+        selectionAfter: result.selectionAfter ?? undefined,
+      });
+      if (!commit.ok) {
+        return {
+          ok: false,
+          code: "commit_failed",
+          reason: commit.reason ?? commit.code,
+        };
+      }
+    } else if (result.selectionAfter !== null) {
+      document.selection?.restore(result.selectionAfter);
+    }
+
+    if (result.selectionAfter !== null) {
+      restoreDOMSelection(
+        root,
+        result.selectionAfter,
+        textAttribute,
+        atomAttribute,
+        offsetMapper,
+      );
+    }
+
+    return modelToDomUpdate({
+      kind: result.kind,
+      patch: result.patch,
+      render: result.kind !== "no-change",
+      selection: result.selectionAfter,
+    });
+  }
 
   function applyHistoryUndo(): JSONCapabilityResult {
     const result = document.undo();
@@ -867,8 +863,8 @@ export function createInternalEditableHost({
   }
 
   function dispatchSelectionIntent(
-    intent: InternalSelectionIntent,
-  ): InternalEditableUpdate {
+    intent: EditableSelectionIntent,
+  ): EditableUpdate {
     const layout = readVisualLayoutSnapshot();
     if (!layout.ok) {
       return visualLayoutStaleUpdate(
@@ -910,9 +906,9 @@ export function createInternalEditableHost({
   }
 
   function dispatchSelectionIntentWithKernel(
-    intent: InternalSelectionIntent,
+    intent: EditableSelectionIntent,
     selection: SelectionSnap | null,
-    layout: InternalVisualLayout | null,
+    layout: VisualLayout | null,
   ): { selection: SelectionSnap | null; goalX: number | null } | null {
     const state = richEditState(selection, layout);
     if (state === null) {
@@ -938,222 +934,26 @@ export function createInternalEditableHost({
 
   function richEditState(
     selection: SelectionSnap | null,
-    layout: InternalVisualLayout | null,
+    layout: VisualLayout | null,
   ): {
     document: RichDocument;
     lineSeeds: ReadonlyArray<RichVisualLineSeed> | null;
     selection: SelectionSnap | null;
     selectionAfter(selection: SelectionSnap | null): SelectionSnap | null;
-  } | null {
-    if (isRichDocument(document.value)) {
-      return {
-        document: document.value,
-        lineSeeds:
-          layout === null
-            ? null
-            : richVisualLineSeedsFromMeasuredLayout(document.value, layout),
-        selection,
-        selectionAfter: (next) => next,
-      };
-    }
-
-    const textPath = textPathFromSelection(selection);
-    if (textPath === null) {
-      return null;
-    }
-    const text = readString(document, textPath);
-    if (!text.ok) {
-      return null;
-    }
-    const richPath = richTextPathForBlock(0);
-    const richDocument = createRichDocument({
-      id: "editable-host",
-      blocks: [createRichBlock({ id: "b", type: "paragraph", text: text.value })],
-    });
+  } {
     return {
-      document: richDocument,
-      lineSeeds:
-        layout === null ? null : richLineSeedsFromMeasuredLayout(layout, richPath),
-      selection: remapSelectionPath(selection, textPath, richPath),
-      selectionAfter: (next) => remapSelectionPath(next, richPath, textPath),
-    };
-  }
-}
-
-export function createEditableHost({
-  document,
-  root,
-  projection = null,
-  visualLayout = null,
-}: EditableHostOptions): EditableHost {
-  const host = createInternalEditableHost({
-    atomAttribute: JSON_ATOM_ATTRIBUTE,
-    atomsPath: richAtomsPathForTextPath,
-    document,
-    rangesPath: richRangesPathForTextPath,
-    root,
-    textAttribute: JSON_TEXT_ATTRIBUTE,
-    projection,
-    visualLayout,
-  });
-  return {
-    handle: (event) =>
-      editableUpdateFromHostResult(
-        host.handle(event),
-        document,
-        event.type === "cut" || event.type === "paste",
-      ),
-    dispatch: (intent, options) =>
-      dispatchEditableIntent(host, document, visualLayout, intent, options),
-    copy: (event) =>
-      editableUpdateFromHostResult(host.copy(event), document, false),
-    cut: (event) =>
-      editableUpdateFromHostResult(host.cut(event), document, true),
-    flush: host.flush,
-    paste: (event) =>
-      editableUpdateFromHostResult(host.paste(event), document, true),
-    reset: host.reset,
-    restoreSelectionToDOM: host.restoreSelectionToDOM,
-    syncSelectionFromDOM: host.syncSelectionFromDOM,
-  };
-}
-
-function editableUpdateFromHostResult(
-  result: InternalEditableUpdate | InternalClipboardResult,
-  document: JSONDocument<RichDocument>,
-  renderText: boolean,
-): EditableUpdate {
-  if ("kind" in result) {
-    return result;
-  }
-  if (!result.ok) {
-    if (result.code === "visual_layout_stale") {
-      return result;
-    }
-    return {
-      ok: false,
-      code: result.code,
-      reason: result.reason,
-    };
-  }
-  return modelToDomUpdate({
-    kind: renderText ? "text" : "no-change",
-    patch: [],
-    render: renderText,
-    selection: document.selection?.snapshot() ?? null,
-  });
-}
-
-function dispatchEditableIntent(
-  host: InternalEditableHost,
-  document: JSONDocument<RichDocument>,
-  visualLayout: VisualLayoutProvider | null,
-  intent: EditIntent,
-  options: EditableDispatchOptions = {},
-): EditableUpdate {
-  if (intent.type === "historyUndo") {
-    return capabilityToUpdate(host.applyHistoryUndo());
-  }
-  if (intent.type === "historyRedo") {
-    return capabilityToUpdate(host.applyHistoryRedo());
-  }
-  if (intent.type === "insertFromPaste" || intent.type === "insertFromDrop") {
-    const result =
-      typeof intent.data === "string"
-        ? host.insertText(intent.data, options.selection)
-        : host.insertFragment(intent.data, options.selection);
-    return editableUpdateFromHostResult(result, document, true);
-  }
-  if (
-    intent.type === "modifySelection" &&
-    (intent.granularity === "line" || intent.granularity === "lineboundary")
-  ) {
-    return host.dispatchSelectionIntent(intent);
-  }
-  return dispatchKernelIntent(host, document, visualLayout, intent, options);
-}
-
-function dispatchKernelIntent(
-  host: InternalEditableHost,
-  document: JSONDocument<RichDocument>,
-  visualLayout: VisualLayoutProvider | null,
-  intent: EditIntent,
-  options: EditableDispatchOptions,
-): InternalEditableUpdate {
-  const flushed = host.flush({
-    label: `prepare ${options.label ?? intent.type}`,
-  });
-  if (!flushed.ok) {
-    return flushed;
-  }
-
-  const selection =
-    options.selection === undefined
-      ? document.selection?.snapshot() ?? null
-      : options.selection;
-  if (options.selection !== undefined && options.selection !== null) {
-    document.selection?.restore(options.selection);
-  }
-
-  const layout = visualLayout?.();
-  const result = edit(
-    {
       document: document.value,
-      selection,
-      goalX: null,
-    },
-    intent,
-    {
       lineSeeds:
-        layout?.ok === true && layout.layout !== null
-          ? richVisualLineSeedsFromMeasuredLayout(document.value, layout.layout)
-          : null,
-    },
-  );
-
-  if (!result.ok) {
-    return {
-      ok: false,
-      code: "commit_failed",
-      reason: result.reason,
+        layout === null
+          ? null
+          : richVisualLineSeedsFromMeasuredLayout(document.value, layout),
+      selection,
+      selectionAfter: (next) => next,
     };
   }
-  if (result.kind === "history") {
-    return capabilityToUpdate(
-      result.command === "undo" ? host.applyHistoryUndo() : host.applyHistoryRedo(),
-    );
-  }
-
-  if (result.patch.length > 0) {
-    const commit = document.commit(result.patch, {
-      label: options.label ?? intent.type,
-      origin: "contenteditable",
-      selectionAfter: result.selectionAfter ?? undefined,
-    });
-    if (!commit.ok) {
-      return {
-        ok: false,
-        code: "commit_failed",
-        reason: commit.reason ?? commit.code,
-      };
-    }
-  } else if (result.selectionAfter !== null) {
-    document.selection?.restore(result.selectionAfter);
-  }
-
-  if (result.selectionAfter !== null) {
-    host.restoreSelectionToDOM(result.selectionAfter);
-  }
-
-  return modelToDomUpdate({
-    kind: result.kind,
-    patch: result.patch,
-    render: result.kind !== "no-change",
-    selection: result.selectionAfter,
-  });
 }
 
-function capabilityToUpdate(result: JSONCapabilityResult): InternalEditableUpdate {
+function capabilityToUpdate(result: JSONCapabilityResult): EditableUpdate {
   return result.ok
     ? modelToDomUpdate({
         kind: "text",
@@ -1172,21 +972,11 @@ function modelInstructionLabel(instruction: EditModelInstruction): string {
   return instruction.type === "insertText" ? instruction.label : "model command";
 }
 
-function relatedPath(
-  path: InternalEditableRelatedPath | null,
-  textPath: Pointer | null,
-): Pointer | null {
-  if (path === null || textPath === null) {
-    return null;
-  }
-  return typeof path === "function" ? path(textPath) : path;
-}
-
 function visualLayoutStaleUpdate(
-  command: InternalSelectionIntent,
+  command: EditableSelectionIntent,
   reason: string,
   selection: SelectionSnap | null,
-): InternalEditableUpdate {
+): EditableUpdate {
   return {
     ok: false,
     code: "visual_layout_stale",
@@ -1210,68 +1000,4 @@ function textPathFromSelection(selection: SelectionSnap | null): Pointer | null 
     return null;
   }
   return range.anchor.path;
-}
-
-function isRichDocument(value: unknown): value is RichDocument {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    "schema" in value &&
-    value.schema === RICH_DOCUMENT_SCHEMA &&
-    "blocks" in value &&
-    Array.isArray(value.blocks)
-  );
-}
-
-function richLineSeedsFromMeasuredLayout(
-  layout: InternalVisualLayout,
-  path: Pointer,
-): RichVisualLineSeed[] {
-  return layout.lines.map((line, lineIndex) => ({
-    id: line.id,
-    blockId: "b",
-    blockIndex: 0,
-    path,
-    startOffset: line.startOffset,
-    endOffset: line.endOffset,
-    kind: line.kind,
-    lineIndex,
-    caretMetrics: line.carets.map((caret) => ({
-      offset: caret.offset,
-      x: caret.x,
-    })),
-  }));
-}
-
-function remapSelectionPath(
-  selection: SelectionSnap | null,
-  from: Pointer,
-  to: Pointer,
-): SelectionSnap | null {
-  if (selection === null) {
-    return null;
-  }
-  const mapPoint = (point: SelectionSnap["anchor"]): SelectionSnap["anchor"] => {
-    if (typeof point === "string") {
-      return point === from ? to : point;
-    }
-    if (point !== null && point.path === from) {
-      return { ...point, path: to };
-    }
-    return point;
-  };
-  const mapRangePoint = (
-    point: SelectionSnap["selectionRanges"][number]["anchor"],
-  ): SelectionSnap["selectionRanges"][number]["anchor"] =>
-    mapPoint(point) as SelectionSnap["selectionRanges"][number]["anchor"];
-  return {
-    ...selection,
-    selectionRanges: selection.selectionRanges.map((range) => ({
-      anchor: mapRangePoint(range.anchor),
-      focus: mapRangePoint(range.focus),
-    })),
-    anchor: mapPoint(selection.anchor),
-    focus: mapPoint(selection.focus),
-  };
 }

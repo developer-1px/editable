@@ -2,7 +2,6 @@
 
 import { createJSONDocument } from "@interactive-os/json-document";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 import {
   ATOM_REPLACEMENT,
   createRichBlock,
@@ -11,6 +10,8 @@ import {
   EDITABLE_TEXT_ATTRIBUTE,
   RICH_FRAGMENT_MIME,
   RICH_FRAGMENT_SCHEMA,
+  type RichInlineAtom,
+  type RichInlineRange,
 } from "./index";
 import * as PublicCore from "./dom";
 import {
@@ -19,91 +20,53 @@ import {
   type VisualLayout,
   type VisualLayoutSnapshot,
 } from "./dom";
-import { createInternalEditableHost } from "./internal/dom/createEditableHost";
 import { RichDocumentSchema } from "./schema";
 
-const TestDocumentSchema = z.object({
-  text: z.string(),
-});
+type TestAtomRecord = Record<string, RichInlineAtom>;
+type TestRangeRecord = Record<string, RichInlineRange>;
 
-const MarkerDocumentSchema = z.object({
-  text: z.string(),
-  atoms: z.record(
-    z.string(),
-    z.object({
-      type: z.literal("taskMarker"),
-      label: z.string(),
-      offset: z.number().int().nonnegative(),
+function createTestDocument(
+  text: string,
+  atoms: TestAtomRecord = {},
+  ranges: TestRangeRecord = {},
+) {
+  return createJSONDocument(
+    RichDocumentSchema,
+    createRichDocument({
+      id: "test",
+      blocks: [{ ...createRichBlock({ id: "b1", text }), atoms, ranges }],
     }),
-  ),
-});
-
-const AtomDocumentSchema = z.object({
-  text: z.string(),
-  atoms: z.record(
-    z.string(),
-    z.object({
-      type: z.literal("mention"),
-      userId: z.string(),
-      label: z.string(),
-      offset: z.number().int().nonnegative(),
-    }),
-  ),
-});
-
-const RangeDocumentSchema = z.object({
-  text: z.string(),
-  marks: z.record(
-    z.string(),
-    z.object({
-      type: z.union([z.literal("bold"), z.literal("underline")]),
-      start: z.number().int().nonnegative(),
-      end: z.number().int().nonnegative(),
-    }),
-  ),
-});
-
-type TestAtomRecord = z.infer<typeof AtomDocumentSchema>["atoms"];
-type TestRangeRecord = z.infer<typeof RangeDocumentSchema>["marks"];
-
-function setup(initial = "Plain") {
-  const document = createJSONDocument(
-    TestDocumentSchema,
-    { text: initial },
     { history: 20, selection: true, trustedInitial: true },
   );
+}
+
+function setup(initial = "Plain") {
+  const document = createTestDocument(initial);
   const root = window.document.createElement("div");
   root.contentEditable = "true";
-  root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/text">${initial}</span>`;
+  root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text">${initial}</span>`;
   window.document.body.append(root);
   const textElement = root.querySelector(`[${EDITABLE_TEXT_ATTRIBUTE}]`);
   if (!(textElement instanceof HTMLElement) || textElement.firstChild === null) {
     throw new Error("Fixture failed to create editable text.");
   }
 
-  const core = createInternalEditableHost({ root, document });
+  const core = createEditableHost({ root, document });
   return { core, document, root, textElement, textNode: textElement.firstChild };
 }
 
 function setupMarkerDocument(initial = "Task text") {
   const text = `${ATOM_REPLACEMENT}${initial}`;
-  const document = createJSONDocument(
-    MarkerDocumentSchema,
-    {
-      text,
-      atoms: {
-        "task-marker": {
-          type: "taskMarker",
-          label: "- [ ] ",
-          offset: 0,
-        },
-      },
+  const document = createTestDocument(text, {
+    "task-marker": {
+      type: "taskMarker",
+      label: "- [ ] ",
+      offset: 0,
     },
-    { history: 20, selection: true, trustedInitial: true },
-  );
+  });
   const root = window.document.createElement("div");
   root.contentEditable = "true";
-  root.innerHTML = `<div><span ${EDITABLE_TEXT_ATTRIBUTE}="/text"><span ${EDITABLE_ATOM_ATTRIBUTE}="task-marker" contenteditable="false">- [ ] </span>${initial}</span></div>`;
+  root.innerHTML = `<div><span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text"><span ${EDITABLE_ATOM_ATTRIBUTE}="task-marker" contenteditable="false">- [ ] </span>${initial}</span></div>`;
   window.document.body.append(root);
   const block = root.firstElementChild;
   const marker = root.querySelector(`[${EDITABLE_ATOM_ATTRIBUTE}="task-marker"]`);
@@ -118,7 +81,7 @@ function setupMarkerDocument(initial = "Task text") {
     throw new Error("Fixture failed to create marker text.");
   }
 
-  const core = createInternalEditableHost({ root, document, atomsPath: "/atoms" });
+  const core = createEditableHost({ root, document });
   return {
     block,
     core,
@@ -134,97 +97,70 @@ function setupAtomDocument(
   initial = `A${ATOM_REPLACEMENT}B`,
   atoms: TestAtomRecord = {
     ada: {
-      type: "mention" as const,
+      type: "mention",
       userId: "ada",
       label: "@Ada",
       offset: 1,
     },
   },
 ) {
-  const document = createJSONDocument(
-    AtomDocumentSchema,
-    { text: initial, atoms },
-    { history: 20, selection: true, trustedInitial: true },
-  );
+  const document = createTestDocument(initial, atoms);
   const root = window.document.createElement("div");
   root.contentEditable = "true";
-  root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/text">A<span ${EDITABLE_ATOM_ATTRIBUTE}="ada" contenteditable="false">@Ada</span>B</span>`;
+  root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text">A<span ${EDITABLE_ATOM_ATTRIBUTE}="ada" contenteditable="false">@Ada</span>B</span>`;
   window.document.body.append(root);
   const textElement = root.querySelector(`[${EDITABLE_TEXT_ATTRIBUTE}]`);
   if (!(textElement instanceof HTMLElement)) {
     throw new Error("Fixture failed to create atom text.");
   }
 
-  const core = createInternalEditableHost({
-    root,
-    document,
-    atomsPath: "/atoms",
-  });
+  const core = createEditableHost({ root, document });
   return { core, document, root, textElement };
 }
 
 function setupTrailingAtomDocument() {
-  const document = createJSONDocument(
-    AtomDocumentSchema,
-    {
-      text: `A${ATOM_REPLACEMENT}`,
-      atoms: {
-        ada: {
-          type: "mention",
-          userId: "ada",
-          label: "@Ada",
-          offset: 1,
-        },
-      },
+  const document = createTestDocument(`A${ATOM_REPLACEMENT}`, {
+    ada: {
+      type: "mention",
+      userId: "ada",
+      label: "@Ada",
+      offset: 1,
     },
-    { history: 20, selection: true, trustedInitial: true },
-  );
+  });
   const root = window.document.createElement("div");
   root.contentEditable = "true";
-  root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/text">A<span ${EDITABLE_ATOM_ATTRIBUTE}="ada" contenteditable="false">@Ada</span></span>`;
+  root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text">A<span ${EDITABLE_ATOM_ATTRIBUTE}="ada" contenteditable="false">@Ada</span></span>`;
   window.document.body.append(root);
   const textElement = root.querySelector(`[${EDITABLE_TEXT_ATTRIBUTE}]`);
   if (!(textElement instanceof HTMLElement)) {
     throw new Error("Fixture failed to create trailing atom text.");
   }
 
-  const core = createInternalEditableHost({
-    root,
-    document,
-    atomsPath: "/atoms",
-  });
+  const core = createEditableHost({ root, document });
   return { core, document, root, textElement };
 }
 
 function setupRangeDocument(
   initial = "Hello world",
-  marks: TestRangeRecord = {
+  ranges: TestRangeRecord = {
     bold: {
-      type: "bold" as const,
+      type: "bold",
       start: 0,
       end: 5,
     },
   },
 ) {
-  const document = createJSONDocument(
-    RangeDocumentSchema,
-    { text: initial, marks },
-    { history: 20, selection: true, trustedInitial: true },
-  );
+  const document = createTestDocument(initial, {}, ranges);
   const root = window.document.createElement("div");
   root.contentEditable = "true";
-  root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/text">${initial}</span>`;
+  root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text">${initial}</span>`;
   window.document.body.append(root);
   const textElement = root.querySelector(`[${EDITABLE_TEXT_ATTRIBUTE}]`);
   if (!(textElement instanceof HTMLElement) || textElement.firstChild === null) {
     throw new Error("Fixture failed to create range text.");
   }
 
-  const core = createInternalEditableHost({
-    root,
-    document,
-    rangesPath: "/marks",
-  });
+  const core = createEditableHost({ root, document });
   return { core, document, root, textElement, textNode: textElement.firstChild };
 }
 
@@ -247,7 +183,7 @@ function visualLine({
   return {
     id,
     sourceId: id,
-    path: "/text",
+    path: "/blocks/0/text",
     startOffset,
     endOffset,
     kind: "text" as const,
@@ -261,7 +197,7 @@ function visualLine({
       height: bottom - top,
     },
     carets: xs.map((x, offsetIndex) => ({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: startOffset + offsetIndex,
       x,
       top,
@@ -342,6 +278,10 @@ describe("editable DOM adapter json-document bridge", () => {
       ok: true,
       render: true,
     });
+    if (!pasted.ok || !("patch" in pasted)) {
+      throw new Error("Expected a patch-carrying update.");
+    }
+    expect(pasted.patch.length).toBeGreaterThan(0);
     expect(document.value.blocks[0]?.text).toBe("Plain!");
     expect(host.dispatch({ type: "historyUndo" })).toMatchObject({
       flow: "model-to-dom",
@@ -350,6 +290,179 @@ describe("editable DOM adapter json-document bridge", () => {
       render: true,
     });
     expect(document.value.blocks[0]?.text).toBe("Plain");
+  });
+
+  it("passes kernel error codes through the public dispatch", () => {
+    const value = createRichDocument({
+      id: "host",
+      blocks: [createRichBlock({ id: "b", text: "Plain" })],
+    });
+    const document = createJSONDocument(RichDocumentSchema, value, {
+      history: 20,
+      selection: true,
+      trustedInitial: true,
+    });
+    const root = window.document.createElement("div");
+    root.contentEditable = "true";
+    root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text">Plain</span>`;
+    window.document.body.append(root);
+    const host = createEditableHost({ root, document });
+    const caret = {
+      selectedPointers: [],
+      selectionRanges: [
+        {
+          anchor: { path: "/blocks/0/text", offset: 2 },
+          focus: { path: "/blocks/0/text", offset: 2 },
+        },
+      ],
+      primaryIndex: 0,
+      anchor: { path: "/blocks/0/text", offset: 2 },
+      focus: { path: "/blocks/0/text", offset: 2 },
+    };
+
+    document.selection?.restore(caret);
+    expect(host.dispatch({ type: "formatBold" })).toMatchObject({
+      ok: false,
+      code: "empty_selection",
+    });
+    expect(
+      host.dispatch({ type: "someFutureIntent" } as never),
+    ).toMatchObject({
+      ok: false,
+      code: "unsupported_intent",
+    });
+  });
+
+  it("clears the vertical goal when a kernel-path intent moves the caret", () => {
+    const value = createRichDocument({
+      id: "host",
+      blocks: [createRichBlock({ id: "b", text: "abc\nde\nfgh" })],
+    });
+    const document = createJSONDocument(RichDocumentSchema, value, {
+      history: 20,
+      selection: true,
+      trustedInitial: true,
+    });
+    const root = window.document.createElement("div");
+    root.contentEditable = "true";
+    root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text">abc\nde\nfgh</span>`;
+    window.document.body.append(root);
+    const path = "/blocks/0/text";
+    const line = (
+      index: number,
+      startOffset: number,
+      xs: number[],
+    ) => ({
+      id: `${path}:line:${index}`,
+      sourceId: `${path}:line:${index}`,
+      path,
+      startOffset,
+      endOffset: startOffset + xs.length - 1,
+      kind: "text" as const,
+      lineIndex: index,
+      top: index * 10,
+      bottom: index * 10 + 10,
+      box: { x: 0, y: index * 10, width: xs.at(-1) ?? 0, height: 10 },
+      carets: xs.map((x, column) => ({
+        path,
+        offset: startOffset + column,
+        x,
+        top: index * 10,
+        bottom: index * 10 + 10,
+      })),
+    });
+    const host = createEditableHost({
+      root,
+      document,
+      visualLayout: () => ({
+        ok: true,
+        layout: {
+          lines: [
+            line(0, 0, [0, 10, 20, 30]),
+            line(1, 4, [0, 10, 20]),
+            line(2, 7, [0, 10, 20, 30]),
+          ],
+        },
+        revision: 1,
+      }),
+    });
+    const caretAt = (offset: number) => ({
+      selectedPointers: [],
+      selectionRanges: [
+        { anchor: { path, offset }, focus: { path, offset } },
+      ],
+      primaryIndex: 0,
+      anchor: { path, offset },
+      focus: { path, offset },
+    });
+
+    document.selection?.restore(caretAt(2));
+    const down = host.dispatch({
+      type: "modifySelection",
+      alter: "move",
+      direction: "forward",
+      granularity: "line",
+    });
+    expect(down.ok).toBe(true);
+    expect(document.selection?.focus).toMatchObject({ path, offset: 6 });
+
+    const left = host.dispatch({
+      type: "modifySelection",
+      alter: "move",
+      direction: "backward",
+      granularity: "character",
+    });
+    expect(left.ok).toBe(true);
+    expect(document.selection?.focus).toMatchObject({ path, offset: 5 });
+
+    const secondDown = host.dispatch({
+      type: "modifySelection",
+      alter: "move",
+      direction: "forward",
+      granularity: "line",
+    });
+    expect(secondDown.ok).toBe(true);
+    expect(document.selection?.focus).toMatchObject({ path, offset: 8 });
+  });
+
+  it("does not write the document clipboard on insertFromDrop", () => {
+    const value = createRichDocument({
+      id: "host",
+      blocks: [createRichBlock({ id: "b", text: "Plain" })],
+    });
+    const document = createJSONDocument(RichDocumentSchema, value, {
+      history: 20,
+      selection: true,
+      trustedInitial: true,
+    });
+    const root = window.document.createElement("div");
+    root.contentEditable = "true";
+    root.innerHTML = `<span ${EDITABLE_TEXT_ATTRIBUTE}="/blocks/0/text">Plain</span>`;
+    window.document.body.append(root);
+    const host = createEditableHost({ root, document });
+    const before = document.clipboard.read();
+
+    const dropped = host.dispatch(
+      { type: "insertFromDrop", data: "X" },
+      {
+        selection: {
+          selectedPointers: [],
+          selectionRanges: [
+            {
+              anchor: { path: "/blocks/0/text", offset: 0 },
+              focus: { path: "/blocks/0/text", offset: 0 },
+            },
+          ],
+          primaryIndex: 0,
+          anchor: { path: "/blocks/0/text", offset: 0 },
+          focus: { path: "/blocks/0/text", offset: 0 },
+        },
+      },
+    );
+
+    expect(dropped).toMatchObject({ ok: true, kind: "text" });
+    expect(document.value.blocks[0]?.text).toBe("XPlain");
+    expect(document.clipboard.read()).toEqual(before);
   });
 
   it("derives rich visual line seeds from measured layout", () => {
@@ -399,12 +512,12 @@ describe("editable DOM adapter json-document bridge", () => {
     const selection = core.syncSelectionFromDOM();
 
     expect(selection?.selectionRanges[0]).toMatchObject({
-      anchor: { path: "/text", offset: 1 },
-      focus: { path: "/text", offset: 4 },
+      anchor: { path: "/blocks/0/text", offset: 1 },
+      focus: { path: "/blocks/0/text", offset: 4 },
     });
     expect(document.selection?.snapshot().selectionRanges[0]).toMatchObject({
-      anchor: { path: "/text", offset: 1 },
-      focus: { path: "/text", offset: 4 },
+      anchor: { path: "/blocks/0/text", offset: 1 },
+      focus: { path: "/blocks/0/text", offset: 4 },
     });
   });
 
@@ -415,12 +528,12 @@ describe("editable DOM adapter json-document bridge", () => {
     const selection = core.syncSelectionFromDOM();
 
     expect(selection?.selectionRanges[0]).toMatchObject({
-      anchor: { path: "/text", offset: 0 },
-      focus: { path: "/text", offset: 10 },
+      anchor: { path: "/blocks/0/text", offset: 0 },
+      focus: { path: "/blocks/0/text", offset: 10 },
     });
     expect(document.selection?.snapshot().selectionRanges[0]).toMatchObject({
-      anchor: { path: "/text", offset: 0 },
-      focus: { path: "/text", offset: 10 },
+      anchor: { path: "/blocks/0/text", offset: 0 },
+      focus: { path: "/blocks/0/text", offset: 10 },
     });
   });
 
@@ -431,13 +544,13 @@ describe("editable DOM adapter json-document bridge", () => {
       selectedPointers: [],
       selectionRanges: [
         {
-          anchor: { path: "/text", offset: 0 },
-          focus: { path: "/text", offset: 10 },
+          anchor: { path: "/blocks/0/text", offset: 0 },
+          focus: { path: "/blocks/0/text", offset: 10 },
         },
       ],
       primaryIndex: 0,
-      anchor: { path: "/text", offset: 0 },
-      focus: { path: "/text", offset: 10 },
+      anchor: { path: "/blocks/0/text", offset: 0 },
+      focus: { path: "/blocks/0/text", offset: 10 },
     });
 
     const selection = window.document.getSelection();
@@ -488,9 +601,9 @@ describe("editable DOM adapter json-document bridge", () => {
 
     expect(result.ok).toBe(true);
     expect(result).toMatchObject({ flow: "dom-to-model", render: false });
-    expect(document.value.text).toBe(`${ATOM_REPLACEMENT}New Task text`);
+    expect(document.value.blocks[0]?.text).toBe(`${ATOM_REPLACEMENT}New Task text`);
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 4,
     });
   });
@@ -506,16 +619,16 @@ describe("editable DOM adapter json-document bridge", () => {
 
     expect(result.ok).toBe(true);
     expect(result).toMatchObject({ flow: "dom-to-model", render: false });
-    expect(document.value.text).toBe("가Plain");
+    expect(document.value.blocks[0]?.text).toBe("가Plain");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 1,
     });
 
-    expect(core.applyHistoryUndo().ok).toBe(true);
-    expect(document.value.text).toBe("Plain");
-    expect(core.applyHistoryRedo().ok).toBe(true);
-    expect(document.value.text).toBe("가Plain");
+    expect(core.dispatch({ type: "historyUndo" }).ok).toBe(true);
+    expect(document.value.blocks[0]?.text).toBe("Plain");
+    expect(core.dispatch({ type: "historyRedo" }).ok).toBe(true);
+    expect(document.value.blocks[0]?.text).toBe("가Plain");
   });
 
   it("trusts the collapsed DOM caret when native text changes line structure", () => {
@@ -529,9 +642,9 @@ describe("editable DOM adapter json-document bridge", () => {
 
     expect(result.ok).toBe(true);
     expect(result).toMatchObject({ flow: "dom-to-model", render: false });
-    expect(document.value.text).toBe("abc\ndef");
+    expect(document.value.blocks[0]?.text).toBe("abc\ndef");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 2,
     });
   });
@@ -545,7 +658,7 @@ describe("editable DOM adapter json-document bridge", () => {
     const copied = core.copy(clipboard);
 
     expect(copied.ok).toBe(true);
-    expect(document.value.text).toBe("Plain xy");
+    expect(document.value.blocks[0]?.text).toBe("Plain xy");
     expect(clipboard.clipboardData?.getData("text/plain")).toBe("y");
     expect(document.clipboard.read()).toMatchObject({
       ok: true,
@@ -564,9 +677,9 @@ describe("editable DOM adapter json-document bridge", () => {
     const result = core.paste(clipboard);
 
     expect(result.ok).toBe(true);
-    expect(document.value.text).toBe("Plain xZ");
+    expect(document.value.blocks[0]?.text).toBe("Plain xZ");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 8,
     });
   });
@@ -577,12 +690,12 @@ describe("editable DOM adapter json-document bridge", () => {
     setDOMRange(textNode, 7, textNode, 8);
     core.syncSelectionFromDOM();
 
-    const result = core.insertText("Z");
+    const result = core.dispatch({ type: "insertFromPaste", data: "Z" });
 
     expect(result.ok).toBe(true);
-    expect(document.value.text).toBe("Plain xZ");
+    expect(document.value.blocks[0]?.text).toBe("Plain xZ");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 8,
     });
   });
@@ -594,12 +707,12 @@ describe("editable DOM adapter json-document bridge", () => {
     core.syncSelectionFromDOM();
     setDOMRange(textNode, 8, textNode, 8);
 
-    const result = core.insertText("Z");
+    const result = core.dispatch({ type: "insertFromPaste", data: "Z" });
 
     expect(result.ok).toBe(true);
-    expect(document.value.text).toBe("Z xy");
+    expect(document.value.blocks[0]?.text).toBe("Z xy");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 1,
     });
   });
@@ -609,14 +722,18 @@ describe("editable DOM adapter json-document bridge", () => {
 
     setDOMRange(textNode, 2, textNode, 2);
     core.syncSelectionFromDOM();
+    const commandSelection = document.selection?.snapshot() ?? null;
     setDOMRange(textNode, 8, textNode, 8);
 
-    const result = core.insertText("Z");
+    const result = core.dispatch(
+      { type: "insertFromPaste", data: "Z" },
+      { selection: commandSelection },
+    );
 
     expect(result.ok).toBe(true);
-    expect(document.value.text).toBe("PlZain xy");
+    expect(document.value.blocks[0]?.text).toBe("PlZain xy");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 3,
     });
   });
@@ -628,12 +745,12 @@ describe("editable DOM adapter json-document bridge", () => {
     const selection = core.syncSelectionFromDOM();
 
     expect(selection?.selectionRanges[0]).toMatchObject({
-      anchor: { path: "/text", offset: 1 },
-      focus: { path: "/text", offset: 2 },
+      anchor: { path: "/blocks/0/text", offset: 1 },
+      focus: { path: "/blocks/0/text", offset: 2 },
     });
     expect(document.selection?.snapshot().selectionRanges[0]).toMatchObject({
-      anchor: { path: "/text", offset: 1 },
-      focus: { path: "/text", offset: 2 },
+      anchor: { path: "/blocks/0/text", offset: 1 },
+      focus: { path: "/blocks/0/text", offset: 2 },
     });
   });
 
@@ -651,7 +768,7 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -669,7 +786,7 @@ describe("editable DOM adapter json-document bridge", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(result.ok).toBe(true);
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 2,
     });
     expect(window.document.getSelection()?.focusOffset).toBe(2);
@@ -689,7 +806,7 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -712,8 +829,8 @@ describe("editable DOM adapter json-document bridge", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(result.ok).toBe(true);
     expect(document.selection?.selectionRanges[0]).toMatchObject({
-      anchor: { path: "/text", offset: 0 },
-      focus: { path: "/text", offset: 2 },
+      anchor: { path: "/blocks/0/text", offset: 0 },
+      focus: { path: "/blocks/0/text", offset: 2 },
     });
     expect(window.document.getSelection()?.toString()).toBe("A@Ada");
   });
@@ -748,7 +865,7 @@ describe("editable DOM adapter json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("One\nTwo\nThree");
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -766,7 +883,7 @@ describe("editable DOM adapter json-document bridge", () => {
       ).ok,
     ).toBe(true);
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 7,
     });
 
@@ -782,7 +899,7 @@ describe("editable DOM adapter json-document bridge", () => {
       ).ok,
     ).toBe(true);
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 4,
     });
   });
@@ -817,7 +934,7 @@ describe("editable DOM adapter json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("One\nTwo\nThree");
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -832,7 +949,7 @@ describe("editable DOM adapter json-document bridge", () => {
     expect(core.handle(endEvent).ok).toBe(true);
     expect(endEvent.defaultPrevented).toBe(true);
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 7,
     });
 
@@ -845,7 +962,7 @@ describe("editable DOM adapter json-document bridge", () => {
     expect(core.handle(homeEvent).ok).toBe(true);
     expect(homeEvent.defaultPrevented).toBe(true);
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 4,
     });
   });
@@ -872,7 +989,7 @@ describe("editable DOM adapter json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("abcd\nefgh");
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -892,7 +1009,7 @@ describe("editable DOM adapter json-document bridge", () => {
     });
     expect(down.defaultPrevented).toBe(true);
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 7,
     });
 
@@ -907,7 +1024,7 @@ describe("editable DOM adapter json-document bridge", () => {
       render: true,
     });
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 2,
     });
   });
@@ -942,7 +1059,7 @@ describe("editable DOM adapter json-document bridge", () => {
       ],
     };
     const { document, root, textNode } = setup("abc\nde\nfgh");
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -957,7 +1074,7 @@ describe("editable DOM adapter json-document bridge", () => {
       }),
     );
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 5,
     });
 
@@ -969,7 +1086,7 @@ describe("editable DOM adapter json-document bridge", () => {
       }),
     );
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 9,
     });
   });
@@ -1004,7 +1121,7 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1022,7 +1139,7 @@ describe("editable DOM adapter json-document bridge", () => {
       render: true,
     });
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 7,
     });
 
@@ -1036,7 +1153,7 @@ describe("editable DOM adapter json-document bridge", () => {
       kind: "selection",
     });
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 11,
     });
   });
@@ -1065,7 +1182,7 @@ describe("editable DOM adapter json-document bridge", () => {
       ok: false,
     });
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 2,
     });
   });
@@ -1095,7 +1212,7 @@ describe("editable DOM adapter json-document bridge", () => {
       ok: false,
     });
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 5,
     });
   });
@@ -1105,7 +1222,7 @@ describe("editable DOM adapter json-document bridge", () => {
     let visualLayout: VisualLayout = {
       lines: [],
     };
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1143,7 +1260,7 @@ describe("editable DOM adapter json-document bridge", () => {
         granularity: "line",
       },
     });
-    expect(document.value.text).toBe("반top\nbottom");
+    expect(document.value.blocks[0]?.text).toBe("반top\nbottom");
     if (
       !result.ok ||
       !("flow" in result) ||
@@ -1173,12 +1290,12 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    expect(core.dispatchSelectionIntent(result.command)).toMatchObject({
+    expect(core.dispatch(result.command)).toMatchObject({
       flow: "model-to-dom",
       kind: "selection",
     });
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 6,
     });
 
@@ -1195,7 +1312,7 @@ describe("editable DOM adapter json-document bridge", () => {
       kind: "no-change",
       render: true,
     });
-    expect(document.value.text).toBe("반top\nbottom");
+    expect(document.value.blocks[0]?.text).toBe("반top\nbottom");
   });
 
   it("derives stale IME caret before Enter inserts a line break", () => {
@@ -1239,9 +1356,9 @@ describe("editable DOM adapter json-document bridge", () => {
       kind: "text",
       render: true,
     });
-    expect(document.value.text).toBe("안녕\nPlain");
+    expect(document.value.blocks[0]?.text).toBe("안녕\nPlain");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 3,
     });
   });
@@ -1251,7 +1368,7 @@ describe("editable DOM adapter json-document bridge", () => {
     let visualLayout: VisualLayout = {
       lines: [],
     };
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1301,9 +1418,9 @@ describe("editable DOM adapter json-document bridge", () => {
         granularity: "line",
       },
     });
-    expect(document.value.text).toBe("안녕Plain\nTail");
+    expect(document.value.blocks[0]?.text).toBe("안녕Plain\nTail");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 2,
     });
     if (
@@ -1335,12 +1452,12 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    expect(core.dispatchSelectionIntent(result.command)).toMatchObject({
+    expect(core.dispatch(result.command)).toMatchObject({
       flow: "model-to-dom",
       kind: "selection",
     });
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 10,
     });
   });
@@ -1359,7 +1476,7 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    const core = createInternalEditableHost({
+    const core = createEditableHost({
       root,
       document,
       visualLayout: () => freshVisualLayout(visualLayout),
@@ -1398,7 +1515,7 @@ describe("editable DOM adapter json-document bridge", () => {
         granularity: "lineboundary",
       },
     });
-    expect(document.value.text).toBe("P반lain");
+    expect(document.value.blocks[0]?.text).toBe("P반lain");
     if (
       !result.ok ||
       !("flow" in result) ||
@@ -1420,12 +1537,12 @@ describe("editable DOM adapter json-document bridge", () => {
         }),
       ],
     };
-    expect(core.dispatchSelectionIntent(result.command)).toMatchObject({
+    expect(core.dispatch(result.command)).toMatchObject({
       flow: "model-to-dom",
       kind: "selection",
     });
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: "P반lain".length,
     });
   });
@@ -1485,8 +1602,8 @@ describe("editable DOM adapter json-document bridge", () => {
     const pasted = core.paste(clipboard);
 
     expect(pasted.ok).toBe(true);
-    expect(document.value.text).toBe(`A${ATOM_REPLACEMENT}B`);
-    expect(document.value.atoms.ada).toMatchObject({
+    expect(document.value.blocks[0]?.text).toBe(`A${ATOM_REPLACEMENT}B`);
+    expect(document.value.blocks[0]?.atoms.ada).toMatchObject({
       label: "@Ada",
       offset: 1,
     });
@@ -1506,8 +1623,8 @@ describe("editable DOM adapter json-document bridge", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(document.value.text).toBe(`XA${ATOM_REPLACEMENT}B`);
-    expect(document.value.atoms.ada.offset).toBe(2);
+    expect(document.value.blocks[0]?.text).toBe(`XA${ATOM_REPLACEMENT}B`);
+    expect(document.value.blocks[0]?.atoms.ada.offset).toBe(2);
   });
 
   it("copies selected ranges as a structured fragment", () => {
@@ -1564,8 +1681,8 @@ describe("editable DOM adapter json-document bridge", () => {
     const pasted = core.paste(clipboard);
 
     expect(pasted.ok).toBe(true);
-    expect(document.value.text).toBe("AHiB");
-    expect(document.value.marks.bold).toMatchObject({
+    expect(document.value.blocks[0]?.text).toBe("AHiB");
+    expect(document.value.blocks[0]?.ranges.bold).toMatchObject({
       type: "bold",
       start: 1,
       end: 3,
@@ -1588,8 +1705,8 @@ describe("editable DOM adapter json-document bridge", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(document.value.text).toBe("Big Hello world");
-    expect(document.value.marks.bold).toMatchObject({
+    expect(document.value.blocks[0]?.text).toBe("Big Hello world");
+    expect(document.value.blocks[0]?.ranges.bold).toMatchObject({
       start: 10,
       end: 15,
     });
@@ -1612,7 +1729,7 @@ describe("editable DOM adapter json-document bridge", () => {
     );
 
     expect(composingInput.ok).toBe(true);
-    expect(document.value.text).toBe("Plain");
+    expect(document.value.blocks[0]?.text).toBe("Plain");
 
     const historyUndo = new InputEvent("beforeinput", {
       bubbles: true,
@@ -1621,7 +1738,7 @@ describe("editable DOM adapter json-document bridge", () => {
     });
     core.handle(historyUndo);
     expect(historyUndo.defaultPrevented).toBe(true);
-    expect(document.value.text).toBe("Plain");
+    expect(document.value.blocks[0]?.text).toBe("Plain");
 
     const commit = core.handle(
       new InputEvent("input", {
@@ -1631,9 +1748,9 @@ describe("editable DOM adapter json-document bridge", () => {
     );
 
     expect(commit.ok).toBe(true);
-    expect(document.value.text).toBe("あPlain");
+    expect(document.value.blocks[0]?.text).toBe("あPlain");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 1,
     });
   });
@@ -1663,9 +1780,9 @@ describe("editable DOM adapter json-document bridge", () => {
     );
 
     expect(commit.ok).toBe(true);
-    expect(document.value.text).toBe("あin");
+    expect(document.value.blocks[0]?.text).toBe("あin");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 1,
     });
   });
@@ -1695,9 +1812,9 @@ describe("editable DOM adapter json-document bridge", () => {
       ).ok,
     ).toBe(true);
 
-    expect(document.value.text).toBe("가가Plain");
+    expect(document.value.blocks[0]?.text).toBe("가가Plain");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 2,
     });
   });
@@ -1716,9 +1833,9 @@ describe("editable DOM adapter json-document bridge", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(result.ok).toBe(true);
     expect(result).toMatchObject({ flow: "model-to-dom", render: true });
-    expect(document.value.text).toBe("안녕하세요.\n");
+    expect(document.value.blocks[0]?.text).toBe("안녕하세요.\n");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 7,
     });
   });
@@ -1742,9 +1859,9 @@ describe("editable DOM adapter json-document bridge", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(result.ok).toBe(true);
     expect(result).toMatchObject({ flow: "model-to-dom", render: true });
-    expect(document.value.text).toBe(`A${ATOM_REPLACEMENT}\n`);
+    expect(document.value.blocks[0]?.text).toBe(`A${ATOM_REPLACEMENT}\n`);
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 3,
     });
   });
@@ -1768,9 +1885,9 @@ describe("editable DOM adapter json-document bridge", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(result.ok).toBe(true);
     expect(result).toMatchObject({ flow: "model-to-dom", render: true });
-    expect(document.value.text).toBe(`A${ATOM_REPLACEMENT}\n`);
+    expect(document.value.blocks[0]?.text).toBe(`A${ATOM_REPLACEMENT}\n`);
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 3,
     });
   });
@@ -1790,9 +1907,9 @@ describe("editable DOM adapter json-document bridge", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(result.ok).toBe(true);
     expect(result).toMatchObject({ flow: "model-to-dom", render: true });
-    expect(document.value.text).toBe("abc\nPlain");
+    expect(document.value.blocks[0]?.text).toBe("abc\nPlain");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 4,
     });
   });
@@ -1811,9 +1928,9 @@ describe("editable DOM adapter json-document bridge", () => {
 
     expect(result.ok).toBe(true);
     expect(result).toMatchObject({ flow: "dom-to-model", render: false });
-    expect(document.value.text).toBe("안녕하세요.a");
+    expect(document.value.blocks[0]?.text).toBe("안녕하세요.a");
     expect(document.selection?.focus).toMatchObject({
-      path: "/text",
+      path: "/blocks/0/text",
       offset: 7,
     });
   });
@@ -1838,7 +1955,7 @@ describe("editable DOM adapter json-document bridge", () => {
     const pasted = core.paste(pasteEvent);
 
     expect(pasted.ok).toBe(true);
-    expect(document.value.text).toBe("PlainPlain");
+    expect(document.value.blocks[0]?.text).toBe("PlainPlain");
   });
 });
 
