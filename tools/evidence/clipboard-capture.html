@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clipboard Evidence Capture</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #f8f7f4;
+        color: #1d1b18;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      main {
+        width: min(100%, 1040px);
+        margin: 0 auto;
+        padding: 32px 18px;
+      }
+
+      h1 {
+        margin: 0 0 18px;
+        font-size: 1.45rem;
+        line-height: 1.25;
+      }
+
+      form {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      label {
+        display: grid;
+        gap: 5px;
+        color: #6b6258;
+        font-size: 0.78rem;
+        font-weight: 720;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      input,
+      select,
+      textarea,
+      button {
+        font: inherit;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        border: 1px solid #d8d4cc;
+        border-radius: 6px;
+        background: #fffdfa;
+        color: #28231d;
+        padding: 9px 10px;
+      }
+
+      textarea {
+        min-height: 72px;
+        resize: vertical;
+      }
+
+      .full {
+        grid-column: 1 / -1;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+
+      button {
+        border: 1px solid #d8d4cc;
+        border-radius: 6px;
+        background: #fffdfa;
+        color: #28231d;
+        padding: 8px 12px;
+      }
+
+      button:hover {
+        background: #f0ede7;
+      }
+
+      pre {
+        overflow: auto;
+        max-height: 56vh;
+        margin: 0;
+        border-radius: 6px;
+        background: #eeeae1;
+        padding: 12px;
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 0.78rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+      }
+
+      .status {
+        min-height: 1.4em;
+        margin: 0 0 10px;
+        color: #4c453d;
+      }
+
+      @media (max-width: 720px) {
+        form {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Clipboard Evidence Capture</h1>
+      <form id="metadata">
+        <label>
+          Source
+          <select id="source">
+            <option value="slack">Slack</option>
+            <option value="google-docs">Google Docs</option>
+            <option value="notion">Notion</option>
+            <option value="github-rendered">GitHub rendered page</option>
+            <option value="generic-webpage">Generic webpage/article</option>
+          </select>
+        </label>
+        <label>
+          Shape
+          <select id="shape">
+            <option value="message-mention-link-emoji">
+              message-mention-link-emoji
+            </option>
+            <option value="inline-code-code-block">
+              inline-code-code-block
+            </option>
+            <option value="heading-marks-link">heading-marks-link</option>
+            <option value="list">list</option>
+            <option value="table-ish">table-ish</option>
+            <option value="paragraph-heading">paragraph-heading</option>
+            <option value="callout-code-list">callout-code-list</option>
+            <option value="link">link</option>
+            <option value="heading-list-code-link-table">
+              heading-list-code-link-table
+            </option>
+            <option value="paragraph-link-image">paragraph-link-image</option>
+            <option value="unsafe-style-script-wrapper">
+              unsafe-style-script-wrapper
+            </option>
+          </select>
+        </label>
+        <label>
+          App
+          <input id="app" value="Slack" />
+        </label>
+        <label>
+          URL
+          <input id="url" placeholder="https://..." />
+        </label>
+        <label>
+          Browser
+          <input id="browser" />
+        </label>
+        <label>
+          OS
+          <input id="os" />
+        </label>
+        <label class="full">
+          Notes
+          <textarea id="notes"></textarea>
+        </label>
+      </form>
+      <div class="actions">
+        <button id="read" type="button">Read Clipboard</button>
+        <button id="copy" type="button">Copy JSON</button>
+        <button id="download" type="button">Download JSON</button>
+      </div>
+      <p class="status" id="status"></p>
+      <pre id="output">{}</pre>
+    </main>
+    <script>
+      const sourceInput = document.querySelector("#source");
+      const shapeInput = document.querySelector("#shape");
+      const appInput = document.querySelector("#app");
+      const urlInput = document.querySelector("#url");
+      const browserInput = document.querySelector("#browser");
+      const osInput = document.querySelector("#os");
+      const notesInput = document.querySelector("#notes");
+      const statusOutput = document.querySelector("#status");
+      const output = document.querySelector("#output");
+      let currentMime = null;
+
+      const sourceNames = {
+        "generic-webpage": "Generic webpage/article",
+        "github-rendered": "GitHub rendered page",
+        "google-docs": "Google Docs",
+        notion: "Notion",
+        slack: "Slack",
+      };
+
+      browserInput.value = navigator.userAgent;
+      osInput.value = navigator.platform;
+
+      sourceInput.addEventListener("change", () => {
+        appInput.value = sourceNames[sourceInput.value] ?? sourceInput.value;
+        refreshOutput();
+      });
+      document
+        .querySelector("#metadata")
+        .addEventListener("input", refreshOutput);
+
+      document.querySelector("#read").addEventListener("click", async () => {
+        try {
+          const mime = await readClipboard();
+          currentMime = mime;
+          refreshOutput();
+          statusOutput.textContent = Object.entries(mime)
+            .map(([type, value]) => `${type}: ${value.length} bytes`)
+            .join(" | ");
+        } catch (error) {
+          statusOutput.textContent =
+            error instanceof Error ? error.message : String(error);
+        }
+      });
+
+      document.querySelector("#copy").addEventListener("click", async () => {
+        await navigator.clipboard.writeText(output.textContent);
+        statusOutput.textContent = "JSON copied.";
+      });
+
+      document.querySelector("#download").addEventListener("click", () => {
+        const source = sourceInput.value;
+        const shape = shapeInput.value;
+        const blob = new Blob([`${output.textContent}\n`], {
+          type: "application/json",
+        });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `${source}-${shape}.json`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+      });
+
+      async function readClipboard() {
+        if (!navigator.clipboard?.read) {
+          throw new Error("navigator.clipboard.read() is unavailable.");
+        }
+        const items = await navigator.clipboard.read();
+        const mime = {};
+        for (const item of items) {
+          for (const type of item.types) {
+            const blob = await item.getType(type);
+            mime[type] = await blob.text();
+          }
+        }
+        if (typeof mime["text/html"] !== "string") {
+          throw new Error("Clipboard payload is missing text/html.");
+        }
+        if (typeof mime["text/plain"] !== "string") {
+          throw new Error("Clipboard payload is missing text/plain.");
+        }
+        return mime;
+      }
+
+      function buildSample(mime) {
+        const notes = notesInput.value
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+        return {
+          schema: "interactive-os.clipboard-html-sample@1",
+          source: {
+            app: appInput.value,
+            browser: browserInput.value,
+            os: osInput.value,
+            url: urlInput.value,
+            capturedWith:
+              "tools/evidence/clipboard-capture.html navigator.clipboard.read()",
+          },
+          selectionShape: shapeInput.value,
+          mime,
+          currentReaderExpectation: {
+            html: "ignored",
+            fallback: "text/plain",
+          },
+          futureHtmlImporterExpectation: expectationFor(
+            sourceInput.value,
+            shapeInput.value,
+          ),
+          notes,
+        };
+      }
+
+      function expectationFor(source, shape) {
+        if (source === "slack") {
+          return {
+            allowed: [
+              "paragraph",
+              "link",
+              "mention-text",
+              "emoji-text-or-image-alt",
+              "inline-code",
+              "code-block",
+            ],
+            dropped: [
+              "style",
+              "class",
+              "data-*",
+              "slack-ui-chrome",
+              "event-handler",
+              "script",
+            ],
+          };
+        }
+        if (shape === "unsafe-style-script-wrapper") {
+          return {
+            allowed: ["heading", "paragraph", "link text", "image alt text"],
+            dropped: [
+              "style",
+              "class",
+              "event-handler",
+              "javascript-url",
+              "script",
+            ],
+          };
+        }
+        return {
+          allowed: ["paragraph", "heading", "list", "table", "link", "marks"],
+          dropped: ["style", "class", "data-*", "event-handler", "script"],
+        };
+      }
+
+      function refreshOutput() {
+        if (currentMime === null) {
+          return;
+        }
+        output.textContent = JSON.stringify(buildSample(currentMime), null, 2);
+      }
+    </script>
+  </body>
+</html>

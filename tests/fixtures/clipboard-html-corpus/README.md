@@ -56,3 +56,6 @@ captured `text/html`; sanitizer expectations belong in the expectation fields.
 When a single copied selection intentionally covers more than one required
 shape, list the file once in `manifest.json` with `shapes` instead of duplicating
 the raw payload.
+
+`tools/evidence/clipboard-capture.html` can generate this sample shape from a
+real browser clipboard payload.
