@@ -1,0 +1,35 @@
+{
+  "schema": "interactive-os.clipboard-html-corpus@1",
+  "issue": 74,
+  "status": "collecting",
+  "requiredSources": [
+    {
+      "id": "google-docs",
+      "name": "Google Docs",
+      "requiredShapes": ["heading-marks-link", "list", "table-ish"]
+    },
+    {
+      "id": "notion",
+      "name": "Notion",
+      "requiredShapes": ["paragraph-heading", "callout-code-list", "link"]
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "requiredShapes": ["message-mention-link-emoji", "inline-code-code-block"]
+    },
+    {
+      "id": "github-rendered",
+      "name": "GitHub rendered page",
+      "requiredShapes": ["heading-list-code-link-table"]
+    },
+    {
+      "id": "generic-webpage",
+      "name": "Generic webpage/article",
+      "requiredShapes": ["paragraph-link-image", "unsafe-style-script-wrapper"]
+    }
+  ],
+  "requiredMimeTypes": ["text/html", "text/plain"],
+  "optionalMimeTypes": ["text/markdown", "text/uri-list"],
+  "samples": []
+}
