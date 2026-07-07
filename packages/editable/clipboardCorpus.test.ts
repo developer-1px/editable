@@ -50,8 +50,17 @@ describe("clipboard html corpus", () => {
 
   it("validates any collected sample metadata", () => {
     const manifest = readManifest();
+    const requiredShapesBySource = new Map(
+      manifest.requiredSources.map((source) => [
+        source.id,
+        new Set(source.requiredShapes),
+      ]),
+    );
 
     for (const sample of manifest.samples) {
+      expect(requiredShapesBySource.get(sample.source)?.has(sample.shape)).toBe(
+        true,
+      );
       const samplePath = join(fixturesRoot, sample.path);
       expect(existsSync(samplePath), sample.path).toBe(true);
       const payload = JSON.parse(readFileSync(samplePath, "utf8")) as {
@@ -68,6 +77,8 @@ describe("clipboard html corpus", () => {
       expect(payload.selectionShape).toEqual(expect.any(String));
       expect(payload.mime?.["text/html"]).toEqual(expect.any(String));
       expect(payload.mime?.["text/plain"]).toEqual(expect.any(String));
+      expect(payload.mime?.["text/html"].length).toBeGreaterThan(0);
+      expect(payload.mime?.["text/plain"].length).toBeGreaterThan(0);
       expect(payload.currentReaderExpectation).toEqual(expect.any(Object));
       expect(payload.futureHtmlImporterExpectation).toEqual(expect.any(Object));
     }

@@ -31,5 +31,16 @@
   ],
   "requiredMimeTypes": ["text/html", "text/plain"],
   "optionalMimeTypes": ["text/markdown", "text/uri-list"],
-  "samples": []
+  "samples": [
+    {
+      "path": "github-rendered/heading-list-code-link-table.json",
+      "source": "github-rendered",
+      "shape": "heading-list-code-link-table"
+    },
+    {
+      "path": "generic-webpage/paragraph-link-image.json",
+      "source": "generic-webpage",
+      "shape": "paragraph-link-image"
+    }
+  ]
 }
