@@ -1,0 +1,341 @@
+{
+  "schema": "interactive-os.manual-editor-trace-corpus@1",
+  "status": "collecting",
+  "issues": [
+    {
+      "issue": 85,
+      "title": "OS autocorrect and insertReplacementText history real browser traces",
+      "relatedDocs": [
+        "docs/editor-text-replacement-formatting-policy-audit.md",
+        "docs/editor-native-mutation-policy-audit.md"
+      ],
+      "requiredScenarios": [
+        {
+          "id": "macos-text-replacement-acceptance",
+          "environment": {
+            "platform": "macOS",
+            "browsers": ["Safari", "Chrome"],
+            "inputMethods": ["System text replacement", "spellcheck replacement"]
+          },
+          "requiredOperations": [
+            "accept replacement with Space",
+            "accept replacement with Return",
+            "accept replacement with punctuation",
+            "dismiss pending replacement with Backspace"
+          ],
+          "requiredFields": [
+            "eventOrder",
+            "inputType",
+            "data",
+            "targetRanges",
+            "selectionBeforeAfter",
+            "textSurfaceBeforeAfter",
+            "historyUnit",
+            "undoResult"
+          ],
+          "requiresRealDevice": true
+        },
+        {
+          "id": "ios-autocorrect-prediction",
+          "environment": {
+            "platform": "iOS",
+            "browsers": ["Safari"],
+            "inputMethods": ["iOS autocorrect", "iOS prediction bar"]
+          },
+          "requiredOperations": [
+            "replace selected bold text",
+            "replace link label text",
+            "replace code-mark text or document why blocked",
+            "replace text adjacent to an inline atom"
+          ],
+          "requiredFields": [
+            "eventOrder",
+            "inputType",
+            "dataTransferTypes",
+            "htmlPayloadShape",
+            "selectionBeforeAfter",
+            "markRecordsBeforeAfter",
+            "historyUnit",
+            "undoResult"
+          ],
+          "requiresRealDevice": true
+        }
+      ],
+      "samples": []
+    },
+    {
+      "issue": 70,
+      "title": "iOS and Android touch selection real device traces",
+      "relatedDocs": ["docs/editor-selection-geometry-policy-audit.md"],
+      "requiredScenarios": [
+        {
+          "id": "ios-touch-selection",
+          "environment": {
+            "platform": "iOS",
+            "browsers": ["Safari"],
+            "inputMethods": ["Touch selection handles", "Native selection menu"]
+          },
+          "requiredOperations": [
+            "tap to place caret inside text",
+            "drag caret across a mark boundary",
+            "select word with handles",
+            "extend selection across inline atom boundary",
+            "open and dismiss native context menu"
+          ],
+          "requiredFields": [
+            "eventOrder",
+            "selectionchangeOrder",
+            "domSelectionBeforeAfter",
+            "mappedModelSelection",
+            "visualViewport",
+            "nativeMenuState",
+            "playwrightPromotionCandidate"
+          ],
+          "requiresRealDevice": true
+        },
+        {
+          "id": "android-touch-selection",
+          "environment": {
+            "platform": "Android",
+            "browsers": ["Chrome"],
+            "inputMethods": ["Touch selection handles", "Gboard"]
+          },
+          "requiredOperations": [
+            "tap to place caret inside text",
+            "drag caret across a mark boundary",
+            "select word with handles",
+            "extend selection across inline atom boundary",
+            "open and dismiss native context menu"
+          ],
+          "requiredFields": [
+            "eventOrder",
+            "selectionchangeOrder",
+            "domSelectionBeforeAfter",
+            "mappedModelSelection",
+            "visualViewport",
+            "virtualKeyboardState",
+            "playwrightPromotionCandidate"
+          ],
+          "requiresRealDevice": true
+        }
+      ],
+      "samples": []
+    },
+    {
+      "issue": 72,
+      "title": "Android and iOS Enter and Backspace block-boundary real device traces",
+      "relatedDocs": [
+        "docs/editor-android-virtual-keyboard-policy-audit.md",
+        "docs/editor-mobile-cjk-ime-targetrange-policy-audit.md",
+        "docs/editor-stray-break-policy-audit.md"
+      ],
+      "requiredScenarios": [
+        {
+          "id": "ios-enter-backspace-boundary",
+          "environment": {
+            "platform": "iOS",
+            "browsers": ["Safari"],
+            "inputMethods": ["iOS keyboard"]
+          },
+          "requiredOperations": [
+            "Enter at paragraph middle",
+            "Enter at empty list item",
+            "Backspace at paragraph start",
+            "Backspace near inline atom",
+            "Backspace near block atom or media boundary"
+          ],
+          "requiredFields": [
+            "eventOrder",
+            "inputType",
+            "data",
+            "isComposing",
+            "targetRanges",
+            "nativeDomEffect",
+            "commandResult",
+            "selectionBeforeAfter",
+            "historyUnit",
+            "undoResult"
+          ],
+          "requiresRealDevice": true
+        },
+        {
+          "id": "android-enter-backspace-boundary",
+          "environment": {
+            "platform": "Android",
+            "browsers": ["Chrome"],
+            "inputMethods": ["Gboard", "Samsung Keyboard"]
+          },
+          "requiredOperations": [
+            "Enter at paragraph middle",
+            "Enter at empty list item",
+            "Backspace at paragraph start",
+            "Backspace near inline atom",
+            "Backspace near block atom or media boundary"
+          ],
+          "requiredFields": [
+            "eventOrder",
+            "inputType",
+            "data",
+            "isComposing",
+            "targetRanges",
+            "nativeDomEffect",
+            "commandResult",
+            "selectionBeforeAfter",
+            "historyUnit",
+            "undoResult"
+          ],
+          "requiresRealDevice": true
+        }
+      ],
+      "samples": []
+    },
+    {
+      "issue": 78,
+      "title": "Mobile virtual keyboard viewport and caret visibility real device traces",
+      "relatedDocs": ["docs/editor-android-virtual-keyboard-policy-audit.md"],
+      "requiredScenarios": [
+        {
+          "id": "ios-keyboard-viewport-caret",
+          "environment": {
+            "platform": "iOS",
+            "browsers": ["Safari"],
+            "inputMethods": ["iOS keyboard"]
+          },
+          "requiredOperations": [
+            "focus editable near top of viewport",
+            "focus editable near bottom of viewport",
+            "type while keyboard is open",
+            "move caret after scroll",
+            "hide keyboard and restore viewport"
+          ],
+          "requiredFields": [
+            "visualViewportBeforeAfter",
+            "layoutViewportBeforeAfter",
+            "caretRectBeforeAfter",
+            "scrollBeforeAfter",
+            "keyboardState",
+            "selectionBeforeAfter",
+            "obscuredCaretDecision"
+          ],
+          "requiresRealDevice": true
+        },
+        {
+          "id": "android-keyboard-viewport-caret",
+          "environment": {
+            "platform": "Android",
+            "browsers": ["Chrome"],
+            "inputMethods": ["Gboard"]
+          },
+          "requiredOperations": [
+            "focus editable near top of viewport",
+            "focus editable near bottom of viewport",
+            "type while keyboard is open",
+            "move caret after scroll",
+            "hide keyboard and restore viewport"
+          ],
+          "requiredFields": [
+            "visualViewportBeforeAfter",
+            "layoutViewportBeforeAfter",
+            "caretRectBeforeAfter",
+            "scrollBeforeAfter",
+            "keyboardState",
+            "selectionBeforeAfter",
+            "obscuredCaretDecision"
+          ],
+          "requiresRealDevice": true
+        },
+        {
+          "id": "android-webview-keyboard-viewport-caret",
+          "environment": {
+            "platform": "Android",
+            "browsers": ["WebView shell"],
+            "inputMethods": ["Gboard"]
+          },
+          "requiredOperations": [
+            "focus editable near bottom of viewport",
+            "type while keyboard is open",
+            "move caret after scroll",
+            "record reason if WebView shell is unavailable"
+          ],
+          "requiredFields": [
+            "visualViewportBeforeAfter",
+            "layoutViewportBeforeAfter",
+            "caretRectBeforeAfter",
+            "scrollBeforeAfter",
+            "keyboardState",
+            "selectionBeforeAfter",
+            "obscuredCaretDecision"
+          ],
+          "requiresRealDevice": true
+        }
+      ],
+      "samples": []
+    },
+    {
+      "issue": 81,
+      "title": "iOS BIU and native formatting context-menu real device traces",
+      "relatedDocs": [
+        "docs/editor-text-replacement-formatting-policy-audit.md",
+        "docs/editor-native-mutation-policy-audit.md"
+      ],
+      "requiredScenarios": [
+        {
+          "id": "ios-biu-native-formatting",
+          "environment": {
+            "platform": "iOS",
+            "browsers": ["Safari"],
+            "inputMethods": ["Native BIU context menu"]
+          },
+          "requiredOperations": [
+            "apply Bold from native menu",
+            "apply Italic from native menu",
+            "apply Underline from native menu",
+            "toggle formatting off from native menu",
+            "apply formatting across partial mark selection"
+          ],
+          "requiredFields": [
+            "eventOrder",
+            "inputType",
+            "beforeinputCancelability",
+            "data",
+            "targetRanges",
+            "nativeDomEffect",
+            "markRecordsBeforeAfter",
+            "selectionBeforeAfter",
+            "historyUnit",
+            "undoResult"
+          ],
+          "requiresRealDevice": true
+        },
+        {
+          "id": "ios-biu-boundary-safety",
+          "environment": {
+            "platform": "iOS",
+            "browsers": ["Safari"],
+            "inputMethods": ["Native BIU context menu"]
+          },
+          "requiredOperations": [
+            "apply formatting to link label",
+            "apply formatting near inline atom",
+            "attempt formatting across block boundary",
+            "record native menu availability when selection is collapsed"
+          ],
+          "requiredFields": [
+            "eventOrder",
+            "inputType",
+            "beforeinputCancelability",
+            "targetRanges",
+            "nativeDomEffect",
+            "markRecordsBeforeAfter",
+            "atomRecordsBeforeAfter",
+            "selectionBeforeAfter",
+            "historyUnit",
+            "undoResult"
+          ],
+          "requiresRealDevice": true
+        }
+      ],
+      "samples": []
+    }
+  ]
+}
