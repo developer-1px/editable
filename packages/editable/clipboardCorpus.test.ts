@@ -21,8 +21,9 @@ type ClipboardCorpusManifest = {
   optionalMimeTypes: string[];
   samples: Array<{
     path: string;
+    shape?: string;
+    shapes?: string[];
     source: string;
-    shape: string;
   }>;
 };
 
@@ -58,9 +59,14 @@ describe("clipboard html corpus", () => {
     );
 
     for (const sample of manifest.samples) {
-      expect(requiredShapesBySource.get(sample.source)?.has(sample.shape)).toBe(
-        true,
-      );
+      const sampleShapes = sample.shapes ?? [sample.shape];
+      expect(sampleShapes.every(isString)).toBe(true);
+      expect(
+        sampleShapes.every((shape) =>
+          isString(shape) &&
+          requiredShapesBySource.get(sample.source)?.has(shape),
+        ),
+      ).toBe(true);
       const samplePath = join(fixturesRoot, sample.path);
       expect(existsSync(samplePath), sample.path).toBe(true);
       const payload = JSON.parse(readFileSync(samplePath, "utf8")) as {
@@ -89,4 +95,8 @@ function readManifest(): ClipboardCorpusManifest {
   return JSON.parse(
     readFileSync(join(fixturesRoot, "manifest.json"), "utf8"),
   ) as ClipboardCorpusManifest;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
 }

@@ -1,0 +1,43 @@
+{
+  "schema": "interactive-os.clipboard-html-sample@1",
+  "source": {
+    "app": "Notion public page",
+    "browser": "149.0.7827.55",
+    "os": "Darwin 25.3.0",
+    "url": "https://notion-templates.notion.site/Getting-Started-d0bc5f2525474589a37509a21aedc196",
+    "capturedWith": "Playwright DOM selection copy, then navigator.clipboard.read() from a permission-enabled page in the same browser context"
+  },
+  "selectionShape": "notion-page-paragraph-heading-callout-code-list-link",
+  "mime": {
+    "text/plain": "This wiki is built in Notion. Here are all the tips you need to contribute.\n\n# The Basics\n\n## Create a Page\n\nIn your sidebar, click the `+` that appears next to the word **Workspace** on hover. A new page will appear. Give it a title and start typing like you would in any other document.\n\n## Headings\n\nYou can add headings and subheadings in one of two ways:\n\n- Type `/heading` or `/h1`, `/h2`, or `/h3` to choose the heading size you want.\n- Use Markdown shortcuts, like `#`, `##`, and `###`.\n    - Create inline code by wrapping text with ``` (or with the shortcut `cmd/ctrl + e`).\n\n## Toggle Lists\n\n- Toggle lists streamline your content. Click the arrow to open.\n    - Click the arrow again to hide this content.\n    - Create a toggle by typing `/toggle` and pressing `enter`.\n    - You can add anything to toggles, including images and embeds.\n\n## Callout Blocks\n\n<aside>\n💡 Create a callout block like this by typing `/call` and pressing `enter`.\nHelpful for adding inline instructions, warnings, disclaimers, and tips.\nChange the emoji icon by clicking on it.\n\n</aside>\n\n## Code Blocks\n\nYou can add code notation to any Notion page:\n\n- Type `/code` and press `enter`.\n- Choose the language from the dropdown in the bottom right corner.\n- Here's an example:\n\n```html\nHover over this block to see the <b>Copy to Clipboard</b> option!\n```\n\n- Your teammates can select any code to comment on it.\n\n## Organizing Pages\n\nInstead of using folders, Notion lets you nest pages inside pages.\n\n- Type `/page` and press `enter` to create a sub-page inside a page. Like this:\n\nExample sub-page\n\n# Advanced Techniques\n\nCheck out this Notion Editor 101 guide for more advanced tips and how-to's.",
+    "text/html": "<p>This wiki is built in Notion. Here are all the tips you need to contribute.</p>\n<h1>The Basics</h1>\n<h2>Create a Page</h2>\n<p>In your sidebar, click the <code>+</code> that appears next to the word <strong>Workspace</strong> on hover. A new page will appear. Give it a title and start typing like you would in any other document.</p>\n<h2>Headings</h2>\n<p>You can add headings and subheadings in one of two ways:</p>\n<ul>\n<li>Type <code>/heading</code> or <code>/h1</code>, <code>/h2</code>, or <code>/h3</code> to choose the heading size you want.</li>\n<li>Use Markdown shortcuts, like <code>#</code>, <code>##</code>, and <code>###</code>.\n<ul>\n<li>Create inline code by wrapping text with ``` (or with the shortcut <code>cmd/ctrl + e</code>).</li>\n</ul>\n</li>\n</ul>\n<h2>Toggle Lists</h2>\n<ul>\n<li>Toggle lists streamline your content. Click the arrow to open.\n<ul>\n<li>Click the arrow again to hide this content.</li>\n<li>Create a toggle by typing <code>/toggle</code> and pressing <code>enter</code>.</li>\n<li>You can add anything to toggles, including images and embeds.</li>\n</ul>\n</li>\n</ul>\n<h2>Callout Blocks</h2>\n<p>&lt;aside&gt;<br>\n💡 Create a callout block like this by typing <code>/call</code> and pressing <code>enter</code>.<br>\nHelpful for adding inline instructions, warnings, disclaimers, and tips.<br>\nChange the emoji icon by clicking on it.</p>\n<p>&lt;/aside&gt;</p>\n<h2>Code Blocks</h2>\n<p>You can add code notation to any Notion page:</p>\n<ul>\n<li>Type <code>/code</code> and press <code>enter</code>.</li>\n<li>Choose the language from the dropdown in the bottom right corner.</li>\n<li>Here's an example:</li>\n</ul>\n<pre><code class=\"language-html\">Hover over this block to see the &lt;b&gt;Copy to Clipboard&lt;/b&gt; option!\n</code></pre>\n<ul>\n<li>Your teammates can select any code to comment on it.</li>\n</ul>\n<h2>Organizing Pages</h2>\n<p>Instead of using folders, Notion lets you nest pages inside pages.</p>\n<ul>\n<li>Type <code>/page</code> and press <code>enter</code> to create a sub-page inside a page. Like this:</li>\n</ul>\n<p><a href=\"https://app.notion.com/Example-sub-page-0ea3f93fe465468eb4e3e0399b2fa891?pvs=21\">Example sub-page</a></p>\n<h1>Advanced Techniques</h1>\n<p>Check out this <a href=\"https://www.notion.so/notion/Notion-editor-101-create-and-edit-68c7c67047494fdb87d50185429df93e\">Notion Editor 101</a> guide for more advanced tips and how-to's.</p>\n<!-- notionvc: 2d28b7a7-9440-4884-af70-c0392bb60e96 -->"
+  },
+  "currentReaderExpectation": {
+    "html": "ignored",
+    "fallback": "text/plain"
+  },
+  "futureHtmlImporterExpectation": {
+    "allowed": [
+      "paragraph",
+      "heading",
+      "callout",
+      "code-block",
+      "list-like-block",
+      "link",
+      "bold",
+      "inline-code"
+    ],
+    "dropped": [
+      "style",
+      "class",
+      "data-*",
+      "notion-ui-chrome",
+      "browser-injected-css"
+    ]
+  },
+  "notes": [
+    "Raw text/html is the Notion clipboard payload from a public Notion page content selection.",
+    "The payload is read from a separate permission-enabled page because the Notion document applies a clipboard-read permissions policy.",
+    "Notion exports this public-page selection as clean HTML rather than the style-heavy rendered DOM."
+  ]
+}

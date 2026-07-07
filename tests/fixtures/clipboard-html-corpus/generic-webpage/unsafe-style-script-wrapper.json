@@ -1,0 +1,46 @@
+{
+  "schema": "interactive-os.clipboard-html-sample@1",
+  "source": {
+    "app": "Generic webpage/article",
+    "browser": "Chromium",
+    "os": "Darwin 25.3.0",
+    "url": "https://example.com/ temporary Playwright page content",
+    "capturedWith": "Playwright DOM selection copy plus navigator.clipboard.read()"
+  },
+  "selectionShape": "unsafe-style-script-wrapper",
+  "sourceFixture": {
+    "html": "<!doctype html><article id=\"copy\" class=\"unsafe-wrapper\" style=\"border: 1px solid red; color: rgb(10, 20, 30)\" onclick=\"alert('inline')\"><h1 style=\"font-size: 32px\">Unsafe wrapper</h1><p>Paragraph with <a class=\"bad-link\" style=\"color: red\" href=\"javascript:alert('x')\" onclick=\"alert('link')\">javascript link</a> and <img src=\"https://example.com/image.png\" onerror=\"alert('img')\" style=\"width: 24px\" alt=\"bad image\">.</p><script>window.__copiedScript = true;</script></article>",
+    "expectedBrowserCopySanitization": [
+      "inline event handlers removed",
+      "javascript: link href removed",
+      "script element removed"
+    ]
+  },
+  "mime": {
+    "text/plain": "Unsafe wrapper\nParagraph with javascript link and bad image.",
+    "text/html": "<h1 style=\"color: rgb(10, 20, 30); font-family: Times; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; font-size: 32px;\">Unsafe wrapper</h1><p style=\"color: rgb(10, 20, 30); font-family: Times; font-size: medium; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;\">Paragraph with<span>&nbsp;</span><a class=\"bad-link\" style=\"color: red;\">javascript link</a><span>&nbsp;</span>and<span>&nbsp;</span><img src=\"https://example.com/image.png\" alt=\"bad image\" style=\"width: 24px;\">.</p>"
+  },
+  "currentReaderExpectation": {
+    "html": "ignored",
+    "fallback": "text/plain"
+  },
+  "futureHtmlImporterExpectation": {
+    "allowed": [
+      "heading",
+      "paragraph",
+      "link text",
+      "image alt text or safe image policy"
+    ],
+    "dropped": [
+      "style",
+      "class",
+      "event-handler",
+      "javascript-url",
+      "script"
+    ]
+  },
+  "notes": [
+    "Raw text/html is the browser clipboard payload from copying a generic page region whose source HTML includes style/class, inline handlers, a javascript: URL, an image onerror handler, and a script tag.",
+    "Chromium strips the executable attributes and script tag before they reach text/html, while style/class remain in the clipboard payload."
+  ]
+}
