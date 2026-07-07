@@ -33,6 +33,26 @@
   "optionalMimeTypes": ["text/markdown", "text/uri-list"],
   "samples": [
     {
+      "path": "google-docs/heading-marks-link.json",
+      "source": "google-docs",
+      "shape": "heading-marks-link"
+    },
+    {
+      "path": "google-docs/list.json",
+      "source": "google-docs",
+      "shape": "list"
+    },
+    {
+      "path": "google-docs/table-ish.json",
+      "source": "google-docs",
+      "shape": "table-ish"
+    },
+    {
+      "path": "notion/getting-started-page.json",
+      "source": "notion",
+      "shapes": ["paragraph-heading", "callout-code-list", "link"]
+    },
+    {
       "path": "github-rendered/heading-list-code-link-table.json",
       "source": "github-rendered",
       "shape": "heading-list-code-link-table"
@@ -41,6 +61,11 @@
       "path": "generic-webpage/paragraph-link-image.json",
       "source": "generic-webpage",
       "shape": "paragraph-link-image"
+    },
+    {
+      "path": "generic-webpage/unsafe-style-script-wrapper.json",
+      "source": "generic-webpage",
+      "shape": "unsafe-style-script-wrapper"
     }
   ]
 }

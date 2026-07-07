@@ -52,3 +52,7 @@ Each sample JSON must include:
 
 Keep raw payload strings intact. Do not prettify, sanitize, or normalize the
 captured `text/html`; sanitizer expectations belong in the expectation fields.
+
+When a single copied selection intentionally covers more than one required
+shape, list the file once in `manifest.json` with `shapes` instead of duplicating
+the raw payload.

@@ -25,6 +25,16 @@ both current-reader and future-importer expectations.
 | GitHub rendered page | Markdown-rendered heading/list/code/link/table |
 | Generic webpage/article | Paragraph/link/image, unsafe style/script wrapper |
 
+## Current Corpus Status
+
+| Source | Status |
+| --- | --- |
+| Google Docs | Collected: `heading-marks-link`, `list`, `table-ish` |
+| Notion | Collected: `paragraph-heading`, `callout-code-list`, `link` |
+| Slack | Missing: `message-mention-link-emoji`, `inline-code-code-block` |
+| GitHub rendered page | Collected: `heading-list-code-link-table` |
+| Generic webpage/article | Collected: `paragraph-link-image`, `unsafe-style-script-wrapper` |
+
 ## Required MIME Payloads
 
 Each sample must store:
