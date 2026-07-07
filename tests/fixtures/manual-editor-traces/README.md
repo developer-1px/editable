@@ -65,3 +65,6 @@ Each sample JSON must include:
 
 Keep event payloads raw. Derived interpretation belongs in `assertions`, not by
 rewriting captured events.
+
+`tools/evidence/manual-trace-recorder.html` can generate this trace shape from a
+real browser or device session.
