@@ -32,7 +32,8 @@ function buildReport() {
   const manualTraces = buildManualTraceReport();
   const problems = [...clipboard.problems, ...manualTraces.problems];
   return {
-    complete: clipboard.complete && manualTraces.complete && problems.length === 0,
+    complete:
+      clipboard.complete && manualTraces.complete && problems.length === 0,
     clipboard,
     manualTraces,
     problems,
@@ -62,7 +63,9 @@ function buildClipboardReport() {
     };
 
     if (!sourceShapes) {
-      problems.push(`Unknown clipboard source '${sample.source}' in ${sample.path}`);
+      problems.push(
+        `Unknown clipboard source '${sample.source}' in ${sample.path}`,
+      );
     }
 
     for (const shape of sampleShapes) {
@@ -73,7 +76,9 @@ function buildClipboardReport() {
       if (!sourceShapes) {
         continue;
       }
-      const source = manifest.requiredSources.find((entry) => entry.id === sample.source);
+      const source = manifest.requiredSources.find(
+        (entry) => entry.id === sample.source,
+      );
       if (!source.requiredShapes.includes(shape)) {
         problems.push(
           `Clipboard sample ${sample.path} declares unexpected shape '${shape}'`,
@@ -91,7 +96,9 @@ function buildClipboardReport() {
 
     const payload = readJson(samplePath);
     const missingMime = manifest.requiredMimeTypes.filter(
-      (type) => typeof payload.mime?.[type] !== "string" || payload.mime[type].length === 0,
+      (type) =>
+        typeof payload.mime?.[type] !== "string" ||
+        payload.mime[type].length === 0,
     );
     if (payload.schema !== "interactive-os.clipboard-html-sample@1") {
       problems.push(`Clipboard sample ${sample.path} has an invalid schema`);
@@ -109,7 +116,9 @@ function buildClipboardReport() {
 
   const sources = manifest.requiredSources.map((source) => {
     const collected = [...(collectedBySource.get(source.id) ?? new Set())];
-    const missing = source.requiredShapes.filter((shape) => !collected.includes(shape));
+    const missing = source.requiredShapes.filter(
+      (shape) => !collected.includes(shape),
+    );
     const missingTargets = missing.map((shape) => ({
       shape,
       path: `${source.id}/${shape}.json`,
@@ -128,7 +137,8 @@ function buildClipboardReport() {
   return {
     issue: manifest.issue,
     status: manifest.status,
-    complete: sources.every((source) => source.complete) && problems.length === 0,
+    complete:
+      sources.every((source) => source.complete) && problems.length === 0,
     sources,
     samples,
     problems,
@@ -139,7 +149,9 @@ function buildManualTraceReport() {
   const manifest = readJson(join(manualTraceRoot, "manifest.json"));
   const problems = [];
   const issues = manifest.issues.map((issue) => {
-    const requiredScenarios = issue.requiredScenarios.map((scenario) => scenario.id);
+    const requiredScenarios = issue.requiredScenarios.map(
+      (scenario) => scenario.id,
+    );
     const collected = [];
     const samples = [];
 
@@ -176,7 +188,9 @@ function buildManualTraceReport() {
         Array.isArray(payload.notes);
 
       if (!valid) {
-        problems.push(`Manual trace sample ${sample.path} has an invalid payload`);
+        problems.push(
+          `Manual trace sample ${sample.path} has an invalid payload`,
+        );
       } else {
         collected.push(sample.scenario);
       }
@@ -184,7 +198,9 @@ function buildManualTraceReport() {
       samples.push(sampleReport);
     }
 
-    const missing = requiredScenarios.filter((scenario) => !collected.includes(scenario));
+    const missing = requiredScenarios.filter(
+      (scenario) => !collected.includes(scenario),
+    );
     const missingTargets = missing.map((scenario) => ({
       scenario,
       path: `issue-${issue.issue}/${scenario}.json`,
@@ -217,7 +233,9 @@ function printReport(report) {
   for (const source of report.clipboard.sources) {
     console.log(
       `- ${source.id}: ${source.collected.length}/${source.required.length} collected` +
-        (source.missing.length > 0 ? `; missing ${source.missing.join(", ")}` : ""),
+        (source.missing.length > 0
+          ? `; missing ${source.missing.join(", ")}`
+          : ""),
     );
     for (const target of source.missingTargets) {
       console.log(`  -> ${target.shape}: ${target.path}`);
@@ -228,7 +246,9 @@ function printReport(report) {
   for (const issue of report.manualTraces.issues) {
     console.log(
       `- #${issue.issue}: ${issue.collected.length}/${issue.required.length} collected` +
-        (issue.missing.length > 0 ? `; missing ${issue.missing.join(", ")}` : ""),
+        (issue.missing.length > 0
+          ? `; missing ${issue.missing.join(", ")}`
+          : ""),
     );
     for (const target of issue.missingTargets) {
       console.log(`  -> ${target.scenario}: ${target.path}`);

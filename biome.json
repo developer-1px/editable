@@ -10,6 +10,7 @@
     "includes": [
       "**/src/**/*",
       "**/scripts/**/*.mjs",
+      "**/tools/**/*.mjs",
       "**/.vscode/**/*",
       "**/index.html",
       "**/vite.config.ts",
