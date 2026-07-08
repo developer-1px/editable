@@ -68,3 +68,12 @@ rewriting captured events.
 
 `tools/evidence/manual-trace-recorder.html` can generate this trace shape from a
 real browser or device session.
+
+After downloading a trace, import it with:
+
+```bash
+pnpm run evidence:import -- --file <trace-json> --issue <number> --scenario <scenario>
+```
+
+Use `pnpm run evidence:status` to see the exact command for every missing
+issue/scenario.

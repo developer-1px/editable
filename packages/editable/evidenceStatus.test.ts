@@ -12,6 +12,7 @@ type EvidenceStatusReport = {
     sources: Array<{
       id: string;
       missingTargets: Array<{
+        importCommand: string;
         path: string;
         shape: string;
       }>;
@@ -21,6 +22,7 @@ type EvidenceStatusReport = {
     issues: Array<{
       issue: number;
       missingTargets: Array<{
+        importCommand: string;
         path: string;
         scenario: string;
       }>;
@@ -44,10 +46,14 @@ describe("evidence status CLI", () => {
       {
         shape: "message-mention-link-emoji",
         path: "slack/message-mention-link-emoji.json",
+        importCommand:
+          "pnpm run evidence:import -- --file <downloaded-json> --source slack --shape message-mention-link-emoji",
       },
       {
         shape: "inline-code-code-block",
         path: "slack/inline-code-code-block.json",
+        importCommand:
+          "pnpm run evidence:import -- --file <downloaded-json> --source slack --shape inline-code-code-block",
       },
     ]);
     expect(
@@ -57,14 +63,20 @@ describe("evidence status CLI", () => {
       {
         scenario: "ios-keyboard-viewport-caret",
         path: "issue-78/ios-keyboard-viewport-caret.json",
+        importCommand:
+          "pnpm run evidence:import -- --file <trace-json> --issue 78 --scenario ios-keyboard-viewport-caret",
       },
       {
         scenario: "android-keyboard-viewport-caret",
         path: "issue-78/android-keyboard-viewport-caret.json",
+        importCommand:
+          "pnpm run evidence:import -- --file <trace-json> --issue 78 --scenario android-keyboard-viewport-caret",
       },
       {
         scenario: "android-webview-keyboard-viewport-caret",
         path: "issue-78/android-webview-keyboard-viewport-caret.json",
+        importCommand:
+          "pnpm run evidence:import -- --file <trace-json> --issue 78 --scenario android-webview-keyboard-viewport-caret",
       },
     ]);
   });
