@@ -68,6 +68,23 @@ tests/fixtures/manual-editor-traces/manifest.json
 `packages/editable/manualTraceCorpus.test.ts` verifies the issue/scenario
 connection and basic payload shape.
 
+## Coverage Status
+
+Print current coverage:
+
+```bash
+pnpm run evidence:status
+```
+
+Use the completion gate when auditing whether these issues can close:
+
+```bash
+pnpm run evidence:check
+```
+
+The check exits non-zero until Slack clipboard samples and all manual trace
+scenarios are present.
+
 ## Completion Boundary
 
 These tools do not replace the real evidence. They reduce collection friction
