@@ -8,6 +8,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:core": "vitest run packages/editable/dom.test.ts packages/editable/index.test.ts packages/editable/edit.test.ts packages/editable/schema.test.ts",
+    "evidence:status": "node tools/evidence/status.mjs",
+    "evidence:check": "node tools/evidence/status.mjs --require-complete",
     "verify:internal": "pnpm exec tsc --noEmit && pnpm test && pnpm run check && pnpm build",
     "verify:browser": "playwright test",
     "format": "biome format --write",

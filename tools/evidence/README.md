@@ -53,3 +53,20 @@ Then add the file to `tests/fixtures/manual-editor-traces/manifest.json`.
 
 The pages only collect evidence. The issue still needs a policy/test follow-up
 when the captured behavior changes editor decisions.
+
+## Status CLI
+
+Print current corpus coverage:
+
+```bash
+pnpm run evidence:status
+```
+
+Fail unless every required evidence item has a valid sample:
+
+```bash
+pnpm run evidence:check
+```
+
+`evidence:check` is expected to fail while Slack and real-device traces are
+missing.
