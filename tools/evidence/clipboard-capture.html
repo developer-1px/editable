@@ -177,10 +177,17 @@
           Notes
           <textarea id="notes"></textarea>
         </label>
+        <label class="full">
+          Import Command
+          <input id="import-command" readonly />
+        </label>
       </form>
       <div class="actions">
         <button id="read" type="button">Read Clipboard</button>
         <button id="copy" type="button">Copy JSON</button>
+        <button id="copy-import-command" type="button">
+          Copy Import Command
+        </button>
         <button id="download" type="button">Download JSON</button>
       </div>
       <p class="status" id="status"></p>
@@ -194,9 +201,37 @@
       const browserInput = document.querySelector("#browser");
       const osInput = document.querySelector("#os");
       const notesInput = document.querySelector("#notes");
+      const importCommandInput = document.querySelector("#import-command");
       const statusOutput = document.querySelector("#status");
       const output = document.querySelector("#output");
       let currentMime = null;
+
+      const sourceShapes = {
+        "generic-webpage": [
+          ["paragraph-link-image", "paragraph-link-image"],
+          ["unsafe-style-script-wrapper", "unsafe-style-script-wrapper"],
+        ],
+        "github-rendered": [
+          [
+            "heading-list-code-link-table",
+            "heading-list-code-link-table",
+          ],
+        ],
+        "google-docs": [
+          ["heading-marks-link", "heading-marks-link"],
+          ["list", "list"],
+          ["table-ish", "table-ish"],
+        ],
+        notion: [
+          ["paragraph-heading", "paragraph-heading"],
+          ["callout-code-list", "callout-code-list"],
+          ["link", "link"],
+        ],
+        slack: [
+          ["message-mention-link-emoji", "message-mention-link-emoji"],
+          ["inline-code-code-block", "inline-code-code-block"],
+        ],
+      };
 
       const sourceNames = {
         "generic-webpage": "Generic webpage/article",
@@ -211,6 +246,7 @@
 
       sourceInput.addEventListener("change", () => {
         appInput.value = sourceNames[sourceInput.value] ?? sourceInput.value;
+        syncShapeOptions();
         refreshOutput();
       });
       document
@@ -236,6 +272,13 @@
         statusOutput.textContent = "JSON copied.";
       });
 
+      document
+        .querySelector("#copy-import-command")
+        .addEventListener("click", async () => {
+          await navigator.clipboard.writeText(importCommandInput.value);
+          statusOutput.textContent = "Import command copied.";
+        });
+
       document.querySelector("#download").addEventListener("click", () => {
         const source = sourceInput.value;
         const shape = shapeInput.value;
@@ -247,6 +290,7 @@
         link.download = `${source}-${shape}.json`;
         link.click();
         URL.revokeObjectURL(link.href);
+        statusOutput.textContent = `Downloaded JSON. ${importCommand()}`;
       });
 
       async function readClipboard() {
@@ -299,6 +343,31 @@
         };
       }
 
+      function syncShapeOptions() {
+        const currentShape = shapeInput.value;
+        const shapes = sourceShapes[sourceInput.value] ?? [];
+        shapeInput.replaceChildren(
+          ...shapes.map(([value, label]) => {
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = label;
+            return option;
+          }),
+        );
+        shapeInput.value = shapes.some(([value]) => value === currentShape)
+          ? currentShape
+          : (shapes[0]?.[0] ?? "");
+        refreshImportCommand();
+      }
+
+      function importCommand() {
+        return `pnpm run evidence:import -- --file <downloaded-json> --source ${sourceInput.value} --shape ${shapeInput.value}`;
+      }
+
+      function refreshImportCommand() {
+        importCommandInput.value = importCommand();
+      }
+
       function expectationFor(source, shape) {
         if (source === "slack") {
           return {
@@ -339,11 +408,14 @@
       }
 
       function refreshOutput() {
+        refreshImportCommand();
         if (currentMime === null) {
           return;
         }
         output.textContent = JSON.stringify(buildSample(currentMime), null, 2);
       }
+
+      syncShapeOptions();
     </script>
   </body>
 </html>
