@@ -72,3 +72,13 @@ pnpm run evidence:check
 
 `evidence:check` is expected to fail while Slack and real-device traces are
 missing.
+
+## Sample Plan CLI
+
+Validate a downloaded evidence JSON and print the fixture destination plus
+manifest entry:
+
+```bash
+pnpm run evidence:plan -- --file ~/Downloads/slack-message.json --source slack --shape message-mention-link-emoji
+pnpm run evidence:plan -- --file ~/Downloads/ios-trace.json --issue 70 --scenario ios-touch-selection
+```
