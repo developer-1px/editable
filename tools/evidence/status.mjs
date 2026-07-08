@@ -122,6 +122,7 @@ function buildClipboardReport() {
     const missingTargets = missing.map((shape) => ({
       shape,
       path: `${source.id}/${shape}.json`,
+      importCommand: `pnpm run evidence:import -- --file <downloaded-json> --source ${source.id} --shape ${shape}`,
     }));
     return {
       id: source.id,
@@ -204,6 +205,7 @@ function buildManualTraceReport() {
     const missingTargets = missing.map((scenario) => ({
       scenario,
       path: `issue-${issue.issue}/${scenario}.json`,
+      importCommand: `pnpm run evidence:import -- --file <trace-json> --issue ${issue.issue} --scenario ${scenario}`,
     }));
     return {
       issue: issue.issue,
@@ -239,6 +241,7 @@ function printReport(report) {
     );
     for (const target of source.missingTargets) {
       console.log(`  -> ${target.shape}: ${target.path}`);
+      console.log(`     import: ${target.importCommand}`);
     }
   }
   console.log("");
@@ -252,6 +255,7 @@ function printReport(report) {
     );
     for (const target of issue.missingTargets) {
       console.log(`  -> ${target.scenario}: ${target.path}`);
+      console.log(`     import: ${target.importCommand}`);
     }
   }
   if (report.problems.length > 0) {

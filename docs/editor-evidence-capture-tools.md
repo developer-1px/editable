@@ -44,26 +44,24 @@ Slack selections:
 | `message-mention-link-emoji` | `tests/fixtures/clipboard-html-corpus/slack/message-mention-link-emoji.json` |
 | `inline-code-code-block` | `tests/fixtures/clipboard-html-corpus/slack/inline-code-code-block.json` |
 
-After each capture, add the sample to:
+After each capture, import the sample:
 
-```txt
-tests/fixtures/clipboard-html-corpus/manifest.json
+```bash
+pnpm run evidence:import -- --file <downloaded-slack.json> --source slack --shape <shape>
 ```
 
 ## Manual Trace Path
 
-For #85, #70, #72, #78, and #81, select the scenario in the recorder and commit
-the downloaded JSON under:
+For #85, #70, #72, #78, and #81, select the scenario in the recorder and import
+the downloaded JSON:
 
-```txt
-tests/fixtures/manual-editor-traces/issue-<number>/<scenario>.json
+```bash
+pnpm run evidence:import -- --file <trace.json> --issue <number> --scenario <scenario>
 ```
 
-Then list it under that issue's `samples` array in:
-
-```txt
-tests/fixtures/manual-editor-traces/manifest.json
-```
+The command validates the sample, copies it into
+`tests/fixtures/manual-editor-traces/`, and lists it under the issue's
+`samples` array in `manifest.json`.
 
 `packages/editable/manualTraceCorpus.test.ts` verifies the issue/scenario
 connection and basic payload shape.
@@ -76,7 +74,8 @@ Print current coverage:
 pnpm run evidence:status
 ```
 
-The status output lists the target fixture path for every missing sample.
+The status output lists the target fixture path and import command for every
+missing sample.
 
 Use the completion gate when auditing whether these issues can close:
 

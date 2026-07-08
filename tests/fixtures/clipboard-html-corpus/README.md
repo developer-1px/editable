@@ -59,3 +59,12 @@ the raw payload.
 
 `tools/evidence/clipboard-capture.html` can generate this sample shape from a
 real browser clipboard payload.
+
+After downloading a sample, import it with:
+
+```bash
+pnpm run evidence:import -- --file <downloaded-json> --source <source> --shape <shape>
+```
+
+Use `pnpm run evidence:status` to see the exact command for every missing
+source/shape.

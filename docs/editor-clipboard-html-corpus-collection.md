@@ -67,3 +67,13 @@ real browser or OS clipboard after copying from the source application.
 
 This means Google Docs, Notion, and Slack samples depend on logged-in source app
 state and cannot be generated from this repository alone.
+
+After capture, import the downloaded JSON instead of editing the manifest by
+hand:
+
+```bash
+pnpm run evidence:import -- --file <downloaded-json> --source slack --shape message-mention-link-emoji
+```
+
+`pnpm run evidence:status` prints the exact import command for each missing
+source/shape.

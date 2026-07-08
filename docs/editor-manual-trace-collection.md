@@ -54,6 +54,15 @@ complete only when a raw sample file is committed and listed under `samples`, or
 when a sample records a concrete device-access reason that makes the capture
 unavailable.
 
+After capture, import the downloaded JSON instead of editing `samples` by hand:
+
+```bash
+pnpm run evidence:import -- --file <trace-json> --issue 85 --scenario macos-text-replacement-acceptance
+```
+
+`pnpm run evidence:status` prints the exact import command for each missing
+issue/scenario.
+
 ## Minimum Trace Shape
 
 Every manual trace sample must include:
