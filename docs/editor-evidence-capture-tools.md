@@ -76,6 +76,8 @@ Print current coverage:
 pnpm run evidence:status
 ```
 
+The status output lists the target fixture path for every missing sample.
+
 Use the completion gate when auditing whether these issues can close:
 
 ```bash
