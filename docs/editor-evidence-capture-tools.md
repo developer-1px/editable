@@ -36,6 +36,9 @@ secure context, while direct `file://` access may not be enough.
 For real iOS/Android capture, use the LAN `manual-trace-recorder.html` URL
 printed by `evidence:serve` on the device being tested.
 
+The root URL printed by `evidence:serve` lists the currently missing evidence
+targets and the matching import command for each downloaded JSON file.
+
 ## Issue #74 Slack Path
 
 Slack remains the only missing source in the clipboard corpus. Capture two

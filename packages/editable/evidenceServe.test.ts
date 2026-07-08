@@ -18,6 +18,9 @@ describe("evidence server CLI", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain(
+      "Evidence index: http://127.0.0.1:9876/",
+    );
+    expect(result.stdout).toContain(
       "Clipboard capture: http://127.0.0.1:9876/clipboard-capture.html",
     );
     expect(result.stdout).toContain(
@@ -31,6 +34,18 @@ describe("evidence server CLI", () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("--host <host>");
     expect(result.stdout).toContain("Defaults to 0.0.0.0");
+  });
+
+  it("prints an evidence index with missing targets", () => {
+    const result = runServe("--print-index");
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("<title>Evidence Capture</title>");
+    expect(result.stdout).toContain("slack/message-mention-link-emoji.json");
+    expect(result.stdout).toContain(
+      "pnpm run evidence:import -- --file &lt;downloaded-json&gt; --source slack --shape message-mention-link-emoji",
+    );
+    expect(result.stdout).toContain("issue-85/macos-text-replacement-acceptance.json");
   });
 });
 

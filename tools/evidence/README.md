@@ -9,9 +9,10 @@ Serve this directory:
 pnpm run evidence:serve
 ```
 
-Open one of the printed URLs:
+Open the printed evidence index URL, or open a tool directly:
 
 ```txt
+http://127.0.0.1:8787/
 http://127.0.0.1:8787/clipboard-capture.html
 http://127.0.0.1:8787/manual-trace-recorder.html
 ```
