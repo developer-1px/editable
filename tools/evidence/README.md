@@ -62,6 +62,8 @@ Print current corpus coverage:
 pnpm run evidence:status
 ```
 
+The report includes target fixture paths for each missing sample.
+
 Fail unless every required evidence item has a valid sample:
 
 ```bash

@@ -110,12 +110,17 @@ function buildClipboardReport() {
   const sources = manifest.requiredSources.map((source) => {
     const collected = [...(collectedBySource.get(source.id) ?? new Set())];
     const missing = source.requiredShapes.filter((shape) => !collected.includes(shape));
+    const missingTargets = missing.map((shape) => ({
+      shape,
+      path: `${source.id}/${shape}.json`,
+    }));
     return {
       id: source.id,
       name: source.name,
       required: source.requiredShapes,
       collected,
       missing,
+      missingTargets,
       complete: missing.length === 0,
     };
   });
@@ -180,12 +185,17 @@ function buildManualTraceReport() {
     }
 
     const missing = requiredScenarios.filter((scenario) => !collected.includes(scenario));
+    const missingTargets = missing.map((scenario) => ({
+      scenario,
+      path: `issue-${issue.issue}/${scenario}.json`,
+    }));
     return {
       issue: issue.issue,
       title: issue.title,
       required: requiredScenarios,
       collected,
       missing,
+      missingTargets,
       complete: missing.length === 0,
       samples,
     };
@@ -209,6 +219,9 @@ function printReport(report) {
       `- ${source.id}: ${source.collected.length}/${source.required.length} collected` +
         (source.missing.length > 0 ? `; missing ${source.missing.join(", ")}` : ""),
     );
+    for (const target of source.missingTargets) {
+      console.log(`  -> ${target.shape}: ${target.path}`);
+    }
   }
   console.log("");
   console.log("Manual traces");
@@ -217,6 +230,9 @@ function printReport(report) {
       `- #${issue.issue}: ${issue.collected.length}/${issue.required.length} collected` +
         (issue.missing.length > 0 ? `; missing ${issue.missing.join(", ")}` : ""),
     );
+    for (const target of issue.missingTargets) {
+      console.log(`  -> ${target.scenario}: ${target.path}`);
+    }
   }
   if (report.problems.length > 0) {
     console.log("");
