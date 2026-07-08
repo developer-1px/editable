@@ -27,12 +27,14 @@ and package public surface stay focused on the editor protocol.
 Serve the tools from localhost:
 
 ```bash
-cd tools/evidence
-python3 -m http.server 8787
+pnpm run evidence:serve
 ```
 
 Clipboard APIs require a secure context. Browsers generally treat localhost as a
 secure context, while direct `file://` access may not be enough.
+
+For real iOS/Android capture, use the LAN `manual-trace-recorder.html` URL
+printed by `evidence:serve` on the device being tested.
 
 ## Issue #74 Slack Path
 

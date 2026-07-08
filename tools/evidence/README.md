@@ -3,19 +3,21 @@
 These standalone pages help collect the remaining issue evidence without adding
 debug UI to the sample app or public package surface.
 
-Serve this directory from localhost:
+Serve this directory:
 
 ```bash
-cd tools/evidence
-python3 -m http.server 8787
+pnpm run evidence:serve
 ```
 
-Open:
+Open one of the printed URLs:
 
 ```txt
 http://127.0.0.1:8787/clipboard-capture.html
 http://127.0.0.1:8787/manual-trace-recorder.html
 ```
+
+For iOS/Android capture, open the LAN `manual-trace-recorder.html` URL printed
+by the command on the device being tested.
 
 ## Clipboard Capture
 
