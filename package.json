@@ -11,6 +11,7 @@
     "evidence:status": "node tools/evidence/status.mjs",
     "evidence:check": "node tools/evidence/status.mjs --require-complete",
     "evidence:plan": "node tools/evidence/plan-sample.mjs",
+    "evidence:import": "node tools/evidence/import-sample.mjs",
     "verify:internal": "pnpm exec tsc --noEmit && pnpm test && pnpm run check && pnpm build",
     "verify:browser": "playwright test",
     "format": "biome format --write",

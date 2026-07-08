@@ -26,13 +26,15 @@ Use `clipboard-capture.html` for issue #74.
 2. Open the capture page in the same browser context.
 3. Choose the source and shape.
 4. Read and download the JSON.
-5. Commit it under:
+5. Import it:
 
-```txt
-tests/fixtures/clipboard-html-corpus/<source>/<shape>.json
+```bash
+pnpm run evidence:import -- --file ~/Downloads/slack-message.json --source slack --shape message-mention-link-emoji
 ```
 
-Then add the file to `tests/fixtures/clipboard-html-corpus/manifest.json`.
+The import command copies the file under
+`tests/fixtures/clipboard-html-corpus/` and updates
+`tests/fixtures/clipboard-html-corpus/manifest.json`.
 
 ## Manual Trace Recorder
 
@@ -43,13 +45,15 @@ Use `manual-trace-recorder.html` for issues #85, #70, #72, #78, and #81.
 3. Perform the required operation on the editable surface.
 4. Add manual snapshots when useful.
 5. Download the trace JSON.
-6. Commit it under:
+6. Import it:
 
-```txt
-tests/fixtures/manual-editor-traces/issue-<number>/<scenario>.json
+```bash
+pnpm run evidence:import -- --file ~/Downloads/ios-trace.json --issue 70 --scenario ios-touch-selection
 ```
 
-Then add the file to `tests/fixtures/manual-editor-traces/manifest.json`.
+The import command copies the file under
+`tests/fixtures/manual-editor-traces/` and updates
+`tests/fixtures/manual-editor-traces/manifest.json`.
 
 The pages only collect evidence. The issue still needs a policy/test follow-up
 when the captured behavior changes editor decisions.
@@ -82,3 +86,16 @@ manifest entry:
 pnpm run evidence:plan -- --file ~/Downloads/slack-message.json --source slack --shape message-mention-link-emoji
 pnpm run evidence:plan -- --file ~/Downloads/ios-trace.json --issue 70 --scenario ios-touch-selection
 ```
+
+## Sample Import CLI
+
+Validate a downloaded evidence JSON, copy it to the planned fixture path, and
+update the matching manifest:
+
+```bash
+pnpm run evidence:import -- --file ~/Downloads/slack-message.json --source slack --shape message-mention-link-emoji
+pnpm run evidence:import -- --file ~/Downloads/ios-trace.json --issue 70 --scenario ios-touch-selection
+```
+
+Use `--dry-run` to check the destination without writing files. Use `--force`
+only when replacing an existing fixture for the same target.
