@@ -3,27 +3,46 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const clipboardRoot = join(repoRoot, "tests/fixtures/clipboard-html-corpus");
-const manualTraceRoot = join(repoRoot, "tests/fixtures/manual-editor-traces");
-const options = parseArgs(process.argv.slice(2));
+export const defaultRepoRoot = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../..",
+);
 
-if (options.help) {
-  printHelp();
-  process.exit(0);
+if (isCliEntrypoint()) {
+  main();
 }
 
-try {
-  const result = planSample(options);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-} catch (error) {
-  process.stderr.write(
-    `${error instanceof Error ? error.message : String(error)}\n`,
-  );
-  process.exitCode = 1;
+function main() {
+  const options = parseArgs(process.argv.slice(2));
+
+  if (options.help) {
+    printHelp();
+    process.exit(0);
+  }
+
+  try {
+    const result = planSample(options);
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  } catch (error) {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exitCode = 1;
+  }
 }
 
-function planSample(args) {
+export function createEvidenceContext(repoRoot = defaultRepoRoot) {
+  return {
+    repoRoot,
+    clipboardRoot: join(repoRoot, "tests/fixtures/clipboard-html-corpus"),
+    manualTraceRoot: join(repoRoot, "tests/fixtures/manual-editor-traces"),
+  };
+}
+
+export function planSample(
+  args,
+  context = createEvidenceContext(args.repoRoot),
+) {
   if (!args.file) {
     throw new Error("Missing --file <path>.");
   }
@@ -33,16 +52,16 @@ function planSample(args) {
   }
   const payload = readJson(samplePath);
   if (payload.schema === "interactive-os.clipboard-html-sample@1") {
-    return planClipboardSample(args, payload);
+    return planClipboardSample(args, payload, context);
   }
   if (payload.schema === "interactive-os.manual-editor-trace@1") {
-    return planManualTraceSample(args, payload);
+    return planManualTraceSample(args, payload, context);
   }
   throw new Error(`Unknown sample schema: ${payload.schema ?? "(missing)"}`);
 }
 
-function planClipboardSample(args, payload) {
-  const manifest = readJson(join(clipboardRoot, "manifest.json"));
+function planClipboardSample(args, payload, context) {
+  const manifest = readJson(join(context.clipboardRoot, "manifest.json"));
   if (!args.source) {
     throw new Error("Clipboard samples require --source <id>.");
   }
@@ -93,8 +112,8 @@ function planClipboardSample(args, payload) {
   };
 }
 
-function planManualTraceSample(args, payload) {
-  const manifest = readJson(join(manualTraceRoot, "manifest.json"));
+function planManualTraceSample(args, payload, context) {
+  const manifest = readJson(join(context.manualTraceRoot, "manifest.json"));
   const issueNumber = Number(args.issue ?? payload.issue);
   const scenario = args.scenario ?? payload.scenario;
   if (!Number.isInteger(issueNumber)) {
@@ -135,8 +154,9 @@ function planManualTraceSample(args, payload) {
   };
 }
 
-function parseArgs(args) {
+export function parseArgs(args) {
   const options = {};
+  const booleanOptions = new Set(["dry-run", "force"]);
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--") {
@@ -150,6 +170,10 @@ function parseArgs(args) {
       throw new Error(`Unexpected positional argument: ${arg}`);
     }
     const key = arg.slice(2);
+    if (booleanOptions.has(key)) {
+      options[toCamelCase(key)] = true;
+      continue;
+    }
     const value = args[index + 1];
     if (typeof value !== "string" || value.startsWith("--")) {
       throw new Error(`Missing value for ${arg}.`);
@@ -174,7 +198,7 @@ function toCamelCase(value) {
   return value.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
 }
 
-function readJson(path) {
+export function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
@@ -195,6 +219,11 @@ Options:
   --issue <number>      Manual trace issue number.
   --scenario <id>       Manual trace scenario id.
   --destination <path>  Override the planned fixture path.
+  --repo-root <path>    Override the repository root.
   --help, -h            Show this help.
 `);
+}
+
+function isCliEntrypoint() {
+  return process.argv[1] === fileURLToPath(import.meta.url);
 }
