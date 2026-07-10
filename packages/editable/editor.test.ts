@@ -998,6 +998,84 @@ describe("JSON editable coordinator", () => {
     expect(fixture.faults).toEqual([]);
   });
 
+  it("accepts native Enter when an empty composition source keeps its owned placeholder", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    expect(
+      fixture.editor.dispatch({
+        type: "replaceText",
+        blockId: "alpha",
+        from: 0,
+        to: 6,
+        text: "",
+      }),
+    ).toMatchObject({ ok: true, change: "document" });
+
+    const sourceSurface = textSurface(fixture, "alpha");
+    const composingNode = textNode(fixture, "alpha");
+    const ownedPlaceholder = sourceSurface.querySelector(
+      "[data-editable-placeholder]",
+    );
+    expect(ownedPlaceholder).not.toBeNull();
+    setDOMCaret(composingNode, 0);
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionstart", { bubbles: true }),
+    );
+    composingNode.insertData(0, "한");
+    setDOMCaret(composingNode, 1);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertCompositionText", {
+        data: "한",
+        isComposing: true,
+      }),
+    );
+    expect(Array.from(sourceSurface.childNodes)).toEqual(
+      expect.arrayContaining([composingNode, ownedPlaceholder]),
+    );
+
+    fixture.root.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: false,
+        inputType: "insertParagraph",
+        isComposing: true,
+      }),
+    );
+    const sourceBlock = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (sourceBlock === null) {
+      throw new Error("Missing alpha block.");
+    }
+    const nativeBlock = window.document.createElement("div");
+    nativeBlock.append(window.document.createElement("br"));
+    sourceBlock.after(nativeBlock);
+    nativeBlock.dispatchEvent(
+      inputEvent("input", "insertParagraph", { isComposing: false }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "한",
+      "",
+      "second",
+    ]);
+    expect(fixture.faults).toEqual([]);
+    expect(fixture.editor.dispatch({ type: "undo" }).ok).toBe(true);
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "한",
+      "second",
+    ]);
+    expect(fixture.editor.dispatch({ type: "undo" }).ok).toBe(true);
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "",
+      "second",
+    ]);
+  });
+
   it("rejects an evidenced native split with foreign nested markup", async () => {
     vi.useFakeTimers();
     const fixture = setupEditor();

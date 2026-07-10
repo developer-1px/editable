@@ -168,6 +168,23 @@ editor.subscribe(listener);
 editor.destroy();
 ```
 
+The package keeps that public seam separate from responsibility-named internals:
+
+```txt
+editor.ts
+└─ editorCoordinator.ts       browser event order and mounted-session state
+   ├─ editorCommands.ts       action -> JSON patch and selection plan
+   ├─ documentProjection.ts   keyed canonical DOM projection
+   ├─ editableDOM.ts          owned surface and placeholder primitives
+   ├─ domSelection.ts         DOM <-> model selection mapping
+   ├─ nativeTextMutation.ts   bounded text-mutation admission
+   └─ nativeParagraph.ts      one-shot native Enter grammar
+```
+
+The policy modules neither commit `JSONDocument` changes nor report faults.
+The coordinator remains the single transaction and timing owner, so splitting
+files does not split the composition lease across competing state holders.
+
 `destroy()` uses the same mandatory native-effect validation, trailing-newline
 normalization, queued-remote ordering, and structural replay as timed settling
 before it removes listeners and restores the host attributes it borrowed.

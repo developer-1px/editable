@@ -639,6 +639,86 @@ test.describe("synthetic composition protocol — not an OS IME reproduction", (
     expect(blocks[composingIndex + 1]?.text).toBe("");
     await expect(lastFault(page)).toHaveText("null");
   });
+
+  test("synthetic noncancelable Enter accepts an owned placeholder beside composed text", async ({
+    page,
+  }) => {
+    const initialCount = (await readDocumentBlocks(page)).length;
+    await page.evaluate((blockId) => {
+      const lab = (window as DemoWindow).__jsonEditableLab;
+      if (lab === undefined) {
+        throw new Error("JSON editable lab is not mounted.");
+      }
+      const block = lab.document.value.blocks.find(
+        (candidate) => candidate.id === blockId,
+      );
+      if (block === undefined) {
+        throw new Error(`Unknown block: ${blockId}`);
+      }
+      const result = lab.editor.dispatch({
+        type: "replaceText",
+        blockId,
+        from: 0,
+        to: block.text.length,
+        text: "",
+      });
+      if (!result.ok) {
+        throw new Error(result.reason);
+      }
+    }, COMPOSING_BLOCK_ID);
+    await expect(blockSurface(page, COMPOSING_BLOCK_ID)).toHaveText("");
+    await beginSyntheticComposition(page, COMPOSING_BLOCK_ID, 0, "한");
+
+    await blockSurface(page, COMPOSING_BLOCK_ID).evaluate((surface) => {
+      const node = surface.firstChild;
+      const placeholder = node?.nextSibling;
+      const block = surface.closest<HTMLElement>("[data-editable-block]");
+      if (
+        !(node instanceof Text) ||
+        !(placeholder instanceof HTMLBRElement) ||
+        !placeholder.hasAttribute("data-editable-placeholder") ||
+        block === null
+      ) {
+        throw new Error("Expected the pinned Text and its owned placeholder.");
+      }
+      surface.dispatchEvent(
+        new InputEvent("beforeinput", {
+          bubbles: true,
+          cancelable: false,
+          composed: true,
+          inputType: "insertParagraph",
+          isComposing: true,
+        }),
+      );
+      const nativeBlock = document.createElement("div");
+      nativeBlock.append(document.createElement("br"));
+      block.after(nativeBlock);
+      nativeBlock.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          composed: true,
+          inputType: "insertParagraph",
+          isComposing: false,
+        }),
+      );
+      nativeBlock.dispatchEvent(
+        new CompositionEvent("compositionend", {
+          bubbles: true,
+          composed: true,
+          data: "한",
+        }),
+      );
+    });
+
+    await expect.poll(() => readDocumentBlocks(page)).toHaveLength(initialCount + 1);
+    const blocks = await readDocumentBlocks(page);
+    const composingIndex = blocks.findIndex(
+      (block) => block.id === COMPOSING_BLOCK_ID,
+    );
+    expect(blocks[composingIndex]?.text).toBe("한");
+    expect(blocks[composingIndex + 1]?.text).toBe("");
+    await expect(lastFault(page)).toHaveText("null");
+  });
 });
 
 function editorRoot(page: Page): Locator {

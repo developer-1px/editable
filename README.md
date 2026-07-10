@@ -5,7 +5,10 @@ on one hard invariant: native IME input and application rendering must never
 replace the same live DOM node at the same time.
 
 The current implementation keeps `@interactive-os/json-document` as canonical
-state and mounts one deep editor module that owns the entire editable subtree.
+state and mounts one coordinator that owns the entire editable subtree. Pure
+command planning, keyed DOM projection, and native-mutation grammar sit behind
+small internal seams; browser event ordering and the live IME lease remain
+together in the coordinator.
 Ordinary input is converted to model commands before the browser mutates DOM.
 During composition the module pins the browser-owned text node and lends that
 block to the IME; proven-disjoint `remote` updates are queued until settling,
