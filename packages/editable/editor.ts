@@ -2300,25 +2300,10 @@ class JsonEditableCoordinator implements JsonEditable {
       }
       if (this.composition !== null) {
         this.flushNativeMutations([], true);
-        const structuralSelection = orderedEditableSelection(
-          this.document.value,
-          this.document.selection,
-        );
-        const snapshot = this.document.selection?.snapshot();
-        if (
-          this.composition !== null &&
-          structuralSelection !== null &&
-          structuralSelection.start.blockId === this.composition.blockId &&
-          structuralSelection.end.blockId === this.composition.blockId &&
-          structuralSelection.start.offset === structuralSelection.end.offset &&
-          snapshot !== undefined &&
-          this.rememberParagraphIntent(
-            snapshot,
-            structuralSelection.start.offset,
-            event.cancelable ? "deferred-command" : "native-fallback",
-            "beforeinput",
-          )
-        ) {
+        if (this.captureParagraphIntent(
+          event.cancelable ? "deferred-command" : "native-fallback",
+          "beforeinput",
+        )) {
           if (event.cancelable) {
             event.preventDefault();
           }
@@ -2417,24 +2402,7 @@ class JsonEditableCoordinator implements JsonEditable {
         event.inputType === "insertLineBreak") &&
       this.composition !== null
     ) {
-      const structuralSelection = orderedEditableSelection(
-        this.document.value,
-        this.document.selection,
-      );
-      const snapshot = this.document.selection?.snapshot();
-      if (
-        structuralSelection !== null &&
-        structuralSelection.start.blockId === this.composition.blockId &&
-        structuralSelection.end.blockId === this.composition.blockId &&
-        structuralSelection.start.offset === structuralSelection.end.offset &&
-        snapshot !== undefined &&
-        this.rememberParagraphIntent(
-          snapshot,
-          structuralSelection.start.offset,
-          "native-fallback",
-          "input",
-        )
-      ) {
+      if (this.captureParagraphIntent("native-fallback", "input")) {
         this.endComposition();
       }
     }
@@ -2452,6 +2420,32 @@ class JsonEditableCoordinator implements JsonEditable {
       this.setPhase("composing");
     }
   };
+
+  private captureParagraphIntent(
+    mode: PendingStructuralIntent["mode"],
+    evidence: StructuralEvidence,
+  ): boolean {
+    const composition = this.composition;
+    const selection = orderedEditableSelection(
+      this.document.value,
+      this.document.selection,
+    );
+    const snapshot = this.document.selection?.snapshot();
+    return (
+      composition !== null &&
+      selection !== null &&
+      selection.start.blockId === composition.blockId &&
+      selection.end.blockId === composition.blockId &&
+      selection.start.offset === selection.end.offset &&
+      snapshot !== undefined &&
+      this.rememberParagraphIntent(
+        snapshot,
+        selection.start.offset,
+        mode,
+        evidence,
+      )
+    );
+  }
 
   private readonly onCompositionStart = (): void => {
     this.nativeEvidenceUntil = performance.now() + 100;
@@ -2472,7 +2466,7 @@ class JsonEditableCoordinator implements JsonEditable {
   private readonly onCompositionEnd = (rawEvent: Event): void => {
     const event = rawEvent as CompositionEvent;
     this.nativeEvidenceUntil = performance.now() + 100;
-    const hasParagraphEvidence = withoutTrailingLineBreak(event.data) !== null;
+    const hasParagraphEvidence = hasTrailingLineBreak(event.data);
     let session = this.composition;
     if (hasParagraphEvidence && session !== null) {
       const index = findEditableBlockIndex(
@@ -2756,14 +2750,11 @@ function isCompositionInputType(inputType: string): boolean {
   );
 }
 
-function withoutTrailingLineBreak(value: string): string | null {
+function hasTrailingLineBreak(value: string): boolean {
   if (value.endsWith("\r\n")) {
-    return value.slice(0, -2);
+    return true;
   }
-  if (value.endsWith("\n") || value.endsWith("\r")) {
-    return value.slice(0, -1);
-  }
-  return null;
+  return value.endsWith("\n") || value.endsWith("\r");
 }
 
 function trailingLineBreakWidth(value: string, offset: number): number {
