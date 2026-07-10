@@ -4,7 +4,7 @@ import {
   type EditableBlock,
   type EditableBlockType,
   type EditableDocumentValue,
-} from "../model";
+} from "../core";
 import {
   EDITABLE_BLOCK_ATTRIBUTE,
   EDITABLE_TEXT_ATTRIBUTE,

@@ -1,9 +1,14 @@
 import type { JSONPatchOperation } from "@interactive-os/json-document";
 import {
+  applyTextChange,
+  diffText,
+  diffTextNearRange,
   editableTextPath,
   findEditableBlockIndex,
   type EditableDocumentValue,
-} from "../model";
+  type TextChange,
+  type TextRange,
+} from "../core";
 import {
   EDITABLE_BLOCK_ATTRIBUTE,
   EDITABLE_PLACEHOLDER_ATTRIBUTE,
@@ -13,13 +18,6 @@ import {
   textFromSurface,
 } from "./editableDOM";
 import { findBlockElement } from "./documentProjection";
-import {
-  applyTextChange,
-  diffText,
-  diffTextNearRange,
-  type TextChange,
-  type TextRange,
-} from "./textChange";
 
 export type NativeTextMutationInspectionOptions = {
   root: HTMLElement;

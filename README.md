@@ -24,6 +24,16 @@ bounded, expected split and are then rebuilt from canonical JSON.
 React renders the toolbar and diagnostics only. It provides an empty root to the
 editor and never renders descendants inside that root.
 
+The package enforces a direct-child layer rule:
+
+```txt
+public facade -> browser -> core
+```
+
+Cross-layer imports must use the child layer's `index.ts`; public-to-core
+grandchild imports, browser-to-core implementation imports, and upward imports
+are rejected by `pnpm run check:editable-layers`.
+
 The previous implementation is preserved unchanged under
 [`archive/pre-composition-island`](./archive/pre-composition-island).
 
@@ -40,6 +50,7 @@ Open `http://localhost:3000/`.
 
 ```bash
 pnpm run test:core
+pnpm run check:editable-layers
 pnpm run verify:browser
 pnpm run verify:internal
 ```

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
-import type { EditableBlock, EditableDocumentValue } from "../model";
+import type { EditableBlock, EditableDocumentValue } from "../core";
 import {
   captureCompositionPlaceholder,
   inspectNativeParagraphEffect,

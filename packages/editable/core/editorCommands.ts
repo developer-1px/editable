@@ -2,32 +2,43 @@ import type {
   JSONPatchOperation,
   SelectionSnap,
 } from "@interactive-os/json-document";
-import type { EditorAction } from "../editor";
 import {
   editableTextPath,
   findEditableBlockIndex,
   orderedEditableSelection,
   primaryEditablePoint,
   type EditableBlock,
+  type EditableBlockType,
   type EditableDocumentValue,
   type OrderedEditableSelection,
-} from "../model";
+} from "./model";
 import { clampTextRange } from "./textChange";
 
-export type EditorDocumentCommand = Extract<
-  EditorAction,
-  {
-    type:
-      | "replaceText"
-      | "replaceSelection"
-      | "setBlockType"
-      | "insertParagraph"
-      | "deleteBackward"
-      | "deleteForward"
-      | "joinBackward"
-      | "joinForward";
-  }
->;
+export type EditorDocumentCommand =
+  | {
+      type: "replaceText";
+      blockId: string;
+      from: number;
+      to: number;
+      text: string;
+      label?: string;
+      origin?: string;
+    }
+  | {
+      type: "replaceSelection";
+      text: string;
+      label?: string;
+      origin?: string;
+    }
+  | {
+      type: "setBlockType";
+      blockType: EditableBlockType;
+      blockId?: string;
+    }
+  | { type: "insertParagraph" }
+  | { type: "deleteBackward" | "deleteForward" }
+  | { type: "joinBackward" }
+  | { type: "joinForward" };
 
 export type EditorCommandPlan =
   | {
@@ -78,7 +89,7 @@ export function planEditorCommand(
 
 function planTextReplacement(
   value: EditableDocumentValue,
-  action: Extract<EditorAction, { type: "replaceText" }>,
+  action: Extract<EditorDocumentCommand, { type: "replaceText" }>,
 ): EditorCommandPlan {
   const index = findEditableBlockIndex(value, action.blockId);
   const block = value.blocks[index];
@@ -200,7 +211,7 @@ function planDirectionalDelete(
 function planBlockTypeChange(
   value: EditableDocumentValue,
   selection: SelectionSnap | null,
-  action: Extract<EditorAction, { type: "setBlockType" }>,
+  action: Extract<EditorDocumentCommand, { type: "setBlockType" }>,
 ): EditorCommandPlan {
   const point = primaryEditablePoint(value, selectionState(selection));
   const blockId = action.blockId ?? point?.blockId;

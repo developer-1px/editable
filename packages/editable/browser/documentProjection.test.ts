@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from "vitest";
-import type { EditableDocumentValue } from "../model";
+import type { EditableDocumentValue } from "../core";
 import {
   findBlockElement,
   isCanonicalBlockElement,

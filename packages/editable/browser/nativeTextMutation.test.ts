@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
-import type { EditableDocumentValue } from "../model";
+import type { EditableDocumentValue } from "../core";
 import {
   inspectNativeTextMutations,
   type NativeTextMutationInspectionOptions,

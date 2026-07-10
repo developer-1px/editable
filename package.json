@@ -16,7 +16,8 @@
     "verify:internal": "pnpm exec tsc --noEmit && pnpm test && pnpm run check && pnpm build",
     "verify:browser": "playwright test",
     "format": "biome format --write",
-    "check": "biome check"
+    "check": "pnpm run check:editable-layers && biome check",
+    "check:editable-layers": "node tools/check-editable-layers.mjs"
   },
   "dependencies": {
     "@interactive-os/json-document": "^1.0.1",

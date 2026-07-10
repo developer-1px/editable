@@ -7,11 +7,21 @@ export {
   findEditableBlockIndex,
   orderedEditableSelection,
   primaryEditablePoint,
-} from "./browser";
+} from "../core";
 export type {
   EditableBlock,
   EditableBlockType,
   EditableDocumentValue,
   EditablePoint,
   OrderedEditableSelection,
-} from "./browser";
+} from "../core";
+export { mountJsonEditable } from "./editor";
+export type {
+  EditorAction,
+  EditorFault,
+  EditorPhase,
+  EditorResult,
+  EditorSnapshot,
+  JsonEditable,
+  MountJsonEditableOptions,
+} from "./editor";

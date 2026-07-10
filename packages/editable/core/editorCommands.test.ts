@@ -1,6 +1,6 @@
 import type { SelectionSnap } from "@interactive-os/json-document";
 import { describe, expect, it, vi } from "vitest";
-import type { EditableDocumentValue } from "../model";
+import type { EditableDocumentValue } from "./model";
 import { planEditorCommand } from "./editorCommands";
 
 const value: EditableDocumentValue = {

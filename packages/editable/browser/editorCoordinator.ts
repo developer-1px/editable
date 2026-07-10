@@ -6,13 +6,20 @@ import {
 } from "@interactive-os/json-document";
 import {
   EditableDocumentSchema,
+  accumulateNativeCompositionRange,
+  diffText,
+  diffTextNearRange,
   editableTextPath,
   findEditableBlockIndex,
   orderedEditableSelection,
+  planEditorCommand,
   primaryEditablePoint,
   type EditableBlock,
   type EditableDocumentValue,
-} from "../model";
+  type EditorDocumentCommand,
+  type TextChange,
+  type TextRange,
+} from "../core";
 import type {
   EditorAction,
   EditorFault,
@@ -21,7 +28,7 @@ import type {
   EditorSnapshot,
   JsonEditable,
   MountJsonEditableOptions,
-} from "../editor";
+} from "./editor";
 import {
   readDOMPoint,
   readDOMSelection,
@@ -34,17 +41,6 @@ import {
   editableSurfaceFromNode,
   ensureCompositionTextNode,
 } from "./editableDOM";
-import {
-  accumulateNativeCompositionRange,
-  diffText,
-  diffTextNearRange,
-  type TextChange,
-  type TextRange,
-} from "./textChange";
-import {
-  planEditorCommand,
-  type EditorDocumentCommand,
-} from "./editorCommands";
 import {
   findBlockElement,
   isCanonicalBlockElement,

@@ -168,22 +168,44 @@ editor.subscribe(listener);
 editor.destroy();
 ```
 
-The package keeps that public seam separate from responsibility-named internals:
+The package encodes that public seam as a direct-child layer hierarchy:
 
 ```txt
-editor.ts
-└─ editorCoordinator.ts       browser event order and mounted-session state
-   ├─ editorCommands.ts       action -> JSON patch and selection plan
-   ├─ documentProjection.ts   keyed canonical DOM projection
-   ├─ editableDOM.ts          owned surface and placeholder primitives
-   ├─ domSelection.ts         DOM <-> model selection mapping
-   ├─ nativeTextMutation.ts   bounded text-mutation admission
-   └─ nativeParagraph.ts      one-shot native Enter grammar
+packages/editable/
+├─ index.ts, editor.ts, model.ts       public facade layer
+├─ browser/
+│  ├─ index.ts                         public -> browser seam
+│  ├─ editor.ts                        editor contract and mount facade
+│  ├─ editorCoordinator.ts             event order and mounted-session state
+│  ├─ documentProjection.ts            keyed canonical DOM projection
+│  ├─ editableDOM.ts                   surface and placeholder primitives
+│  ├─ domSelection.ts                  DOM <-> model selection mapping
+│  ├─ nativeTextMutation.ts            bounded text-mutation admission
+│  └─ nativeParagraph.ts               one-shot native Enter grammar
+└─ core/
+   ├─ index.ts                         browser -> core seam
+   ├─ model.ts                         document model and selection meaning
+   ├─ editorCommands.ts                action -> patch and selection plan
+   └─ textChange.ts                    DOM-free text change calculations
 ```
 
-The policy modules neither commit `JSONDocument` changes nor report faults.
-The coordinator remains the single transaction and timing owner, so splitting
-files does not split the composition lease across competing state holders.
+The allowed direction is `public -> browser -> core`. A layer may access peers
+and its immediate child's explicit `index.ts`, but never a grandchild, parent,
+or child implementation file. Code outside the package may import only the
+root `index.ts`. `pnpm run check:editable-layers` checks static, type-only,
+dynamic, and export-from dependencies and runs as part of the normal check.
+Non-literal dynamic imports are rejected because their target cannot be proven
+to stay on an allowed seam. Aliased CommonJS loaders, Node `createRequire`
+sources, Vite glob loaders, and source-tree symlinks are rejected for the same
+reason.
+The DOM platform, `@interactive-os/json-document`, and Zod are declared
+external dependencies rather than package child layers; core remains DOM-free.
+
+The root `editor.ts` and `model.ts` are compatibility facades and enter browser
+only through `browser/index.ts`. Browser policy modules neither commit
+`JSONDocument` changes nor report faults. The coordinator remains the single
+transaction and timing owner, so layering does not split the composition lease
+across competing state holders.
 
 `destroy()` uses the same mandatory native-effect validation, trailing-newline
 normalization, queued-remote ordering, and structural replay as timed settling

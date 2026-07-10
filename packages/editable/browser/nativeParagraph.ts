@@ -1,4 +1,11 @@
-import type { EditableDocumentValue } from "../model";
+import {
+  applyTextChange,
+  clampTextRange,
+  diffTextNearRange,
+  type EditableDocumentValue,
+  type TextChange,
+  type TextRange,
+} from "../core";
 import {
   EDITABLE_PLACEHOLDER_ATTRIBUTE,
   EDITABLE_TEXT_ATTRIBUTE,
@@ -7,13 +14,6 @@ import {
   isCanonicalBlockElement,
   isCanonicalSurfaceElement,
 } from "./documentProjection";
-import {
-  applyTextChange,
-  clampTextRange,
-  diffTextNearRange,
-  type TextChange,
-  type TextRange,
-} from "./textChange";
 
 export type NativeParagraphEffect = {
   text: string;
