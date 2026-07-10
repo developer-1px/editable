@@ -21,6 +21,15 @@ button {
   font: inherit;
 }
 
+.home-link {
+  color: #1d3f7a;
+  font-weight: 700;
+}
+
+.home-link + .home-link {
+  margin-left: 18px;
+}
+
 .contenteditable-shell {
   min-height: 100vh;
   padding: 48px clamp(18px, 5vw, 64px);
@@ -40,7 +49,6 @@ button {
 
 .contenteditable-toolbar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   margin-bottom: 18px;
@@ -50,51 +58,36 @@ button {
   width: 10px;
 }
 
-.icon-button,
-.text-button {
-  display: inline-flex;
+.icon-button {
+  display: inline-grid;
+  width: 32px;
   height: 32px;
-  align-items: center;
-  justify-content: center;
+  place-items: center;
   border: 1px solid #d8d4cc;
   border-radius: 6px;
   background: #fffdfa;
   color: #28231d;
-  cursor: pointer;
 }
 
-.icon-button {
-  width: 32px;
-  padding: 0;
-}
-
-.text-button {
-  gap: 7px;
-  padding: 0 10px;
-  font-size: 0.82rem;
-  font-weight: 650;
-}
-
-.icon-button:hover,
-.text-button:hover {
+.icon-button:hover {
   background: #f0ede7;
 }
 
-.text-button:disabled {
-  cursor: default;
-  opacity: 0.45;
+.icon-button[data-active="true"] {
+  border-color: #9dadcf;
+  background: #e9eef8;
+  color: #1d3f7a;
 }
 
-.icon-button:focus-visible,
-.text-button:focus-visible {
-  outline: 2px solid #526f9e;
-  outline-offset: 2px;
+.icon-button:disabled {
+  cursor: default;
+  opacity: 0.42;
 }
 
 .contenteditable-editor {
   min-height: 360px;
-  border-radius: 6px;
   outline: 0;
+  border-radius: 6px;
   background: #fffdfa;
   padding: 28px;
   color: #28231d;
@@ -105,30 +98,66 @@ button {
 
 .contenteditable-editor:focus,
 .contenteditable-editor:focus-visible {
-  box-shadow: inset 0 0 0 2px #526f9e;
+  box-shadow: inset 0 0 0 2px rgb(36 89 197 / 28%);
 }
 
-.contenteditable-editor [data-editable-block] {
+.contenteditable-block {
   min-height: 1.75em;
 }
 
-.contenteditable-editor [data-editable-block] + [data-editable-block] {
+.contenteditable-block + .contenteditable-block {
   margin-top: 0.28em;
 }
 
-.contenteditable-editor [data-block-type="heading"] {
+.contenteditable-block-heading {
   margin: 0.65em 0 0.1em;
   font-size: 1.9rem;
   font-weight: 760;
   line-height: 1.28;
 }
 
-.contenteditable-editor [data-block-type="quote"] {
+.contenteditable-block-list-item {
+  padding-left: 0;
+}
+
+.contenteditable-block-marker {
+  display: inline-flex;
+  width: 0.9em;
+  height: 0.9em;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.42em;
+  border: 1.5px solid #7d7468;
+  border-radius: 3px;
+  color: #1d3f7a;
+  font-size: 0.82em;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: -0.08em;
+  user-select: text;
+}
+
+.contenteditable-block-marker[data-checked="true"] {
+  border-color: #1d3f7a;
+  background: #e9eef8;
+}
+
+.contenteditable-text-surface {
+  display: inline;
+}
+
+.editable-syntax-marker {
+  color: #8a8176;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-weight: 650;
+}
+
+.contenteditable-block-quote {
   color: #4c453d;
   font-style: italic;
 }
 
-.contenteditable-editor [data-block-type="code"] {
+.contenteditable-block-code {
   margin-top: 0.55em;
   border-radius: 6px;
   background: #eeeae1;
@@ -138,15 +167,58 @@ button {
   line-height: 1.55;
 }
 
-.contenteditable-editor [data-editable-text] {
-  display: inline;
+.atom-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 0 0.28em;
+  white-space: nowrap;
+}
+
+.mention-chip {
+  background: #e9eef8;
+  color: #1d3f7a;
+}
+
+.tag-chip {
+  background: #edf4e6;
+  color: #315d1f;
+}
+
+.wiki-chip {
+  background: #f3ebd8;
+  color: #6a4a16;
+}
+
+.attachment-chip {
+  background: #eeeae1;
+  color: #4c453d;
+}
+
+.inline-code {
+  border-radius: 4px;
+  background: #eeeae1;
+  padding: 0.05em 0.22em;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.inline-highlight {
+  background: #fff0a8;
+  color: inherit;
+}
+
+.inline-link {
+  color: #1d3f7a;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
 }
 
 .contenteditable-state {
   display: grid;
-  min-width: 0;
   align-content: start;
   gap: 12px;
+  min-width: 0;
 }
 
 .contenteditable-state-block {
@@ -158,12 +230,13 @@ button {
   color: #6b6258;
   font-size: 0.74rem;
   font-weight: 720;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .contenteditable-state-block pre {
   overflow: auto;
-  max-height: 260px;
+  max-height: 220px;
   margin: 0;
   border-radius: 6px;
   background: #eeeae1;
