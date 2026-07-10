@@ -71,6 +71,11 @@ function setDOMCaret(node: Text, offset: number): void {
   selection.addRange(range);
 }
 
+function modelFocusOffset(fixture: EditorFixture): number | undefined {
+  const focus = fixture.document.selection?.primaryRange?.focus;
+  return typeof focus === "string" ? undefined : focus?.offset;
+}
+
 function inputEvent(
   type: "beforeinput" | "input",
   inputType: string,
@@ -266,6 +271,990 @@ describe("JSON editable coordinator", () => {
     expect(fixture.faults).toEqual([]);
   });
 
+  it("preserves a paragraph intent during composition as a separate undo step", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+
+    const accepted = fixture.root.dispatchEvent(
+      inputEvent("beforeinput", "insertParagraph", {
+        isComposing: true,
+      }),
+    );
+
+    expect(accepted).toBe(false);
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한cdef",
+      "second",
+    ]);
+    expect(textNode(fixture, "alpha")).toBe(composingNode);
+    expect(fixture.editor.getSnapshot().phase).toBe("settling");
+    expect(fixture.document.history.undoDepth).toBe(1);
+
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(
+      fixture.document.value.blocks.map(({ type, text }) => ({ type, text })),
+    ).toEqual([
+      { type: "paragraph", text: "ab한" },
+      { type: "paragraph", text: "cdef" },
+      { type: "paragraph", text: "second" },
+    ]);
+    expect(fixture.editor.getSnapshot()).toMatchObject({
+      phase: "idle",
+      composition: null,
+    });
+    expect(fixture.document.history.undoDepth).toBe(2);
+
+    expect(fixture.editor.dispatch({ type: "undo" }).ok).toBe(true);
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한cdef",
+      "second",
+    ]);
+    expect(fixture.editor.dispatch({ type: "undo" }).ok).toBe(true);
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "abcdef",
+      "second",
+    ]);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("applies a queued remote update to its original block before paragraph replay", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    startComposition(fixture);
+
+    expect(
+      fixture.editor.dispatch({
+        type: "replaceText",
+        blockId: "beta",
+        from: 0,
+        to: 0,
+        text: "remote ",
+        origin: "remote",
+      }),
+    ).toMatchObject({ ok: true, change: "queued" });
+    fixture.root.dispatchEvent(
+      inputEvent("beforeinput", "insertParagraph", {
+        isComposing: true,
+      }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "remote second",
+    ]);
+    expect(fixture.document.history.undoDepth).toBe(3);
+
+    expect(fixture.editor.dispatch({ type: "undo" }).ok).toBe(true);
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한cdef",
+      "remote second",
+    ]);
+    expect(fixture.editor.dispatch({ type: "undo" }).ok).toBe(true);
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한cdef",
+      "second",
+    ]);
+    expect(fixture.editor.dispatch({ type: "undo" }).ok).toBe(true);
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "abcdef",
+      "second",
+    ]);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("keeps normalized composition selection stable across remote and paragraph undo", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    expect(
+      fixture.editor.dispatch({
+        type: "replaceText",
+        blockId: "beta",
+        from: 0,
+        to: 0,
+        text: "remote ",
+        origin: "remote",
+      }),
+    ).toMatchObject({ ok: true, change: "queued" });
+    composingNode.insertData(3, "\n");
+    setDOMCaret(composingNode, 4);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertCompositionText", {
+        data: "\n",
+        isComposing: true,
+      }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "\n" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(modelFocusOffset(fixture)).toBe(0);
+    expect(fixture.editor.dispatch({ type: "undo" }).ok).toBe(true);
+    expect(modelFocusOffset(fixture)).toBe(3);
+    expect(fixture.editor.dispatch({ type: "undo" }).ok).toBe(true);
+    expect(modelFocusOffset(fixture)).toBe(3);
+    expect(fixture.editor.dispatch({ type: "undo" }).ok).toBe(true);
+    expect(modelFocusOffset(fixture)).toBe(2);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("splits at the final composition caret rather than the captured paragraph caret", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+
+    fixture.root.dispatchEvent(
+      inputEvent("beforeinput", "insertParagraph", {
+        isComposing: true,
+      }),
+    );
+    composingNode.insertData(3, "국");
+    setDOMCaret(composingNode, 4);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertCompositionText", {
+        data: "한국",
+        isComposing: true,
+      }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", {
+        bubbles: true,
+        data: "한국",
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한국",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.history.undoDepth).toBe(2);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("recognizes a newline-bearing composition result as paragraph evidence", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    startComposition(fixture);
+
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", {
+        bubbles: true,
+        data: "한\n",
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.history.undoDepth).toBe(2);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("normalizes a composition newline in the DOM into a paragraph split", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    composingNode.insertData(3, "\n");
+    setDOMCaret(composingNode, 4);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertCompositionText", {
+        data: "한\n",
+        isComposing: true,
+      }),
+    );
+
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", {
+        bubbles: true,
+        data: "한\n",
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.value.blocks.some((block) => block.text.includes("\n"))).toBe(
+      false,
+    );
+    expect(fixture.document.history.undoDepth).toBe(2);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("locates a composition newline when compositionend reports only the newline delta", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    composingNode.insertData(3, "\n");
+    setDOMCaret(composingNode, 4);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertCompositionText", {
+        data: "\n",
+        isComposing: true,
+      }),
+    );
+
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", {
+        bubbles: true,
+        data: "\n",
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.value.blocks.some((block) => block.text.includes("\n"))).toBe(
+      false,
+    );
+    expect(fixture.document.history.undoDepth).toBe(2);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("recalculates a trailing newline after a late final composition input", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture, 2, "ㅎ");
+
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", {
+        bubbles: true,
+        data: "한\n",
+      }),
+    );
+    composingNode.replaceData(2, 1, "한\n");
+    setDOMCaret(composingNode, 4);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertFromComposition", {
+        data: "한\n",
+        isComposing: false,
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.value.blocks.some((block) => block.text.includes("\n"))).toBe(
+      false,
+    );
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("does not strip a newline that existed after the composition range", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    expect(
+      fixture.editor.dispatch({
+        type: "replaceText",
+        blockId: "alpha",
+        from: 2,
+        to: 2,
+        text: "\n",
+      }).ok,
+    ).toBe(true);
+    startComposition(fixture, 2);
+
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", {
+        bubbles: true,
+        data: "한\n",
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "\ncdef",
+      "second",
+    ]);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("does not treat a candidate-confirming Enter key as paragraph evidence", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    startComposition(fixture);
+    const enter = new KeyboardEvent("keydown", {
+      bubbles: true,
+      key: "Enter",
+      isComposing: false,
+    });
+    Object.defineProperty(enter, "keyCode", { value: 229 });
+
+    fixture.root.dispatchEvent(enter);
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한cdef",
+      "second",
+    ]);
+    expect(fixture.document.history.undoDepth).toBe(1);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("deduplicates paragraph evidence from one composition turn", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    startComposition(fixture);
+
+    fixture.root.dispatchEvent(
+      inputEvent("beforeinput", "insertParagraph", {
+        isComposing: true,
+      }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", {
+        bubbles: true,
+        data: "한\n",
+      }),
+    );
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertParagraph", {
+        isComposing: false,
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.history.undoDepth).toBe(2);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("deduplicates compositionend newline followed by paragraph input", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    startComposition(fixture);
+
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", {
+        bubbles: true,
+        data: "한\n",
+      }),
+    );
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertParagraph", { isComposing: false }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.history.undoDepth).toBe(2);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("preserves two distinct paragraph beforeinput intents in one composition turn", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    startComposition(fixture);
+
+    const first = fixture.root.dispatchEvent(
+      inputEvent("beforeinput", "insertParagraph", { isComposing: true }),
+    );
+    const second = fixture.root.dispatchEvent(
+      inputEvent("beforeinput", "insertParagraph", { isComposing: false }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(first).toBe(false);
+    expect(second).toBe(false);
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.history.undoDepth).toBe(3);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("does not pair a prevented paragraph with a later input-only Enter", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    const alpha = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (alpha === null) {
+      throw new Error("Missing alpha block.");
+    }
+
+    expect(
+      fixture.root.dispatchEvent(
+        inputEvent("beforeinput", "insertParagraph", { isComposing: true }),
+      ),
+    ).toBe(false);
+    const right = composingNode.splitText(3);
+    const nativeBlock = window.document.createElement("div");
+    nativeBlock.append(right);
+    alpha.after(nativeBlock);
+    setDOMCaret(right, 0);
+    nativeBlock.dispatchEvent(
+      inputEvent("input", "insertParagraph", { isComposing: false }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.history.undoDepth).toBe(3);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("preserves insertParagraph that arrives after compositionend during settling", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    startComposition(fixture);
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+
+    const accepted = fixture.root.dispatchEvent(
+      inputEvent("beforeinput", "insertParagraph", {
+        isComposing: false,
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(accepted).toBe(false);
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.history.undoDepth).toBe(2);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("replays one evidenced noncancelable native paragraph split", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    const alpha = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (alpha === null) {
+      throw new Error("Missing alpha block.");
+    }
+
+    const accepted = fixture.root.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: false,
+        inputType: "insertParagraph",
+        isComposing: true,
+      }),
+    );
+    const right = composingNode.splitText(3);
+    const nativeBlock = window.document.createElement("div");
+    nativeBlock.append(right);
+    alpha.after(nativeBlock);
+    setDOMCaret(right, 0);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertParagraph", { isComposing: false }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(accepted).toBe(true);
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(nativeBlock.isConnected).toBe(false);
+    expect(fixture.root.querySelectorAll("[data-editable-block]")).toHaveLength(
+      3,
+    );
+    expect(fixture.document.history.undoDepth).toBe(2);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("accepts the final IME text change inside a noncancelable native split", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = textNode(fixture, "alpha");
+    setDOMCaret(composingNode, 2);
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionstart", { bubbles: true }),
+    );
+    composingNode.insertData(2, "ㅎ");
+    setDOMCaret(composingNode, 3);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertCompositionText", {
+        data: "ㅎ",
+        isComposing: true,
+      }),
+    );
+    const alpha = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (alpha === null) {
+      throw new Error("Missing alpha block.");
+    }
+
+    fixture.root.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: false,
+        inputType: "insertParagraph",
+        isComposing: true,
+      }),
+    );
+    composingNode.replaceData(2, 1, "한");
+    const right = composingNode.splitText(3);
+    const nativeBlock = window.document.createElement("div");
+    nativeBlock.append(right);
+    alpha.after(nativeBlock);
+    setDOMCaret(right, 0);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertParagraph", { isComposing: false }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.history.undoDepth).toBe(2);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("normalizes a trailing IME newline inside a noncancelable native split", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    const alpha = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (alpha === null) {
+      throw new Error("Missing alpha block.");
+    }
+
+    fixture.root.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: false,
+        inputType: "insertParagraph",
+        isComposing: true,
+      }),
+    );
+    composingNode.insertData(3, "\n");
+    const right = composingNode.splitText(4);
+    const nativeBlock = window.document.createElement("div");
+    nativeBlock.append(right);
+    alpha.after(nativeBlock);
+    setDOMCaret(right, 0);
+    nativeBlock.dispatchEvent(
+      inputEvent("input", "insertParagraph", { isComposing: false }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", {
+        bubbles: true,
+        data: "한\n",
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.value.blocks.some((block) => block.text.includes("\n"))).toBe(
+      false,
+    );
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("rejects and restores a native split that replaced the pinned Text node", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    const alpha = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    const surface = textSurface(fixture, "alpha");
+    if (alpha === null) {
+      throw new Error("Missing alpha block.");
+    }
+    fixture.root.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: false,
+        inputType: "insertParagraph",
+        isComposing: true,
+      }),
+    );
+    const foreignText = window.document.createTextNode("ab한");
+    surface.replaceChildren(foreignText);
+    const nativeBlock = window.document.createElement("div");
+    const right = window.document.createTextNode("cdef");
+    nativeBlock.append(right);
+    alpha.after(nativeBlock);
+    setDOMCaret(right, 0);
+    nativeBlock.dispatchEvent(
+      inputEvent("input", "insertParagraph", { isComposing: false }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한cdef",
+      "second",
+    ]);
+    expect(textNode(fixture, "alpha")).toBe(composingNode);
+    expect(foreignText.isConnected).toBe(false);
+    expect(fixture.faults).toEqual([
+      expect.objectContaining({ code: "input_state_lost" }),
+      expect.objectContaining({ code: "foreign_dom_mutation" }),
+    ]);
+  });
+
+  it("accepts an empty native right paragraph represented by a bare br", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    startComposition(fixture, 6);
+    const alpha = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (alpha === null) {
+      throw new Error("Missing alpha block.");
+    }
+    fixture.root.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: false,
+        inputType: "insertParagraph",
+        isComposing: true,
+      }),
+    );
+    const nativeBlock = window.document.createElement("div");
+    nativeBlock.append(window.document.createElement("br"));
+    alpha.after(nativeBlock);
+    nativeBlock.dispatchEvent(
+      inputEvent("input", "insertParagraph", { isComposing: false }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "abcdef한",
+      "",
+      "second",
+    ]);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("rejects an evidenced native split with foreign nested markup", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    const alpha = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (alpha === null) {
+      throw new Error("Missing alpha block.");
+    }
+
+    fixture.root.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: false,
+        inputType: "insertParagraph",
+        isComposing: true,
+      }),
+    );
+    const right = composingNode.splitText(3);
+    const nativeBlock = window.document.createElement("div");
+    const foreign = window.document.createElement("aside");
+    foreign.append(right);
+    nativeBlock.append(foreign);
+    alpha.after(nativeBlock);
+    setDOMCaret(right, 0);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertParagraph", { isComposing: false }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한cdef",
+      "second",
+    ]);
+    expect(nativeBlock.isConnected).toBe(false);
+    expect(fixture.document.history.undoDepth).toBe(1);
+    expect(fixture.faults).toEqual([
+      expect.objectContaining({ code: "input_state_lost" }),
+      expect.objectContaining({ code: "foreign_dom_mutation" }),
+    ]);
+  });
+
+  it("uses paragraph input as fallback evidence when beforeinput is absent", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    const alpha = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (alpha === null) {
+      throw new Error("Missing alpha block.");
+    }
+
+    const right = composingNode.splitText(3);
+    const nativeBlock = window.document.createElement("div");
+    nativeBlock.append(right);
+    alpha.after(nativeBlock);
+    setDOMCaret(right, 0);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertParagraph", { isComposing: false }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(nativeBlock.isConnected).toBe(false);
+    expect(fixture.document.history.undoDepth).toBe(2);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("rejects an input-only split that replaced the pinned block identity", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    const originalBlock = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (originalBlock === null) {
+      throw new Error("Missing alpha block.");
+    }
+    const forged = window.document.createElement("p");
+    forged.className = "contenteditable-block contenteditable-block-paragraph";
+    forged.setAttribute("data-editable-block", "alpha");
+    forged.setAttribute("data-block-type", "paragraph");
+    forged.setAttribute("data-block-index", "0");
+    const forgedSurface = window.document.createElement("span");
+    forgedSurface.setAttribute("data-editable-text", "/blocks/0/text");
+    forgedSurface.append("ab한");
+    forged.append(forgedSurface);
+    const nativeBlock = window.document.createElement("div");
+    const right = window.document.createTextNode("cdef");
+    nativeBlock.append(right);
+    originalBlock.replaceWith(forged, nativeBlock);
+    setDOMCaret(right, 0);
+
+    nativeBlock.dispatchEvent(
+      inputEvent("input", "insertParagraph", { isComposing: false }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한cdef",
+      "second",
+    ]);
+    expect(forged.isConnected).toBe(false);
+    expect(textNode(fixture, "alpha")).toBe(composingNode);
+    expect(fixture.faults).toEqual([
+      expect.objectContaining({ code: "input_state_lost" }),
+      expect.objectContaining({ code: "foreign_dom_mutation" }),
+    ]);
+  });
+
+  it("does not partially adopt a native split without paragraph evidence", async () => {
+    vi.useFakeTimers();
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    const alpha = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (alpha === null) {
+      throw new Error("Missing alpha block.");
+    }
+
+    const right = composingNode.splitText(3);
+    const nativeBlock = window.document.createElement("div");
+    nativeBlock.append(right);
+    alpha.after(nativeBlock);
+    setDOMCaret(right, 0);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertCompositionText", {
+        data: "한",
+        isComposing: false,
+      }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "한" }),
+    );
+    await vi.advanceTimersByTimeAsync(31);
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한cdef",
+      "second",
+    ]);
+    expect(nativeBlock.isConnected).toBe(false);
+    expect(fixture.document.history.undoDepth).toBe(1);
+    expect(fixture.faults).toEqual([
+      expect.objectContaining({ code: "input_state_lost" }),
+      expect.objectContaining({ code: "foreign_dom_mutation" }),
+    ]);
+  });
+
+  it("drains a prevented paragraph intent before destroy", () => {
+    const fixture = setupEditor();
+    startComposition(fixture);
+    const accepted = fixture.root.dispatchEvent(
+      inputEvent("beforeinput", "insertParagraph", {
+        isComposing: true,
+      }),
+    );
+
+    fixture.editor.destroy();
+
+    expect(accepted).toBe(false);
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.history.undoDepth).toBe(2);
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("normalizes a composition newline before destroy drains paragraph intent", () => {
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    composingNode.insertData(3, "\n");
+    setDOMCaret(composingNode, 4);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertCompositionText", {
+        data: "한\n",
+        isComposing: true,
+      }),
+    );
+    fixture.root.dispatchEvent(
+      new CompositionEvent("compositionend", {
+        bubbles: true,
+        data: "한\n",
+      }),
+    );
+
+    fixture.editor.destroy();
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한",
+      "cdef",
+      "second",
+    ]);
+    expect(fixture.document.value.blocks.some((block) => block.text.includes("\n"))).toBe(
+      false,
+    );
+    expect(fixture.faults).toEqual([]);
+  });
+
+  it("rejects an invalid native split when destroy forces an early settle", () => {
+    const fixture = setupEditor();
+    const composingNode = startComposition(fixture);
+    const alpha = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (alpha === null) {
+      throw new Error("Missing alpha block.");
+    }
+    fixture.root.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: false,
+        inputType: "insertParagraph",
+        isComposing: true,
+      }),
+    );
+    const right = composingNode.splitText(2);
+    const nativeBlock = window.document.createElement("div");
+    const foreign = window.document.createElement("aside");
+    foreign.append(right);
+    nativeBlock.append(foreign);
+    alpha.after(nativeBlock);
+    setDOMCaret(right, 0);
+    fixture.root.dispatchEvent(
+      inputEvent("input", "insertParagraph", { isComposing: false }),
+    );
+
+    fixture.editor.destroy();
+
+    expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
+      "ab한cdef",
+      "second",
+    ]);
+    expect(fixture.document.history.undoDepth).toBe(1);
+    expect(fixture.faults).toEqual([
+      expect.objectContaining({ code: "input_state_lost" }),
+      expect.objectContaining({ code: "foreign_dom_mutation" }),
+    ]);
+  });
+
   it("does not collect renderer-owned mutations as native input", async () => {
     const fixture = setupEditor();
     const documentChanges: string[] = [];
@@ -311,6 +1300,51 @@ describe("JSON editable coordinator", () => {
     expect(fixture.document.value.blocks.map((block) => block.text)).toEqual([
       "abcdef",
       "second",
+    ]);
+  });
+
+  it("rejects a foreign element appended directly to an owned block", async () => {
+    const fixture = setupEditor();
+    const block = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (block === null) {
+      throw new Error("Missing alpha block.");
+    }
+    const foreign = window.document.createElement("aside");
+    foreign.textContent = "unowned block child";
+
+    block.append(foreign);
+    await nextDOMTurn();
+
+    expect(block.contains(foreign)).toBe(false);
+    expect(fixture.faults).toEqual([
+      expect.objectContaining({
+        code: "foreign_dom_mutation",
+        recoverable: true,
+      }),
+    ]);
+    expect(fixture.document.value.blocks[0]?.text).toBe("abcdef");
+  });
+
+  it("rejects a foreign attribute mutation on an owned block", async () => {
+    const fixture = setupEditor();
+    const block = fixture.root.querySelector<HTMLElement>(
+      '[data-editable-block="alpha"]',
+    );
+    if (block === null) {
+      throw new Error("Missing alpha block.");
+    }
+
+    block.setAttribute("data-foreign", "true");
+    await nextDOMTurn();
+
+    expect(block.hasAttribute("data-foreign")).toBe(false);
+    expect(fixture.faults).toEqual([
+      expect.objectContaining({
+        code: "foreign_dom_mutation",
+        recoverable: true,
+      }),
     ]);
   });
 

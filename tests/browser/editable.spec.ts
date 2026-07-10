@@ -13,8 +13,11 @@ import type {
 
 const EDITOR_NAME = "JSON document editor";
 const COMPOSING_BLOCK_ID = "korean-ime";
+const REMOTE_BLOCK_ID = "japanese-ime";
 const INITIAL_COMPOSING_TEXT =
   "한글 IME로 입력하는 동안 조합 중인 DOM 노드를 그대로 유지합니다.";
+const INITIAL_REMOTE_TEXT =
+  "日本語 IME の変換中も、編集中の DOM ノードを置き換えません。";
 
 type DemoWindow = Window & {
   __jsonEditableLab?: {
@@ -99,8 +102,31 @@ test("a block-end element boundary edits that block, not its next sibling", asyn
     `${INITIAL_COMPOSING_TEXT}X`,
   );
   await expect.poll(() => readBlockText(page, "japanese-ime")).toBe(
-    "日本語 IME の変換中も、編集中の DOM ノードを置き換えません。",
+    INITIAL_REMOTE_TEXT,
   );
+});
+
+test("ordinary browser Enter splits the selected block through the model", async ({
+  page,
+}) => {
+  const offset = 4;
+  const initialCount = (await readDocumentBlocks(page)).length;
+  await placeCaret(page, COMPOSING_BLOCK_ID, offset);
+
+  await page.keyboard.press("Enter");
+
+  await expect.poll(() => readDocumentBlocks(page)).toHaveLength(initialCount + 1);
+  const blocks = await readDocumentBlocks(page);
+  const composingIndex = blocks.findIndex(
+    (block) => block.id === COMPOSING_BLOCK_ID,
+  );
+  expect(blocks[composingIndex]?.text).toBe(
+    INITIAL_COMPOSING_TEXT.slice(0, offset),
+  );
+  expect(blocks[composingIndex + 1]?.text).toBe(
+    INITIAL_COMPOSING_TEXT.slice(offset),
+  );
+  await expect(lastFault(page)).toHaveText("null");
 });
 
 // These tests dispatch untrusted CompositionEvent/InputEvent objects in a real
@@ -284,6 +310,334 @@ test.describe("synthetic composition protocol — not an OS IME reproduction", (
       .toBe(expected);
     await expectPinnedNode(blockSurface(page, COMPOSING_BLOCK_ID), pinnedNode);
     expect(await selectionIsInsideEditor(page)).toBe(true);
+  });
+
+  test("synthetic insertParagraph is replayed once after composition settles", async ({
+    page,
+  }) => {
+    const offset = 3;
+    const inserted = "한";
+    const initialCount = (await readDocumentBlocks(page)).length;
+    await beginSyntheticComposition(
+      page,
+      COMPOSING_BLOCK_ID,
+      offset,
+      inserted,
+    );
+
+    const accepted = await blockSurface(page, COMPOSING_BLOCK_ID).evaluate(
+      (surface, data) => {
+        const beforeInput = new InputEvent("beforeinput", {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          inputType: "insertParagraph",
+          isComposing: true,
+        });
+        const result = surface.dispatchEvent(beforeInput);
+        surface.dispatchEvent(
+          new CompositionEvent("compositionend", {
+            bubbles: true,
+            composed: true,
+            data,
+          }),
+        );
+        return result;
+      },
+      inserted,
+    );
+
+    const composed = insertAt(INITIAL_COMPOSING_TEXT, offset, inserted);
+    await expect.poll(() => readDocumentBlocks(page)).toHaveLength(initialCount + 1);
+    const blocks = await readDocumentBlocks(page);
+    const composingIndex = blocks.findIndex(
+      (block) => block.id === COMPOSING_BLOCK_ID,
+    );
+    expect(accepted).toBe(false);
+    expect(blocks[composingIndex]?.text).toBe(composed.slice(0, offset + 1));
+    expect(blocks[composingIndex + 1]?.text).toBe(composed.slice(offset + 1));
+    await expect(lastFault(page)).toHaveText("null");
+
+    await page.evaluate(() => {
+      const lab = (window as DemoWindow).__jsonEditableLab;
+      if (lab === undefined) {
+        throw new Error("JSON editable lab is not mounted.");
+      }
+      lab.editor.dispatch({ type: "undo" });
+    });
+    await expect.poll(() => readBlockText(page, COMPOSING_BLOCK_ID)).toBe(composed);
+    await page.evaluate(() => {
+      const lab = (window as DemoWindow).__jsonEditableLab;
+      if (lab === undefined) {
+        throw new Error("JSON editable lab is not mounted.");
+      }
+      lab.editor.dispatch({ type: "undo" });
+    });
+    await expect.poll(() => readBlockText(page, COMPOSING_BLOCK_ID)).toBe(
+      INITIAL_COMPOSING_TEXT,
+    );
+  });
+
+  test("synthetic paragraph replay keeps a queued remote update on its original block", async ({
+    page,
+  }) => {
+    const offset = 3;
+    const inserted = "한";
+    const initialCount = (await readDocumentBlocks(page)).length;
+    await beginSyntheticComposition(
+      page,
+      COMPOSING_BLOCK_ID,
+      offset,
+      inserted,
+    );
+    const queued = await page.evaluate((blockId) => {
+      const lab = (window as DemoWindow).__jsonEditableLab;
+      if (lab === undefined) {
+        throw new Error("JSON editable lab is not mounted.");
+      }
+      return lab.editor.dispatch({
+        type: "replaceText",
+        blockId,
+        from: 0,
+        to: 0,
+        text: "remote ",
+        origin: "remote",
+      });
+    }, REMOTE_BLOCK_ID);
+    expect(queued).toMatchObject({ ok: true, change: "queued" });
+
+    await blockSurface(page, COMPOSING_BLOCK_ID).evaluate(
+      (surface, data) => {
+        surface.dispatchEvent(
+          new InputEvent("beforeinput", {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            inputType: "insertParagraph",
+            isComposing: true,
+          }),
+        );
+        surface.dispatchEvent(
+          new CompositionEvent("compositionend", {
+            bubbles: true,
+            composed: true,
+            data,
+          }),
+        );
+      },
+      inserted,
+    );
+
+    const composed = insertAt(INITIAL_COMPOSING_TEXT, offset, inserted);
+    await expect.poll(() => readDocumentBlocks(page)).toHaveLength(initialCount + 1);
+    const blocks = await readDocumentBlocks(page);
+    const composingIndex = blocks.findIndex(
+      (block) => block.id === COMPOSING_BLOCK_ID,
+    );
+    expect(blocks[composingIndex]?.text).toBe(composed.slice(0, offset + 1));
+    expect(blocks[composingIndex + 1]?.text).toBe(composed.slice(offset + 1));
+    expect(blocks.find((block) => block.id === REMOTE_BLOCK_ID)?.text).toBe(
+      `remote ${INITIAL_REMOTE_TEXT}`,
+    );
+    await expect(lastFault(page)).toHaveText("null");
+  });
+
+  test("synthetic composition newline becomes one canonical paragraph split", async ({
+    page,
+  }) => {
+    const offset = 3;
+    const inserted = "한";
+    const initialCount = (await readDocumentBlocks(page)).length;
+    await beginSyntheticComposition(
+      page,
+      COMPOSING_BLOCK_ID,
+      offset,
+      inserted,
+    );
+
+    await blockSurface(page, COMPOSING_BLOCK_ID).evaluate(
+      (surface, input) => {
+        const node = surface.firstChild;
+        if (!(node instanceof Text)) {
+          throw new Error("Editable surface has no canonical Text node.");
+        }
+        const splitOffset = input.offset + input.text.length;
+        surface.dispatchEvent(
+          new CompositionEvent("compositionend", {
+            bubbles: true,
+            composed: true,
+            data: "\n",
+          }),
+        );
+        node.insertData(splitOffset, "\n");
+        const selection = document.getSelection();
+        if (selection === null) {
+          throw new Error("Document selection is unavailable.");
+        }
+        selection.setBaseAndExtent(
+          node,
+          splitOffset + 1,
+          node,
+          splitOffset + 1,
+        );
+        surface.dispatchEvent(
+          new InputEvent("input", {
+            bubbles: true,
+            composed: true,
+            data: "\n",
+            inputType: "insertFromComposition",
+            isComposing: false,
+          }),
+        );
+      },
+      { offset, text: inserted },
+    );
+
+    const composed = insertAt(INITIAL_COMPOSING_TEXT, offset, inserted);
+    await expect.poll(() => readDocumentBlocks(page)).toHaveLength(initialCount + 1);
+    const blocks = await readDocumentBlocks(page);
+    const composingIndex = blocks.findIndex(
+      (block) => block.id === COMPOSING_BLOCK_ID,
+    );
+    expect(blocks[composingIndex]?.text).toBe(composed.slice(0, offset + 1));
+    expect(blocks[composingIndex + 1]?.text).toBe(composed.slice(offset + 1));
+    expect(blocks.some((block) => block.text.includes("\n"))).toBe(false);
+    await expect(lastFault(page)).toHaveText("null");
+  });
+
+  test("synthetic noncancelable native split is validated and canonicalized once", async ({
+    page,
+  }) => {
+    const offset = 3;
+    const preedit = "ㄱ";
+    const inserted = "글";
+    const initialCount = (await readDocumentBlocks(page)).length;
+    await beginSyntheticComposition(
+      page,
+      COMPOSING_BLOCK_ID,
+      offset,
+      preedit,
+    );
+
+    await blockSurface(page, COMPOSING_BLOCK_ID).evaluate(
+      (surface, input) => {
+        const node = surface.firstChild;
+        const block = surface.closest<HTMLElement>("[data-editable-block]");
+        if (!(node instanceof Text) || block === null) {
+          throw new Error("Expected an owned composition surface.");
+        }
+        surface.dispatchEvent(
+          new InputEvent("beforeinput", {
+            bubbles: true,
+            cancelable: false,
+            composed: true,
+            inputType: "insertParagraph",
+            isComposing: true,
+          }),
+        );
+        node.replaceData(
+          input.offset,
+          input.preedit.length,
+          `${input.finalText}\n`,
+        );
+        const splitOffset = input.offset + input.finalText.length + 1;
+        const right = node.splitText(splitOffset);
+        const nativeBlock = document.createElement("div");
+        nativeBlock.append(right);
+        block.after(nativeBlock);
+        const selection = document.getSelection();
+        if (selection === null) {
+          throw new Error("Document selection is unavailable.");
+        }
+        selection.setBaseAndExtent(right, 0, right, 0);
+        nativeBlock.dispatchEvent(
+          new InputEvent("input", {
+            bubbles: true,
+            composed: true,
+            inputType: "insertParagraph",
+            isComposing: false,
+          }),
+        );
+        nativeBlock.dispatchEvent(
+          new CompositionEvent("compositionend", {
+            bubbles: true,
+            composed: true,
+            data: `${input.finalText}\n`,
+          }),
+        );
+      },
+      { offset, preedit, finalText: inserted },
+    );
+
+    const composed = insertAt(INITIAL_COMPOSING_TEXT, offset, inserted);
+    await expect.poll(() => readDocumentBlocks(page)).toHaveLength(initialCount + 1);
+    const blocks = await readDocumentBlocks(page);
+    const composingIndex = blocks.findIndex(
+      (block) => block.id === COMPOSING_BLOCK_ID,
+    );
+    expect(blocks[composingIndex]?.text).toBe(composed.slice(0, 4));
+    expect(blocks[composingIndex + 1]?.text).toBe(composed.slice(4));
+    await expect(
+      editorRoot(page).locator(":scope > :not([data-editable-block])"),
+    ).toHaveCount(0);
+    await expect(lastFault(page)).toHaveText("null");
+  });
+
+  test("synthetic noncancelable Enter accepts a bare-br empty paragraph", async ({
+    page,
+  }) => {
+    const offset = INITIAL_COMPOSING_TEXT.length;
+    const inserted = "한";
+    const initialCount = (await readDocumentBlocks(page)).length;
+    await beginSyntheticComposition(
+      page,
+      COMPOSING_BLOCK_ID,
+      offset,
+      inserted,
+    );
+
+    await blockSurface(page, COMPOSING_BLOCK_ID).evaluate((surface) => {
+      const block = surface.closest<HTMLElement>("[data-editable-block]");
+      if (block === null) {
+        throw new Error("Expected an owned composition block.");
+      }
+      surface.dispatchEvent(
+        new InputEvent("beforeinput", {
+          bubbles: true,
+          cancelable: false,
+          composed: true,
+          inputType: "insertParagraph",
+          isComposing: true,
+        }),
+      );
+      const nativeBlock = document.createElement("div");
+      nativeBlock.append(document.createElement("br"));
+      block.after(nativeBlock);
+      nativeBlock.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          composed: true,
+          inputType: "insertParagraph",
+          isComposing: false,
+        }),
+      );
+      nativeBlock.dispatchEvent(
+        new CompositionEvent("compositionend", {
+          bubbles: true,
+          composed: true,
+          data: "한",
+        }),
+      );
+    });
+
+    await expect.poll(() => readDocumentBlocks(page)).toHaveLength(initialCount + 1);
+    const blocks = await readDocumentBlocks(page);
+    const composingIndex = blocks.findIndex(
+      (block) => block.id === COMPOSING_BLOCK_ID,
+    );
+    expect(blocks[composingIndex]?.text).toBe(`${INITIAL_COMPOSING_TEXT}${inserted}`);
+    expect(blocks[composingIndex + 1]?.text).toBe("");
+    await expect(lastFault(page)).toHaveText("null");
   });
 });
 

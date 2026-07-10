@@ -12,6 +12,12 @@ block to the IME; proven-disjoint `remote` updates are queued until settling,
 while local or same-block commands return `composition_conflict` and must be
 retried afterward.
 
+Enter is handled as a structural intent, independently from DOM ownership. A
+semantic paragraph event is retained and replayed once composition settles;
+candidate-confirming `keydown Enter` by itself is never treated as a paragraph.
+Non-cancelable native splits are accepted only when they exactly match one
+bounded, expected split and are then rebuilt from canonical JSON.
+
 React renders the toolbar and diagnostics only. It provides an empty root to the
 editor and never renders descendants inside that root.
 

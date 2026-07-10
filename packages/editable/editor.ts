@@ -146,6 +146,9 @@ type CompositionSession = {
   blockId: string;
   node: Text;
   ancestors: Node[];
+  sourceElement: HTMLElement;
+  sourceSurface: HTMLElement;
+  blockElements: ReadonlyArray<HTMLElement>;
   range: TextRange;
   ending: boolean;
 };
@@ -155,6 +158,33 @@ type PendingNativeIntent = {
   text: string;
   inputType: string;
 };
+
+type PendingStructuralIntent = {
+  compositionId: number;
+  mode: "deferred-command" | "native-fallback";
+  paragraphCount: number;
+  unmatchedBeforeInputCount: number;
+  compositionEndEvidencePending: boolean;
+  blockId: string;
+  sourceElement: HTMLElement;
+  sourceSurface: HTMLElement;
+  sourceText: Text;
+  blockElements: ReadonlyArray<HTMLElement>;
+  splitOffset: number;
+  canonicalText: string;
+  selection: SelectionSnap;
+  selectionIsAuthoritative: boolean;
+  normalizeTrailingLineBreak: boolean;
+  nativeRecords: MutationRecord[];
+};
+
+type NativeParagraphEffect = {
+  text: string;
+  splitOffset: number;
+  change: TextChange | null;
+};
+
+type StructuralEvidence = "beforeinput" | "input" | "compositionend";
 
 type QueuedRemotePatch = {
   patch: ReadonlyArray<JSONPatchOperation>;
@@ -175,6 +205,15 @@ const OWNED_HOST_ATTRIBUTES = [
   "role",
   "aria-multiline",
 ] as const;
+
+const OWNED_BLOCK_ATTRIBUTES = new Set([
+  "class",
+  EDITABLE_BLOCK_ATTRIBUTE,
+  "data-block-type",
+  "data-block-index",
+]);
+
+const OWNED_SURFACE_ATTRIBUTES = new Set([EDITABLE_TEXT_ATTRIBUTE]);
 
 let editorSequence = 0;
 
@@ -213,6 +252,7 @@ class JsonEditableCoordinator implements JsonEditable {
   private lastBeforeInputBlockId: string | null = null;
   private nativeEvidenceUntil = 0;
   private pendingNativeIntent: PendingNativeIntent | null = null;
+  private pendingStructuralIntent: PendingStructuralIntent | null = null;
   private inputTargetSelection: SelectionSnap | null = null;
   private queuedRemotePatches: QueuedRemotePatch[] = [];
   private remoteFlushQueued = false;
@@ -338,15 +378,14 @@ class JsonEditableCoordinator implements JsonEditable {
     if (this.destroyed) {
       return;
     }
-    if (this.pendingNativeIntent === null) {
-      this.flushNativeMutations([], this.phase !== "idle");
-    } else {
+    if (this.pendingNativeIntent !== null) {
       this.commitPendingNativeIntent();
     }
-    this.composition = null;
-    this.withDOMWrite(() => {
-      this.renderDocument(this.document.value);
-    });
+    if (this.composition === null) {
+      this.flushNativeMutations([], this.phase !== "idle");
+    } else {
+      this.settleComposition();
+    }
     this.flushQueuedRemotePatches();
     this.destroyed = true;
     this.clearSettleTimer();
@@ -357,6 +396,7 @@ class JsonEditableCoordinator implements JsonEditable {
     this.stopSelectionSubscription?.();
     this.listeners.clear();
     this.pendingNativeIntent = null;
+    this.pendingStructuralIntent = null;
     this.inputTargetSelection = null;
     this.pendingRecords = [];
     this.observer.takeRecords();
@@ -921,6 +961,12 @@ class JsonEditableCoordinator implements JsonEditable {
         surface.setAttribute(EDITABLE_TEXT_ATTRIBUTE, editableTextPath(blockIndex));
         element.append(surface);
       }
+      if (
+        this.composition === null ||
+        !element.contains(this.composition.node)
+      ) {
+        removeUnexpectedAttributes(surface, OWNED_SURFACE_ATTRIBUTES);
+      }
       for (const child of Array.from(element.childNodes)) {
         if (child === surface) {
           continue;
@@ -974,6 +1020,12 @@ class JsonEditableCoordinator implements JsonEditable {
     block: EditableBlock,
     blockIndex: number,
   ): void {
+    if (
+      this.composition === null ||
+      !element.contains(this.composition.node)
+    ) {
+      removeUnexpectedAttributes(element, OWNED_BLOCK_ATTRIBUTES);
+    }
     element.className = `contenteditable-block contenteditable-block-${block.type}`;
     element.setAttribute(EDITABLE_BLOCK_ATTRIBUTE, block.id);
     element.setAttribute("data-block-type", block.type);
@@ -1001,6 +1053,312 @@ class JsonEditableCoordinator implements JsonEditable {
     });
   }
 
+  private handlePendingNativeParagraphMutations(
+    records: ReadonlyArray<MutationRecord>,
+    _nativeEvidence: boolean,
+  ): boolean {
+    const intent = this.pendingStructuralIntent;
+    if (intent === null || intent.mode !== "native-fallback") {
+      return false;
+    }
+    if (records.length > 0) {
+      intent.nativeRecords.push(...records);
+    }
+    return true;
+  }
+
+  private expectedNativeParagraphEffect(
+    intent: PendingStructuralIntent,
+    session: CompositionSession,
+  ): NativeParagraphEffect | null {
+    if (
+      this.composition !== session ||
+      session.id !== intent.compositionId ||
+      session.blockId !== intent.blockId ||
+      intent.nativeRecords.some((record) => record.type === "attributes")
+    ) {
+      return null;
+    }
+    const children = Array.from(this.root.childNodes);
+    if (
+      children.some((node) => node.nodeType !== 1) ||
+      children.length !== intent.blockElements.length + 1
+    ) {
+      return null;
+    }
+    const sourceIndex = intent.blockElements.indexOf(intent.sourceElement);
+    if (sourceIndex < 0) {
+      return null;
+    }
+    for (let index = 0; index < intent.blockElements.length; index += 1) {
+      const expected = intent.blockElements[index];
+      const actual = children[index <= sourceIndex ? index : index + 1];
+      if (actual !== expected) {
+        return null;
+      }
+    }
+    const nativeBlock = children[sourceIndex + 1] as HTMLElement;
+    if (
+      (nativeBlock.tagName !== "DIV" && nativeBlock.tagName !== "P") ||
+      nativeBlock.attributes.length !== 0 ||
+      intent.sourceElement.parentNode !== this.root ||
+      intent.sourceElement.childNodes.length !== 1 ||
+      intent.sourceElement.firstChild !== intent.sourceSurface ||
+      intent.sourceSurface.childNodes.length !== 1 ||
+      intent.sourceSurface.firstChild !== intent.sourceText ||
+      !this.isCompositionPinIntact(intent.sourceSurface) ||
+      !isCanonicalBlockElement(
+        intent.sourceElement,
+        this.document.value,
+        intent.blockId,
+      ) ||
+      !isCanonicalSurfaceElement(
+        intent.sourceSurface,
+        this.document.value,
+        intent.blockId,
+      )
+    ) {
+      return null;
+    }
+    for (const record of intent.nativeRecords) {
+      const target = record.target;
+      if (
+        target !== this.root &&
+        target !== intent.sourceElement &&
+        !intent.sourceElement.contains(target) &&
+        target !== nativeBlock &&
+        !nativeBlock.contains(target)
+      ) {
+        return null;
+      }
+    }
+    const left = strictTextFromContainer(intent.sourceSurface, true);
+    const right = strictTextFromNativeBlock(nativeBlock, intent.sourceSurface);
+    if (left === null || right === null) {
+      return null;
+    }
+    const text = left + right;
+    const change = diffTextNearRange(
+      intent.canonicalText,
+      text,
+      session.range,
+    );
+    if (text === intent.canonicalText) {
+      return left.length === intent.splitOffset
+        ? { text, splitOffset: left.length, change: null }
+        : null;
+    }
+    const range = clampTextRange(session.range, intent.canonicalText.length);
+    if (
+      change === null ||
+      applyTextChange(intent.canonicalText, change) !== text ||
+      change.from < range.from ||
+      change.to > range.to ||
+      left.length !== mapTextOffset(intent.splitOffset, change)
+    ) {
+      return null;
+    }
+    return { text, splitOffset: left.length, change };
+  }
+
+  private finalizePendingNativeParagraphEffect(
+    session: CompositionSession,
+  ): boolean {
+    const intent = this.pendingStructuralIntent;
+    if (
+      intent === null ||
+      intent.compositionId !== session.id ||
+      intent.mode !== "native-fallback"
+    ) {
+      return true;
+    }
+    const effect = this.expectedNativeParagraphEffect(intent, session);
+    if (effect !== null) {
+      return this.commitNativeParagraphEffect(session, intent, effect);
+    }
+    if (
+      intent.nativeRecords.length === 0 &&
+      this.isCanonicalParagraphDOM(intent)
+    ) {
+      return true;
+    }
+    this.rejectPendingNativeParagraphMutation(
+      "The native paragraph effect exceeded its one-shot structural intent.",
+    );
+    return false;
+  }
+
+  private commitNativeParagraphEffect(
+    session: CompositionSession,
+    intent: PendingStructuralIntent,
+    effect: NativeParagraphEffect,
+  ): boolean {
+    const index = findEditableBlockIndex(this.document.value, intent.blockId);
+    const block = this.document.value.blocks[index];
+    if (block === undefined || block.text !== intent.canonicalText) {
+      this.rejectPendingNativeParagraphMutation(
+        "The canonical paragraph changed before its native effect was settled.",
+      );
+      return false;
+    }
+    const selection = selectionAt(
+      editableTextPath(index),
+      effect.splitOffset,
+    );
+    if (effect.change !== null) {
+      const mergeWithPrevious =
+        this.lastNativeCompositionHistoryId === session.id;
+      const result = this.runDocumentChange(
+        "native",
+        () =>
+          this.document.commit(
+            [
+              {
+                op: "replace",
+                path: editableTextPath(index),
+                value: effect.text,
+              },
+            ],
+            {
+              label: "IME composition",
+              origin: "native",
+              mergeKey: `composition:${session.id}`,
+              selectionAfter: selection,
+            },
+          ),
+        new Map([[intent.blockId, effect.change]]),
+      );
+      if (!result.ok) {
+        this.reportFault({
+          code: "native_change_commit_failed",
+          recoverable: false,
+          reason: result.reason ?? result.code,
+        });
+        this.cancelComposition(false);
+        return false;
+      }
+      if (mergeWithPrevious) {
+        this.document.history.mergeLast({
+          mergeKey: `composition:${session.id}`,
+        });
+      }
+      this.lastNativeCompositionHistoryId = session.id;
+    }
+    intent.canonicalText = effect.text;
+    intent.splitOffset = effect.splitOffset;
+    intent.selection = selection;
+    intent.selectionIsAuthoritative = true;
+    return true;
+  }
+
+  private isCanonicalParagraphDOM(intent: PendingStructuralIntent): boolean {
+    const children = Array.from(this.root.children);
+    return (
+      children.length === intent.blockElements.length &&
+      children.every((element, index) => element === intent.blockElements[index]) &&
+      intent.sourceElement.childNodes.length === 1 &&
+      intent.sourceElement.firstChild === intent.sourceSurface &&
+      strictTextFromContainer(intent.sourceSurface, true) ===
+        intent.canonicalText &&
+      isCanonicalBlockElement(
+        intent.sourceElement,
+        this.document.value,
+        intent.blockId,
+      ) &&
+      isCanonicalSurfaceElement(
+        intent.sourceSurface,
+        this.document.value,
+        intent.blockId,
+      )
+    );
+  }
+
+  private rejectPendingNativeParagraphMutation(reason: string): void {
+    const intent = this.pendingStructuralIntent;
+    this.pendingStructuralIntent = null;
+    if (this.composition !== null) {
+      this.reportFault({
+        code: "input_state_lost",
+        recoverable: true,
+        reason,
+      });
+      this.cancelComposition(false);
+    }
+    this.reportFault({
+      code: "foreign_dom_mutation",
+      recoverable: true,
+      reason,
+    });
+    this.withDOMWrite(() => {
+      if (intent !== null) {
+        this.restoreStructuralIntentBaseline(intent);
+      }
+      this.renderDocument(this.document.value);
+    });
+    restoreDOMSelection(
+      this.root,
+      this.document.value,
+      this.document.selection?.snapshot() ?? null,
+    );
+  }
+
+  private restoreStructuralIntentBaseline(
+    intent: PendingStructuralIntent,
+  ): void {
+    this.restoreBlockIdentityBaseline(intent.blockElements);
+    this.restoreCompositionSourceBaseline(
+      intent.sourceElement,
+      intent.sourceSurface,
+      intent.sourceText,
+    );
+  }
+
+  private restoreCompositionSessionBaseline(
+    session: CompositionSession,
+  ): void {
+    this.restoreBlockIdentityBaseline(session.blockElements);
+    this.restoreCompositionSourceBaseline(
+      session.sourceElement,
+      session.sourceSurface,
+      session.node,
+    );
+  }
+
+  private restoreCompositionSourceBaseline(
+    sourceElement: HTMLElement,
+    sourceSurface: HTMLElement,
+    sourceText: Text,
+  ): void {
+    if (
+      sourceElement.childNodes.length !== 1 ||
+      sourceElement.firstChild !== sourceSurface
+    ) {
+      sourceElement.replaceChildren(sourceSurface);
+    }
+    if (
+      sourceSurface.childNodes.length !== 1 ||
+      sourceSurface.firstChild !== sourceText
+    ) {
+      sourceSurface.replaceChildren(sourceText);
+    }
+  }
+
+  private restoreBlockIdentityBaseline(
+    blockElements: ReadonlyArray<HTMLElement>,
+  ): void {
+    this.document.value.blocks.forEach((block, index) => {
+      const expected = blockElements[index];
+      if (expected === undefined) {
+        return;
+      }
+      const current = this.findBlockElement(block.id);
+      if (current !== expected) {
+        current?.remove();
+        this.root.insertBefore(expected, this.root.children[index] ?? null);
+      }
+    });
+  }
+
   private flushNativeMutations(
     additional: ReadonlyArray<MutationRecord>,
     nativeEvidence: boolean,
@@ -1014,6 +1372,14 @@ class JsonEditableCoordinator implements JsonEditable {
       ...this.observer.takeRecords(),
     ];
     this.pendingRecords = [];
+
+    if (this.pendingNativeIntent !== null) {
+      return;
+    }
+
+    if (this.handlePendingNativeParagraphMutations(records, nativeEvidence)) {
+      return;
+    }
 
     const dirtyIds = new Set<string>();
     const rejectedIds = new Set<string>();
@@ -1029,7 +1395,16 @@ class JsonEditableCoordinator implements JsonEditable {
       }
       dirtyIds.add(id);
       if (surface === null) {
-        nativeEmptyCandidateIds.add(id);
+        if (
+          record.type === "childList" &&
+          record.target === block &&
+          isNativeEmptyBlock(block)
+        ) {
+          nativeEmptyCandidateIds.add(id);
+        } else {
+          rejectedIds.add(id);
+          rejectedMutation = true;
+        }
         continue;
       }
       if (!isAdmittedTextMutation(record, surface)) {
@@ -1105,7 +1480,7 @@ class JsonEditableCoordinator implements JsonEditable {
     const selection =
       this.inputTargetSelection ??
       readDOMSelection(this.root, this.document.value);
-    if (patch.length > 0) {
+    if (!rejectedMutation && patch.length > 0) {
       const compositionId = this.composition?.id ?? null;
       const mergeWithPrevious =
         compositionId !== null &&
@@ -1147,14 +1522,16 @@ class JsonEditableCoordinator implements JsonEditable {
       } else {
         this.lastNativeCompositionHistoryId = null;
       }
-    } else if (selection !== null) {
+    } else if (!rejectedMutation && selection !== null) {
       this.restoreModelSelection(selection);
     }
 
     if (rejectedMutation) {
+      const compositionBaseline = this.composition;
       if (
         this.composition !== null &&
-        rejectedIds.has(this.composition.blockId)
+        (rejectedIds.has(this.composition.blockId) ||
+          dirtyIds.has(this.composition.blockId))
       ) {
         this.reportFault({
           code: "input_state_lost",
@@ -1172,6 +1549,9 @@ class JsonEditableCoordinator implements JsonEditable {
           "A DOM change outside the evidenced text surface was rejected and re-rendered.",
       });
       this.withDOMWrite(() => {
+        if (compositionBaseline !== null) {
+          this.restoreCompositionSessionBaseline(compositionBaseline);
+        }
         this.renderDocument(this.document.value);
       });
       if (this.composition === null) {
@@ -1290,11 +1670,29 @@ class JsonEditableCoordinator implements JsonEditable {
       return;
     }
     const node = textNode as Text;
+    const sourceElement = editableBlockFromNode(this.root, node);
+    const blockElements = this.document.value.blocks.map((block) =>
+      this.findBlockElement(block.id),
+    );
+    if (
+      sourceElement === null ||
+      blockElements.some((element) => element === null)
+    ) {
+      this.reportFault({
+        code: "input_state_lost",
+        recoverable: true,
+        reason: "Composition started without a stable block identity baseline.",
+      });
+      return;
+    }
     this.composition = {
       id: ++this.compositionSequence,
       blockId: ordered.start.blockId,
       node,
       ancestors: ancestorsToRoot(node, this.root),
+      sourceElement,
+      sourceSurface: surface,
+      blockElements: blockElements as HTMLElement[],
       range: { from: ordered.start.offset, to: ordered.end.offset },
       ending: false,
     };
@@ -1397,7 +1795,25 @@ class JsonEditableCoordinator implements JsonEditable {
       return;
     }
     this.flushNativeMutations([], true);
-    const selection = readDOMSelection(this.root, this.document.value);
+    if (this.composition !== session) {
+      this.flushQueuedRemotePatches();
+      return;
+    }
+    if (!this.finalizePendingNativeParagraphEffect(session)) {
+      this.flushQueuedRemotePatches();
+      return;
+    }
+    this.normalizePendingCompositionLineBreak(session);
+    if (this.composition !== session) {
+      this.flushQueuedRemotePatches();
+      return;
+    }
+    const pendingIntent = this.pendingStructuralIntent;
+    const selection =
+      pendingIntent?.compositionId === session.id &&
+      pendingIntent.selectionIsAuthoritative
+        ? pendingIntent.selection
+        : readDOMSelection(this.root, this.document.value);
     if (selection !== null) {
       this.restoreModelSelection(selection);
     }
@@ -1410,6 +1826,7 @@ class JsonEditableCoordinator implements JsonEditable {
       this.renderDocument(this.document.value, blockId);
     });
     this.flushQueuedRemotePatches();
+    this.flushPendingStructuralIntent(session.id, selection);
     restoreDOMSelection(
       this.root,
       this.document.value,
@@ -1423,6 +1840,7 @@ class JsonEditableCoordinator implements JsonEditable {
     }
     this.clearSettleTimer();
     this.composition = null;
+    this.pendingStructuralIntent = null;
     this.lastBeforeInputBlockId = null;
     this.nativeEvidenceUntil = 0;
     this.phase = "idle";
@@ -1435,6 +1853,185 @@ class JsonEditableCoordinator implements JsonEditable {
       });
     }
     this.scheduleRemoteFlush();
+  }
+
+  private rememberParagraphIntent(
+    selection: SelectionSnap,
+    splitOffset: number,
+    mode: PendingStructuralIntent["mode"],
+    evidence: StructuralEvidence,
+    selectionIsAuthoritative = false,
+  ): boolean {
+    const session = this.composition;
+    if (session === null) {
+      return false;
+    }
+    const compositionId = session.id;
+    const pending = this.pendingStructuralIntent;
+    if (pending?.compositionId === compositionId) {
+      if (evidence === "beforeinput") {
+        pending.paragraphCount += 1;
+        if (mode === "native-fallback") {
+          pending.unmatchedBeforeInputCount += 1;
+        }
+      } else if (evidence === "input") {
+        if (pending.unmatchedBeforeInputCount > 0) {
+          pending.unmatchedBeforeInputCount -= 1;
+          pending.compositionEndEvidencePending = false;
+        } else if (pending.compositionEndEvidencePending) {
+          pending.compositionEndEvidencePending = false;
+        } else {
+          pending.paragraphCount += 1;
+        }
+      } else {
+        pending.compositionEndEvidencePending = true;
+        pending.normalizeTrailingLineBreak = true;
+      }
+      if (selectionIsAuthoritative || !pending.selectionIsAuthoritative) {
+        pending.selection = selection;
+        pending.splitOffset = splitOffset;
+        pending.selectionIsAuthoritative = selectionIsAuthoritative;
+      }
+      if (mode === "native-fallback") {
+        pending.mode = mode;
+      }
+      return true;
+    }
+    const index = findEditableBlockIndex(this.document.value, session.blockId);
+    const block = this.document.value.blocks[index];
+    const sourceSurface = editableSurfaceFromNode(this.root, session.node);
+    const sourceElement = editableBlockFromNode(this.root, session.node);
+    if (
+      block === undefined ||
+      sourceSurface === null ||
+      sourceElement === null ||
+      sourceSurface !== session.sourceSurface ||
+      sourceElement !== session.sourceElement ||
+      !this.isCompositionPinIntact(sourceSurface) ||
+      session.blockElements.length !== this.document.value.blocks.length
+    ) {
+      return false;
+    }
+    this.pendingStructuralIntent = {
+      compositionId,
+      mode,
+      paragraphCount: 1,
+      unmatchedBeforeInputCount:
+        evidence === "beforeinput" && mode === "native-fallback" ? 1 : 0,
+      compositionEndEvidencePending: evidence === "compositionend",
+      blockId: session.blockId,
+      sourceElement,
+      sourceSurface,
+      sourceText: session.node,
+      blockElements: session.blockElements,
+      splitOffset,
+      canonicalText: block.text,
+      selection,
+      selectionIsAuthoritative,
+      normalizeTrailingLineBreak: evidence === "compositionend",
+      nativeRecords: [],
+    };
+    return true;
+  }
+
+  private normalizePendingCompositionLineBreak(
+    session: CompositionSession,
+  ): void {
+    const intent = this.pendingStructuralIntent;
+    if (
+      intent === null ||
+      intent.compositionId !== session.id ||
+      !intent.normalizeTrailingLineBreak
+    ) {
+      return;
+    }
+    const index = findEditableBlockIndex(this.document.value, intent.blockId);
+    const block = this.document.value.blocks[index];
+    if (block === undefined) {
+      return;
+    }
+    const rangeEnd = Math.min(session.range.to, block.text.length);
+    const width = trailingLineBreakWidth(block.text, rangeEnd);
+    const offset = rangeEnd - width;
+    const selection = selectionAt(editableTextPath(index), offset);
+    intent.splitOffset = offset;
+    intent.selection = selection;
+    intent.selectionIsAuthoritative = true;
+    intent.normalizeTrailingLineBreak = false;
+    if (width === 0) {
+      return;
+    }
+    const text = block.text.slice(0, offset) + block.text.slice(offset + width);
+    const change = diffTextNearRange(block.text, text, {
+      from: offset,
+      to: offset + width,
+    });
+    if (change === null) {
+      return;
+    }
+    const mergeWithPrevious =
+      this.lastNativeCompositionHistoryId === session.id;
+    const result = this.runDocumentChange(
+      "native",
+      () =>
+        this.document.commit(
+          [{ op: "replace", path: editableTextPath(index), value: text }],
+          {
+            label: "IME composition",
+            origin: "native",
+            mergeKey: `composition:${session.id}`,
+            selectionAfter: selection,
+          },
+        ),
+      new Map([[intent.blockId, change]]),
+    );
+    if (!result.ok) {
+      this.reportFault({
+        code: "native_change_commit_failed",
+        recoverable: false,
+        reason: result.reason ?? result.code,
+      });
+      this.cancelComposition(false);
+      return;
+    }
+    if (mergeWithPrevious) {
+      this.document.history.mergeLast({
+        mergeKey: `composition:${session.id}`,
+      });
+    }
+    this.lastNativeCompositionHistoryId = session.id;
+    intent.canonicalText = text;
+  }
+
+  private flushPendingStructuralIntent(
+    compositionId: number,
+    finalSelection: SelectionSnap | null,
+  ): void {
+    const intent = this.pendingStructuralIntent;
+    this.pendingStructuralIntent = null;
+    if (
+      intent === null ||
+      intent.compositionId !== compositionId ||
+      this.destroyed
+    ) {
+      return;
+    }
+    this.restoreModelSelection(
+      intent.selectionIsAuthoritative || intent.mode === "native-fallback"
+        ? intent.selection
+        : (finalSelection ?? intent.selection),
+    );
+    for (let index = 0; index < intent.paragraphCount; index += 1) {
+      const result = this.insertParagraph();
+      if (!result.ok) {
+        this.reportFault({
+          code: "native_change_commit_failed",
+          recoverable: true,
+          reason: result.reason,
+        });
+        return;
+      }
+    }
   }
 
   private flushQueuedRemotePatches(): void {
@@ -1693,6 +2290,44 @@ class JsonEditableCoordinator implements JsonEditable {
       return;
     }
 
+    if (
+      event.inputType === "insertParagraph" ||
+      event.inputType === "insertLineBreak"
+    ) {
+      if (event.isComposing && this.composition === null) {
+        this.nativeEvidenceUntil = performance.now() + 100;
+        this.beginComposition();
+      }
+      if (this.composition !== null) {
+        this.flushNativeMutations([], true);
+        const structuralSelection = orderedEditableSelection(
+          this.document.value,
+          this.document.selection,
+        );
+        const snapshot = this.document.selection?.snapshot();
+        if (
+          this.composition !== null &&
+          structuralSelection !== null &&
+          structuralSelection.start.blockId === this.composition.blockId &&
+          structuralSelection.end.blockId === this.composition.blockId &&
+          structuralSelection.start.offset === structuralSelection.end.offset &&
+          snapshot !== undefined &&
+          this.rememberParagraphIntent(
+            snapshot,
+            structuralSelection.start.offset,
+            event.cancelable ? "deferred-command" : "native-fallback",
+            "beforeinput",
+          )
+        ) {
+          if (event.cancelable) {
+            event.preventDefault();
+          }
+          this.endComposition();
+          return;
+        }
+      }
+    }
+
     if (event.isComposing || isCompositionInputType(event.inputType)) {
       this.nativeEvidenceUntil = performance.now() + 100;
       this.beginComposition();
@@ -1777,6 +2412,32 @@ class JsonEditableCoordinator implements JsonEditable {
     if (event.isComposing && this.composition === null) {
       this.beginComposition();
     }
+    if (
+      (event.inputType === "insertParagraph" ||
+        event.inputType === "insertLineBreak") &&
+      this.composition !== null
+    ) {
+      const structuralSelection = orderedEditableSelection(
+        this.document.value,
+        this.document.selection,
+      );
+      const snapshot = this.document.selection?.snapshot();
+      if (
+        structuralSelection !== null &&
+        structuralSelection.start.blockId === this.composition.blockId &&
+        structuralSelection.end.blockId === this.composition.blockId &&
+        structuralSelection.start.offset === structuralSelection.end.offset &&
+        snapshot !== undefined &&
+        this.rememberParagraphIntent(
+          snapshot,
+          structuralSelection.start.offset,
+          "native-fallback",
+          "input",
+        )
+      ) {
+        this.endComposition();
+      }
+    }
     this.flushNativeMutations([], true);
     if (this.composition === null) {
       this.closeNativeTurn();
@@ -1808,8 +2469,51 @@ class JsonEditableCoordinator implements JsonEditable {
     this.beginComposition();
   };
 
-  private readonly onCompositionEnd = (): void => {
+  private readonly onCompositionEnd = (rawEvent: Event): void => {
+    const event = rawEvent as CompositionEvent;
     this.nativeEvidenceUntil = performance.now() + 100;
+    const hasParagraphEvidence = withoutTrailingLineBreak(event.data) !== null;
+    let session = this.composition;
+    if (hasParagraphEvidence && session !== null) {
+      const index = findEditableBlockIndex(
+        this.document.value,
+        session.blockId,
+      );
+      const block = this.document.value.blocks[index];
+      if (block !== undefined) {
+        const offset = Math.min(session.range.to, block.text.length);
+        this.rememberParagraphIntent(
+          selectionAt(editableTextPath(index), offset),
+          offset,
+          this.root.children.length === this.document.value.blocks.length
+            ? "deferred-command"
+            : "native-fallback",
+          "compositionend",
+          true,
+        );
+      }
+    }
+    this.flushNativeMutations([], true);
+    session = this.composition;
+    if (hasParagraphEvidence && session !== null) {
+      const index = findEditableBlockIndex(
+        this.document.value,
+        session.blockId,
+      );
+      const block = this.document.value.blocks[index];
+      if (block !== undefined) {
+        const rangeEnd = Math.min(session.range.to, block.text.length);
+        const lineBreakWidth = trailingLineBreakWidth(block.text, rangeEnd);
+        const offset = rangeEnd - lineBreakWidth;
+        this.rememberParagraphIntent(
+          selectionAt(editableTextPath(index), offset),
+          offset,
+          this.pendingStructuralIntent?.mode ?? "deferred-command",
+          "compositionend",
+          true,
+        );
+      }
+    }
     this.endComposition();
   };
 
@@ -2052,6 +2756,36 @@ function isCompositionInputType(inputType: string): boolean {
   );
 }
 
+function withoutTrailingLineBreak(value: string): string | null {
+  if (value.endsWith("\r\n")) {
+    return value.slice(0, -2);
+  }
+  if (value.endsWith("\n") || value.endsWith("\r")) {
+    return value.slice(0, -1);
+  }
+  return null;
+}
+
+function trailingLineBreakWidth(value: string, offset: number): number {
+  const end = Math.max(0, Math.min(offset, value.length));
+  if (end >= 2 && value.slice(end - 2, end) === "\r\n") {
+    return 2;
+  }
+  return end >= 1 && (value[end - 1] === "\n" || value[end - 1] === "\r")
+    ? 1
+    : 0;
+}
+
+function mapTextOffset(offset: number, change: TextChange): number {
+  if (offset < change.from) {
+    return offset;
+  }
+  if (offset > change.to) {
+    return offset + change.insert.length - (change.to - change.from);
+  }
+  return change.from + change.insert.length;
+}
+
 function previousGraphemeBoundary(value: string, offset: number): number {
   let previous = 0;
   for (const segment of new Intl.Segmenter(undefined, {
@@ -2095,6 +2829,90 @@ function isAdmittedTextMutation(
   );
 }
 
+function isCanonicalBlockElement(
+  element: HTMLElement,
+  value: EditableDocumentValue,
+  blockId: string,
+): boolean {
+  const index = findEditableBlockIndex(value, blockId);
+  const block = value.blocks[index];
+  return (
+    block !== undefined &&
+    element.attributes.length === OWNED_BLOCK_ATTRIBUTES.size &&
+    element.className ===
+      `contenteditable-block contenteditable-block-${block.type}` &&
+    element.getAttribute(EDITABLE_BLOCK_ATTRIBUTE) === block.id &&
+    element.getAttribute("data-block-type") === block.type &&
+    element.getAttribute("data-block-index") === String(index)
+  );
+}
+
+function isCanonicalSurfaceElement(
+  surface: HTMLElement,
+  value: EditableDocumentValue,
+  blockId: string,
+): boolean {
+  const index = findEditableBlockIndex(value, blockId);
+  return (
+    index >= 0 &&
+    surface.attributes.length === OWNED_SURFACE_ATTRIBUTES.size &&
+    surface.getAttribute(EDITABLE_TEXT_ATTRIBUTE) === editableTextPath(index)
+  );
+}
+
+function strictTextFromNativeBlock(
+  element: HTMLElement,
+  sourceSurface: HTMLElement,
+): string | null {
+  const children = Array.from(element.childNodes);
+  if (children.length === 1 && children[0]?.nodeType === 1) {
+    const surface = children[0] as HTMLElement;
+    if (surface.tagName === "BR" && surface.attributes.length === 0) {
+      return "";
+    }
+    const sourcePath = sourceSurface.getAttribute(EDITABLE_TEXT_ATTRIBUTE);
+    const hasAllowedAttributes =
+      surface.attributes.length === 0 ||
+      (surface.attributes.length === 1 &&
+        surface.getAttribute(EDITABLE_TEXT_ATTRIBUTE) === sourcePath);
+    if (surface.tagName !== "SPAN" || !hasAllowedAttributes) {
+      return null;
+    }
+    return strictTextFromContainer(surface, true);
+  }
+  return strictTextFromContainer(element, false);
+}
+
+function strictTextFromContainer(
+  element: HTMLElement,
+  allowOwnedPlaceholder: boolean,
+): string | null {
+  let text = "";
+  let breakCount = 0;
+  for (const child of Array.from(element.childNodes)) {
+    if (child.nodeType === 3) {
+      text += (child as Text).data;
+      continue;
+    }
+    if (child.nodeType !== 1 || (child as HTMLElement).tagName !== "BR") {
+      return null;
+    }
+    const lineBreak = child as HTMLElement;
+    const allowedPlaceholder =
+      allowOwnedPlaceholder &&
+      lineBreak.attributes.length === 1 &&
+      lineBreak.hasAttribute(EDITABLE_PLACEHOLDER_ATTRIBUTE);
+    if (lineBreak.attributes.length !== 0 && !allowedPlaceholder) {
+      return null;
+    }
+    breakCount += 1;
+  }
+  if (breakCount > 0 && (breakCount !== 1 || text !== "")) {
+    return null;
+  }
+  return text;
+}
+
 function isNativeEmptyBlock(element: HTMLElement): boolean {
   return Array.from(element.childNodes).every(
     (node) =>
@@ -2112,6 +2930,17 @@ function ancestorsToRoot(node: Node, root: HTMLElement): Node[] {
     }
   }
   return ancestors;
+}
+
+function removeUnexpectedAttributes(
+  element: HTMLElement,
+  allowed: ReadonlySet<string>,
+): void {
+  for (const attribute of Array.from(element.attributes)) {
+    if (!allowed.has(attribute.name)) {
+      element.removeAttribute(attribute.name);
+    }
+  }
 }
 
 function success(

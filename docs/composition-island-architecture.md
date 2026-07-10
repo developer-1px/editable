@@ -14,6 +14,7 @@ normal input                    active IME composition
 ------------                    ----------------------
 beforeinput -> JSON command     browser owns one block's DOM
 JSONDocument -> keyed DOM       bounded DOM diff -> JSONDocument
+                                structural intent waits or is validated
                                 document transactions wait
 ```
 
@@ -27,7 +28,8 @@ that receives `composition_conflict`.
 2. React never reconciles descendants of the editable root.
 3. Cancelable ordinary insertion, deletion, Enter, paste, cut, and history
    intent are converted to model commands in `beforeinput`; the browser does
-   not perform those DOM writes.
+   not perform those DOM writes. During composition, an explicit structural
+   intent is retained until the text-node lease can be released.
 4. During composition, the exact `Text` node and its ancestor chain are pinned.
    The composing block is opaque to projection until settling completes.
 5. A `remote` change proven to touch only another block is queued and committed
@@ -37,7 +39,8 @@ that receives `composition_conflict`.
 6. Renderer writes run with the observer disconnected and drained. They can
    never be re-ingested as native input.
 7. DOM changes without a bounded native-input intent are rejected and the
-   canonical projection is restored.
+   canonical projection is restored. A rejected turn is atomic: admitted text
+   records from the same turn are not partially committed.
 
 ## Input Protocol
 
@@ -56,13 +59,20 @@ over a stale DOM selection, which is required by several mobile IME flows.
 Some engines expose a non-cancelable, composition-shaped event for a whole-root
 replacement. The coordinator records the selected JSON range and data before
 the browser writes, discards that known transient DOM rewrite on `input`, and
-replays the captured model command.
+replays the captured model command. Firefox may deliver the mutation observer
+turn before `input`; while this captured intent is live those records are also
+discarded rather than passed to generic foreign-DOM admission. The transient
+DOM is never adopted, and timeout recovery restores canonical projection if
+`input` does not arrive.
 
 ### IME composition
 
-`compositionstart` records the selected JSON range and pins the active text
-node. `input` plus `MutationObserver` evidence is accepted only from that block.
-The smallest text change is computed near the known composition range so
+`compositionstart` records the selected JSON range and pins the exact active
+`Text` node and ancestor chain. It also snapshots the keyed block identities,
+so an input-only fallback cannot redefine a post-mutation node or element as
+the original block. `input` plus
+`MutationObserver` evidence is accepted only from that block. The smallest text
+change is computed near the known composition range so
 repeated strings such as `aaa -> aaaa` do not move the edit to the wrong equal
 substring.
 
@@ -77,10 +87,57 @@ releases the DOM lease and restores normal projection. A new composition start
 settles and cancels the previous timer first, so an old timer cannot terminate
 the new session.
 
+### Structural intent during composition
+
+Composition state and edit intent are independent axes:
+
+- `isComposing` says whether the browser still owns the leased DOM;
+- `inputType` says what edit the user requested.
+
+Therefore composing state is not a global event firewall. A physical
+`keydown Enter` remains ignored because it may only confirm an IME candidate.
+A paragraph intent is instead evidenced by `beforeinput` or `input` with
+`insertParagraph`/`insertLineBreak`, or by a composition result ending in a
+line-break character. `beforeinput` starts one logical intent. A non-cancelable
+`beforeinput` is paired with its later `input`; a canceled `beforeinput` expects
+no `input`, so a later input-only event remains a new intent. Newline-bearing
+`compositionend` and its adjacent input phase are deduplicated. Two distinct
+`beforeinput` events remain two paragraph intents even within one composition.
+Candidate confirmation without one of those signals does not split a block.
+
+For a cancelable structural event, the coordinator prevents the transient DOM
+write, drains the final composition text, releases the lease, and executes the
+existing JSON paragraph command exactly once. The paragraph is a separate undo
+entry from the composition.
+
+For a non-cancelable or input-only mobile path, the event grants a one-shot
+capability for one expected native block split. The coordinator verifies the
+original block and pinned text identities and order, a single adjacent native
+block, a strict text/empty-`br` grammar (including native `<div><br></div>`),
+and exact left/right text against the pre-event
+canonical value. The native element, markup, ID, and type are never adopted.
+The transient DOM is discarded and the same JSON paragraph command is replayed.
+Any extra block, attribute, nested element, text mismatch, or mutation in
+another block rejects the entire turn and restores the canonical projection.
+Validation is mandatory when the lease settles, including an early settle
+caused by teardown or a new composition. A final IME text replacement such as
+preedit-to-committed text is accepted only when its diff remains inside the
+captured composition range; it is merged into the composition history before
+the paragraph command runs.
+
+Some mobile engines encode Enter as a trailing newline in the composition
+text. That newline is removed from the composition history entry before the
+paragraph command runs, preventing it from leaking into either resulting
+block. Its location is recalculated after late final input or a validated native
+split rather than inferred from `compositionend.data` length. The normalized
+model selection is restored before queued remote commits, so their Undo records
+cannot capture a stale pre-normalization DOM caret.
+
 ### Concurrent application changes
 
-- Proven-disjoint `remote` change: validate and queue it, then commit it as the
-  next normal history entry after composition settles.
+- Proven-disjoint `remote` change: validate and queue it, then commit it after
+  composition settles but before structural intent replay. This preserves the
+  queued patch's original index paths; the paragraph remains the first Undo.
 - Local application command: return `composition_conflict` and retry after
   settling, even if it currently targets another block.
 - Same composing block: return `composition_conflict`; the caller retries or
@@ -98,7 +155,8 @@ Blocks are keyed by persisted IDs. Text updates use `CharacterData` operations
 and preserve a canonical single text node plus an empty-block placeholder. A
 type change may replace a block element only outside composition. Foreign root
 children, duplicate keyed nodes, nested markup, and attribute changes are
-removed during recovery.
+removed during recovery. Expected native paragraph DOM is accepted only as a
+temporary effect of the one-shot structural capability described above.
 
 The mount API intentionally stays small:
 
@@ -110,8 +168,9 @@ editor.subscribe(listener);
 editor.destroy();
 ```
 
-`destroy()` drains the current native turn, releases pinned references, removes
-listeners and observers, and restores the host attributes it borrowed.
+`destroy()` uses the same mandatory native-effect validation, trailing-newline
+normalization, queued-remote ordering, and structural replay as timed settling
+before it removes listeners and restores the host attributes it borrowed.
 
 ## Evidence Boundary
 
@@ -121,6 +180,8 @@ The automated suite verifies:
 - owner-document/cross-realm DOM behavior;
 - ordinary typing, empty-block deletion, and root-boundary Select All in real
   Chromium, Firefox, and WebKit;
+- ordinary trusted Enter plus cancelable, input-only, trailing-newline, and
+  non-cancelable structural protocol paths in all three engines;
 - synthetic composition range accumulation, node identity, conflict rejection,
   and settling in all three engines.
 
@@ -139,6 +200,13 @@ traces described in [manual IME acceptance](./manual-ime-acceptance.md).
   and [DOM observation](https://github.com/codemirror/view/blob/main/src/domobserver.ts).
 - CKEditor suppresses view rendering while native composition owns DOM, then
   renders after composition: [view renderer](https://github.com/ckeditor/ckeditor5/blob/master/packages/ckeditor5-engine/src/view/renderer.ts)
-  and [composition observer](https://github.com/ckeditor/ckeditor5/blob/master/packages/ckeditor5-engine/src/view/observer/compositionobserver.ts).
+  and routes Enter from `beforeinput`: [Enter observer](https://github.com/ckeditor/ckeditor5/blob/master/packages/ckeditor5-enter/src/enterobserver.ts).
+- Slate ignores composing keydown while retaining `insertParagraph`, with a
+  separate Android mutation/action queue: [editable input routing](https://github.com/ianstormtaylor/slate/blob/main/packages/slate-react/src/components/editable.tsx)
+  and [Android input manager](https://github.com/ianstormtaylor/slate/blob/main/packages/slate-react/src/hooks/android-input-manager/android-input-manager.ts).
+- Lexical handles paragraph input and trailing composition newlines separately
+  from candidate-confirming keydown: [event routing](https://github.com/facebook/lexical/blob/main/packages/lexical/src/LexicalEvents.ts).
+- Quill's Safari IME guard shows why composing Enter keydown cannot itself be a
+  paragraph command: [keyboard module](https://github.com/slab/quill/blob/main/packages/quill/src/modules/keyboard.ts).
 - EditContext is the platform-level alternative in which the user agent sends
   text updates without directly editing the DOM: [W3C EditContext](https://www.w3.org/TR/edit-context/).
