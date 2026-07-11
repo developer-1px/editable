@@ -20,7 +20,7 @@
     "check:editable-layers": "node tools/check-editable-layers.mjs"
   },
   "dependencies": {
-    "@interactive-os/json-document": "^1.0.1",
+    "@interactive-os/json-document": "1.1.0-rc.0",
     "@tanstack/react-router": "^1.170.16",
     "@tanstack/react-start": "^1.168.26",
     "lucide-react": "^0.545.0",
