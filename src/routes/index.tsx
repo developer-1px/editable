@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ContentEditableDemo } from "../editable-lab/ContentEditableDemo";
+import { JsonEditableDemo } from "../editable-lab/JsonEditableDemo";
 
 export const Route = createFileRoute("/")({
-  component: ContentEditableDemo,
+  component: JsonEditableDemo,
 });

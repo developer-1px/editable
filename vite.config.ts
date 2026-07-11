@@ -8,6 +8,7 @@ const config = defineConfig({
   test: {
     testTimeout: 30_000,
     exclude: [
+      "archive/**",
       "**/.{cache,git,output,temp}/**",
       "**/dist/**",
       "**/node_modules/**",
