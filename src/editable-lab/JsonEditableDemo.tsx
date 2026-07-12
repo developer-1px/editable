@@ -24,14 +24,17 @@ import {
   type JsonEditable,
   mountJsonEditable,
 } from "../../packages/editable";
+import { createEditableCausalInbox } from "./causalDocumentInbox";
 
 type EditableDocument = ReturnType<typeof createEditableDocument>;
+type EditableCausalInbox = ReturnType<typeof createEditableCausalInbox>;
 
 declare global {
   interface Window {
     __jsonEditableLab?: {
       document: EditableDocument;
       editor: JsonEditable;
+      causalInbox: EditableCausalInbox;
     };
   }
 }
@@ -40,6 +43,8 @@ export function JsonEditableDemo() {
   const document = useMemo(() => createEditableDocument(), []);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<JsonEditable | null>(null);
+  const causalInboxRef = useRef<EditableCausalInbox | null>(null);
+  const causalTracerSequenceRef = useRef(0);
   const [snapshot, setSnapshot] = useState<EditorSnapshot | null>(null);
   const [lastFault, setLastFault] = useState<EditorFault | null>(null);
 
@@ -54,18 +59,22 @@ export function JsonEditableDemo() {
       document,
       onFault: setLastFault,
     });
+    const causalInbox = createEditableCausalInbox(document, editor);
     editorRef.current = editor;
+    causalInboxRef.current = causalInbox;
     setSnapshot(editor.getSnapshot());
     const unsubscribe = editor.subscribe(setSnapshot);
-    window.__jsonEditableLab = { document, editor };
+    window.__jsonEditableLab = { document, editor, causalInbox };
 
     return () => {
       if (window.__jsonEditableLab?.editor === editor) {
         delete window.__jsonEditableLab;
       }
       unsubscribe();
+      causalInbox.dispose();
       editor.destroy();
       editorRef.current = null;
+      causalInboxRef.current = null;
     };
   }, [document]);
 
@@ -111,6 +120,73 @@ export function JsonEditableDemo() {
       origin: "remote",
     });
   }, []);
+
+  const runCausalTracer = useCallback(() => {
+    const editor = editorRef.current;
+    const inbox = causalInboxRef.current;
+    const editorSnapshot = editor?.getSnapshot();
+    const inboxSnapshot = inbox?.current();
+    const block = [...document.value.blocks]
+      .reverse()
+      .find(
+        (candidate) => candidate.id !== editorSnapshot?.composition?.blockId,
+      );
+    if (
+      editor === null ||
+      inbox === null ||
+      block === undefined ||
+      inboxSnapshot?.journalRevision === undefined
+    ) {
+      return;
+    }
+
+    causalTracerSequenceRef.current += 1;
+    const sequence = causalTracerSequenceRef.current;
+    const base = document.value;
+    const blockIndex = base.blocks.findIndex(
+      (candidate) => candidate.id === block.id,
+    );
+    if (blockIndex < 0) {
+      return;
+    }
+    if (editorSnapshot?.composition === null) {
+      const local = editor.dispatch({
+        type: "patch",
+        patch: [
+          {
+            op: "add",
+            path: "/blocks/0",
+            value: {
+              id: `causal-local-${sequence}`,
+              type: "paragraph",
+              text: `로컬 선행 변경 ${sequence}`,
+            },
+          },
+        ],
+        label: "causal tracer local insertion",
+      });
+      if (!local.ok) {
+        return;
+      }
+    }
+
+    inbox.ingest({
+      id: `causal-delayed-${sequence}`,
+      dependsOn: inboxSnapshot.frontier,
+      intent: {
+        kind: "positional",
+        base,
+        baseRevision: inboxSnapshot.journalRevision,
+        operations: [
+          {
+            op: "replace",
+            path: `/blocks/${blockIndex}/text`,
+            value: `${block.text} · 지연 변경 ${sequence}`,
+          },
+        ],
+      },
+    });
+  }, [document]);
 
   return (
     <main className="contenteditable-shell">
@@ -174,6 +250,13 @@ export function JsonEditableDemo() {
             >
               현재 조합과 충돌
             </button>
+            <button
+              className="text-button"
+              onClick={runCausalTracer}
+              type="button"
+            >
+              지연 편집 추적
+            </button>
           </div>
 
           {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: mountJsonEditable assigns the empty host's editing semantics. */}
@@ -197,6 +280,10 @@ export function JsonEditableDemo() {
             }}
           />
           <StateBlock label="last fault" value={lastFault} />
+          <StateBlock
+            label="causal inbox"
+            value={causalInboxRef.current?.current() ?? null}
+          />
         </aside>
       </section>
     </main>

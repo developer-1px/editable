@@ -15,6 +15,15 @@ block to the IME; proven-disjoint `remote` updates are queued until settling,
 while local or same-block commands return `composition_conflict` and must be
 retried afterward.
 
+`getJsonEditableDocumentHost(editor)` exposes a document-host capability for
+delayed or causal changes without widening the established `JsonEditable`
+shape. It flushes pending native input before a ready change, defers while the
+browser still owns a composition island, and identifies coordinator-owned
+native, application, history, and ready publications with a pre-commit
+sequence. The demo wires the SHA-pinned `json-document` causal inbox through
+that capability; “지연 편집 추적” exercises both positional rebase after a
+local insertion and settle-time retry during IME composition.
+
 Enter is handled as a structural intent, independently from DOM ownership. A
 semantic paragraph event is retained and replayed once composition settles;
 candidate-confirming `keydown Enter` by itself is never treated as a paragraph.

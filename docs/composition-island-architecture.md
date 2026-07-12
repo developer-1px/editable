@@ -18,9 +18,11 @@ JSONDocument -> keyed DOM       bounded DOM diff -> JSONDocument
                                 document transactions wait
 ```
 
-This is a short, block-granular lease rather than a CRDT. A CRDT or remote-op
-adapter can sit above the coordinator, but it must retry or buffer an operation
-that receives `composition_conflict`.
+This is a short, block-granular lease rather than a CRDT. A causal or remote-op
+adapter can sit above the coordinator through
+`getJsonEditableDocumentHost(editor)`. The host flushes pending native input
+and defers ready work until the lease is released; the app retries a deferred
+inbox from a microtask after observing idle state.
 
 ## Ownership Invariants
 
@@ -145,6 +147,70 @@ cannot capture a stale pre-normalization DOM caret.
 - Direct writes to the supplied `JSONDocument`: unsupported while mounted. The
   editor reports `out_of_band_document_write` and recovers conservatively.
 
+### Causal document host
+
+`getJsonEditableDocumentHost(editor)` is the only supported path for an adapter
+whose own `doc.commit()` must be reconciled as an editor-owned publication. It
+is a small capability rather than a second transaction API, and the separate
+getter keeps the established `JsonEditable` structural contract unchanged:
+
+```ts
+const inbox = createCausalPatchInbox(document, {
+  positionalSchema: EditableDocumentSchema,
+  host: getJsonEditableDocumentHost(editor),
+});
+```
+
+Before every coordinator-owned native, application, or history change,
+`runDocumentChange` assigns a monotonic sequence. `ownsPublication` returns
+that sequence only during the synchronous publication; origin strings are not
+used as authority. A ready apply reserves from the same sequence before its
+scope-bound closure runs. Raw `document.commit()` calls therefore remain out of
+band.
+Editor snapshot subscribers are exception-isolated and report
+`subscriber_failed`; fault observers are isolated as well. A user callback
+therefore cannot abort the document's subscriber loop before a causal inbox
+journals an owned publication.
+
+For a ready causal envelope, `runReady` first drains mutation records. It calls
+the supplied `apply()` exactly once only when the editor is idle and has no
+pending composition, native intent, structural intent, or queued remote patch.
+It refuses immediately, without attempting that drain, while a browser event
+handler or another coordinator-owned document publication is still on the
+stack. This prevents both pre-native DOM interleaving and nested journal order
+from depending on subscriber registration order.
+
+That condition must hold both before and after the drain: recovery that cancels
+a damaged composition still defers the current turn, so a causal render cannot
+overlap an OS composition that has not delivered its final event. Otherwise
+`runReady` returns `host_not_ready` without calling `apply()`. The first
+publication whose `mergeKey` matches the ready envelope id is reconciled as a
+remote change. A nested or second publication remains out of band, while the
+causal inbox independently detects projection divergence.
+
+Browser composition activity is tracked separately from the pinned
+`CompositionSession`. Losing an ancestor or Text identity may cancel the pin,
+but it does not release the OS lease. Ready work remains deferred until
+`compositionend`, blur, or a non-composing `insertFromComposition` input clears
+that latch. Release is queued after the native event handler returns, so a
+synchronous editor subscriber cannot re-enter the inbox before final native
+flush and phase handling complete. A generation token prevents an old release
+from closing a newly started composition, and a new composing signal cancels
+any orphaned settle timer from a damaged session. Clearing the latch emits a
+snapshot change so a coalesced retry waiting behind a damaged composition wakes
+up.
+
+If `compositionend` arrives after the pinned session was already lost, the
+editor still enters the same 30 ms settling window before exposing idle state;
+this leaves room for the browser's late final input.
+
+Retry is scheduled in a microtask after an idle snapshot, not synchronously
+inside an editor subscriber. This lets the current document publication finish
+and reach the causal inbox's ownership subscriber before another ingestion
+begins. The app-owned `causalDocumentInbox` tracer implements this coalesced
+retry and avoids a same-revision microtask loop when another pending input state
+still prevents readiness.
+
 The demo's “remote” origin means a queued asynchronous application update, not
 a full collaborative undo model. True collaboration needs causal operations and
 origin-selective undo in the CRDT/OT layer instead of this linear queue.
@@ -162,6 +228,7 @@ The mount API intentionally stays small:
 
 ```ts
 const editor = mountJsonEditable({ root, document, onFault });
+const host = getJsonEditableDocumentHost(editor);
 editor.dispatch(action);
 editor.getSnapshot();
 editor.subscribe(listener);
@@ -216,6 +283,8 @@ before it removes listeners and restores the host attributes it borrowed.
 The automated suite verifies:
 
 - coordinator transitions and history in jsdom;
+- causal host publication ownership, delayed positional rebase, selection
+  restoration, pending-native flush, composition defer, and microtask retry;
 - owner-document/cross-realm DOM behavior;
 - ordinary typing, empty-block deletion, and root-boundary Select All in real
   Chromium, Firefox, and WebKit;
