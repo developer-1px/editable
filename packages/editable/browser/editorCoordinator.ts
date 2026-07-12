@@ -1,5 +1,6 @@
 import {
   applyPatch,
+  type JSONChangeMetadata,
   type JSONDocument,
   type JSONPatchOperation,
   type SelectionSnap,
@@ -27,6 +28,7 @@ import type {
   EditorResult,
   EditorSnapshot,
   JsonEditable,
+  JsonEditableDocumentHost,
   MountJsonEditableOptions,
 } from "./editor";
 import {
@@ -116,6 +118,11 @@ type BlockChange = {
   typeChanged: boolean;
 };
 
+type ReadyDocumentChange = {
+  id: string;
+  publicationCount: number;
+};
+
 const OWNED_HOST_ATTRIBUTES = [
   "contenteditable",
   "spellcheck",
@@ -125,6 +132,17 @@ const OWNED_HOST_ATTRIBUTES = [
 ] as const;
 
 let editorSequence = 0;
+const documentHosts = new WeakMap<JsonEditable, JsonEditableDocumentHost>();
+
+export function getJsonEditableDocumentHost(
+  editor: JsonEditable,
+): JsonEditableDocumentHost {
+  const host = documentHosts.get(editor);
+  if (host === undefined) {
+    throw new TypeError("The editor was not created by mountJsonEditable().");
+  }
+  return host;
+}
 
 export function mountJsonEditable(
   options: MountJsonEditableOptions,
@@ -133,6 +151,14 @@ export function mountJsonEditable(
 }
 
 class JsonEditableCoordinator implements JsonEditable {
+  private readonly documentHost: JsonEditableDocumentHost = {
+    ownsPublication: () => {
+      const sequence = this.activeDocumentPublicationSequence;
+      return sequence === null ? false : { sequence };
+    },
+    runReady: (request) => this.runReadyDocumentChange(request),
+  };
+
   private readonly root: HTMLElement;
   private readonly document: JSONDocument<EditableDocumentValue>;
   private readonly onFault: ((fault: EditorFault) => void) | undefined;
@@ -146,15 +172,21 @@ class JsonEditableCoordinator implements JsonEditable {
   private phase: EditorPhase = "idle";
   private revision = 0;
   private composition: CompositionSession | null = null;
+  private browserCompositionActive = false;
+  private browserCompositionGeneration = 0;
   private compositionSequence = 0;
   private blockSequence = 0;
   private settleTimer: number | null = null;
   private nativeTurnTimer: number | null = null;
   private commitSource: ChangeSource | null = null;
   private commitTextChanges: ReadonlyMap<string, TextChange> | null = null;
+  private documentPublicationSequence = 0;
+  private activeDocumentPublicationSequence: number | null = null;
+  private readyDocumentChange: ReadyDocumentChange | null = null;
   private lastNativeCompositionHistoryId: number | null = null;
   private dispatching = false;
   private destroyed = false;
+  private browserEventDepth = 0;
   private domWriteDepth = 0;
   private pendingRecords: MutationRecord[] = [];
   private mutationFlushQueued = false;
@@ -205,13 +237,14 @@ class JsonEditableCoordinator implements JsonEditable {
     this.observe();
     this.attachEvents();
 
-    this.stopDocumentSubscription = document.subscribe(() => {
-      this.onDocumentChange();
+    this.stopDocumentSubscription = document.subscribe((_operations, metadata) => {
+      this.onDocumentChange(metadata);
     });
     this.stopSelectionSubscription =
       document.selection?.subscribe(() => {
         this.bump();
       }) ?? null;
+    documentHosts.set(this, this.documentHost);
   }
 
   dispatch(action: EditorAction): EditorResult {
@@ -494,6 +527,10 @@ class JsonEditableCoordinator implements JsonEditable {
   ): T {
     const previousSource = this.commitSource;
     const previousTextChanges = this.commitTextChanges;
+    const previousPublicationSequence =
+      this.activeDocumentPublicationSequence;
+    const publicationSequence = this.reserveDocumentPublicationSequence();
+    this.activeDocumentPublicationSequence = publicationSequence;
     this.commitSource = source;
     this.commitTextChanges = textChanges;
     try {
@@ -501,13 +538,125 @@ class JsonEditableCoordinator implements JsonEditable {
     } finally {
       this.commitSource = previousSource;
       this.commitTextChanges = previousTextChanges;
+      this.activeDocumentPublicationSequence = previousPublicationSequence;
     }
   }
 
-  private onDocumentChange(): void {
+  private runReadyDocumentChange(
+    request: Parameters<JsonEditableDocumentHost["runReady"]>[0],
+  ): ReturnType<JsonEditableDocumentHost["runReady"]> {
+    if (this.destroyed) {
+      throw new Error("The editor has been destroyed.");
+    }
+    if (this.dispatching) {
+      return {
+        ok: false,
+        code: "host_not_ready",
+        reason: "The editor is already dispatching a document transaction.",
+      };
+    }
+    if (
+      this.browserEventDepth > 0 ||
+      this.activeDocumentPublicationSequence !== null
+    ) {
+      return {
+        ok: false,
+        code: "host_not_ready",
+        reason:
+          "The editor is still handling a browser event or publishing a document change.",
+      };
+    }
+
+    this.dispatching = true;
+    try {
+      const enteredReady = this.canApplyReadyDocumentChange();
+      this.flushNativeMutations([], false);
+      if (this.destroyed) {
+        throw new Error(
+          "The editor was destroyed while preparing a ready document change.",
+        );
+      }
+      if (!enteredReady || !this.canApplyReadyDocumentChange()) {
+        return {
+          ok: false,
+          code: "host_not_ready",
+          reason:
+            "The editor must settle native input and composition before applying this document change.",
+        };
+      }
+
+      const readyChange: ReadyDocumentChange = {
+        id: request.id,
+        publicationCount: 0,
+      };
+      const previousPublicationSequence =
+        this.activeDocumentPublicationSequence;
+      this.activeDocumentPublicationSequence =
+        this.reserveDocumentPublicationSequence();
+      this.readyDocumentChange = readyChange;
+      const selectionBefore = selectionSnapshotSignature(
+        this.document.selection?.snapshot() ?? null,
+      );
+      let didThrow = false;
+      let thrown: unknown;
+      try {
+        request.apply();
+      } catch (error) {
+        didThrow = true;
+        thrown = error;
+      } finally {
+        this.readyDocumentChange = null;
+        this.activeDocumentPublicationSequence = previousPublicationSequence;
+      }
+      const selectionChanged =
+        selectionSnapshotSignature(
+          this.document.selection?.snapshot() ?? null,
+        ) !== selectionBefore;
+
+      if (
+        !this.destroyed &&
+        this.composition === null &&
+        (readyChange.publicationCount > 0 || selectionChanged)
+      ) {
+        try {
+          restoreDOMSelection(
+            this.root,
+            this.document.value,
+            this.document.selection?.snapshot() ?? null,
+          );
+        } catch (error) {
+          if (!didThrow) {
+            throw error;
+          }
+        }
+      }
+      if (didThrow) {
+        throw thrown;
+      }
+      return { ok: true };
+    } finally {
+      this.dispatching = false;
+    }
+  }
+
+  private canApplyReadyDocumentChange(): boolean {
+    return (
+      this.phase === "idle" &&
+      !this.destroyed &&
+      this.browserEventDepth === 0 &&
+      this.activeDocumentPublicationSequence === null &&
+      !this.browserCompositionActive &&
+      this.composition === null &&
+      this.pendingNativeIntent === null &&
+      this.pendingStructuralIntent === null &&
+      this.queuedRemotePatches.length === 0
+    );
+  }
+
+  private onDocumentChange(metadata?: JSONChangeMetadata): void {
     const before = this.lastValue;
     const after = this.document.value;
-    const source = this.commitSource ?? "external";
+    const source = this.documentChangeSource(metadata);
     if (source !== "native") {
       this.lastNativeCompositionHistoryId = null;
     }
@@ -530,6 +679,30 @@ class JsonEditableCoordinator implements JsonEditable {
     });
     this.lastValue = after;
     this.bump();
+  }
+
+  private documentChangeSource(metadata?: JSONChangeMetadata): ChangeSource {
+    if (this.commitSource !== null) {
+      return this.commitSource;
+    }
+    const readyChange = this.readyDocumentChange;
+    if (readyChange === null) {
+      return "external";
+    }
+    readyChange.publicationCount += 1;
+    return readyChange.publicationCount === 1 &&
+      metadata?.mergeKey === readyChange.id
+      ? "remote"
+      : "external";
+  }
+
+  private reserveDocumentPublicationSequence(): number {
+    const sequence = this.documentPublicationSequence + 1;
+    if (!Number.isSafeInteger(sequence)) {
+      throw new Error("The editor document publication sequence is exhausted.");
+    }
+    this.documentPublicationSequence = sequence;
+    return sequence;
   }
 
   private reconcileComposition(
@@ -1175,7 +1348,12 @@ class JsonEditableCoordinator implements JsonEditable {
 
   private endComposition(): void {
     if (this.composition === null) {
-      this.setPhase("idle");
+      if (this.browserCompositionActive) {
+        this.setPhase("settling");
+        this.scheduleSettle();
+      } else {
+        this.setPhase("idle");
+      }
       return;
     }
     this.flushNativeMutations([], true);
@@ -1616,39 +1794,103 @@ class JsonEditableCoordinator implements JsonEditable {
   }
 
   private attachEvents(): void {
-    this.root.addEventListener("beforeinput", this.onBeforeInput);
-    this.root.addEventListener("input", this.onInput);
-    this.root.addEventListener("compositionstart", this.onCompositionStart);
-    this.root.addEventListener("compositionupdate", this.onCompositionUpdate);
-    this.root.addEventListener("compositionend", this.onCompositionEnd);
-    this.root.addEventListener("paste", this.onPaste);
-    this.root.addEventListener("cut", this.onCut);
-    this.root.addEventListener("keydown", this.onKeyDown);
-    this.root.addEventListener("blur", this.onBlur);
+    this.root.addEventListener("beforeinput", this.guardedOnBeforeInput);
+    this.root.addEventListener("input", this.guardedOnInput);
+    this.root.addEventListener(
+      "compositionstart",
+      this.guardedOnCompositionStart,
+    );
+    this.root.addEventListener(
+      "compositionupdate",
+      this.guardedOnCompositionUpdate,
+    );
+    this.root.addEventListener("compositionend", this.guardedOnCompositionEnd);
+    this.root.addEventListener("paste", this.guardedOnPaste);
+    this.root.addEventListener("cut", this.guardedOnCut);
+    this.root.addEventListener("keydown", this.guardedOnKeyDown);
+    this.root.addEventListener("blur", this.guardedOnBlur);
     this.root.ownerDocument.addEventListener(
       "selectionchange",
-      this.onSelectionChange,
+      this.guardedOnSelectionChange,
     );
   }
 
   private detachEvents(): void {
-    this.root.removeEventListener("beforeinput", this.onBeforeInput);
-    this.root.removeEventListener("input", this.onInput);
-    this.root.removeEventListener("compositionstart", this.onCompositionStart);
-    this.root.removeEventListener("compositionupdate", this.onCompositionUpdate);
-    this.root.removeEventListener("compositionend", this.onCompositionEnd);
-    this.root.removeEventListener("paste", this.onPaste);
-    this.root.removeEventListener("cut", this.onCut);
-    this.root.removeEventListener("keydown", this.onKeyDown);
-    this.root.removeEventListener("blur", this.onBlur);
+    this.root.removeEventListener("beforeinput", this.guardedOnBeforeInput);
+    this.root.removeEventListener("input", this.guardedOnInput);
+    this.root.removeEventListener(
+      "compositionstart",
+      this.guardedOnCompositionStart,
+    );
+    this.root.removeEventListener(
+      "compositionupdate",
+      this.guardedOnCompositionUpdate,
+    );
+    this.root.removeEventListener("compositionend", this.guardedOnCompositionEnd);
+    this.root.removeEventListener("paste", this.guardedOnPaste);
+    this.root.removeEventListener("cut", this.guardedOnCut);
+    this.root.removeEventListener("keydown", this.guardedOnKeyDown);
+    this.root.removeEventListener("blur", this.guardedOnBlur);
     this.root.ownerDocument.removeEventListener(
       "selectionchange",
-      this.onSelectionChange,
+      this.guardedOnSelectionChange,
     );
+  }
+
+  private readonly guardedOnBeforeInput = (event: Event): void => {
+    this.runBrowserEvent(() => this.onBeforeInput(event));
+  };
+
+  private readonly guardedOnInput = (event: Event): void => {
+    this.runBrowserEvent(() => this.onInput(event));
+  };
+
+  private readonly guardedOnCompositionStart = (): void => {
+    this.runBrowserEvent(this.onCompositionStart);
+  };
+
+  private readonly guardedOnCompositionUpdate = (): void => {
+    this.runBrowserEvent(this.onCompositionUpdate);
+  };
+
+  private readonly guardedOnCompositionEnd = (event: Event): void => {
+    this.runBrowserEvent(() => this.onCompositionEnd(event));
+  };
+
+  private readonly guardedOnPaste = (event: ClipboardEvent): void => {
+    this.runBrowserEvent(() => this.onPaste(event));
+  };
+
+  private readonly guardedOnCut = (event: ClipboardEvent): void => {
+    this.runBrowserEvent(() => this.onCut(event));
+  };
+
+  private readonly guardedOnKeyDown = (event: KeyboardEvent): void => {
+    this.runBrowserEvent(() => this.onKeyDown(event));
+  };
+
+  private readonly guardedOnBlur = (): void => {
+    this.runBrowserEvent(this.onBlur);
+  };
+
+  private readonly guardedOnSelectionChange = (): void => {
+    this.runBrowserEvent(this.onSelectionChange);
+  };
+
+  private runBrowserEvent(run: () => void): void {
+    this.browserEventDepth += 1;
+    try {
+      run();
+    } finally {
+      this.browserEventDepth -= 1;
+    }
   }
 
   private readonly onBeforeInput = (rawEvent: Event): void => {
     const event = rawEvent as InputEvent;
+    if (event.isComposing || isCompositionInputType(event.inputType)) {
+      this.markBrowserCompositionActive();
+    }
     const targetSelection = isTextMutationInputType(event.inputType)
       ? this.selectionFromInputTarget(event)
       : null;
@@ -1808,6 +2050,11 @@ class JsonEditableCoordinator implements JsonEditable {
 
   private readonly onInput = (rawEvent: Event): void => {
     const event = rawEvent as InputEvent;
+    if (event.isComposing) {
+      this.markBrowserCompositionActive();
+    } else if (event.inputType === "insertFromComposition") {
+      this.scheduleBrowserCompositionRelease();
+    }
     this.inputTargetSelection = null;
     if (this.pendingNativeIntent !== null) {
       this.commitPendingNativeIntent();
@@ -1868,6 +2115,7 @@ class JsonEditableCoordinator implements JsonEditable {
   }
 
   private readonly onCompositionStart = (): void => {
+    this.markBrowserCompositionActive();
     this.nativeEvidenceUntil = performance.now() + 100;
     if (this.pendingNativeIntent !== null) {
       return;
@@ -1876,6 +2124,7 @@ class JsonEditableCoordinator implements JsonEditable {
   };
 
   private readonly onCompositionUpdate = (): void => {
+    this.markBrowserCompositionActive();
     this.nativeEvidenceUntil = performance.now() + 100;
     if (this.pendingNativeIntent !== null) {
       return;
@@ -1885,6 +2134,7 @@ class JsonEditableCoordinator implements JsonEditable {
 
   private readonly onCompositionEnd = (rawEvent: Event): void => {
     const event = rawEvent as CompositionEvent;
+    this.scheduleBrowserCompositionRelease();
     this.nativeEvidenceUntil = performance.now() + 100;
     const hasParagraphEvidence = hasTrailingLineBreak(event.data);
     let session = this.composition;
@@ -1980,12 +2230,38 @@ class JsonEditableCoordinator implements JsonEditable {
   };
 
   private readonly onBlur = (): void => {
+    this.scheduleBrowserCompositionRelease();
     if (this.composition === null) {
       this.closeNativeTurn();
     } else {
       this.endComposition();
     }
   };
+
+  private markBrowserCompositionActive(): void {
+    this.clearSettleTimer();
+    this.browserCompositionGeneration += 1;
+    this.browserCompositionActive = true;
+  }
+
+  private scheduleBrowserCompositionRelease(): void {
+    if (!this.browserCompositionActive) {
+      return;
+    }
+    const generation = this.browserCompositionGeneration;
+    queueMicrotask(() => {
+      if (
+        !this.browserCompositionActive ||
+        this.browserCompositionGeneration !== generation
+      ) {
+        return;
+      }
+      this.browserCompositionActive = false;
+      if (!this.destroyed) {
+        this.bump();
+      }
+    });
+  }
 
   private createBlockId(): string {
     let id: string;
@@ -2041,12 +2317,24 @@ class JsonEditableCoordinator implements JsonEditable {
     this.revision += 1;
     const snapshot = this.getSnapshot();
     for (const listener of [...this.listeners]) {
-      listener(snapshot);
+      try {
+        listener(snapshot);
+      } catch (error) {
+        this.reportFault({
+          code: "subscriber_failed",
+          recoverable: true,
+          reason: callbackFailureReason("Editor subscriber", error),
+        });
+      }
     }
   }
 
   private reportFault(fault: EditorFault): void {
-    this.onFault?.(fault);
+    try {
+      this.onFault?.(fault);
+    } catch {
+      // Fault observers cannot be allowed to interrupt document publication.
+    }
   }
 }
 
@@ -2088,6 +2376,16 @@ function actionOrigin(action: EditorAction): string | undefined {
 
 function selectionAt(path: string, offset: number): SelectionSnap {
   return selectionBetween(path, offset, path, offset);
+}
+
+function selectionSnapshotSignature(selection: SelectionSnap | null): string {
+  return JSON.stringify(selection);
+}
+
+function callbackFailureReason(label: string, error: unknown): string {
+  return error instanceof Error
+    ? `${label} failed: ${error.message}`
+    : `${label} failed with an unknown value.`;
 }
 
 function selectionBetween(

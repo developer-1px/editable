@@ -15,7 +15,7 @@ export type {
   EditablePoint,
   OrderedEditableSelection,
 } from "../core";
-export { mountJsonEditable } from "./editor";
+export { getJsonEditableDocumentHost, mountJsonEditable } from "./editor";
 export type {
   EditorAction,
   EditorFault,
@@ -23,5 +23,6 @@ export type {
   EditorResult,
   EditorSnapshot,
   JsonEditable,
+  JsonEditableDocumentHost,
   MountJsonEditableOptions,
 } from "./editor";

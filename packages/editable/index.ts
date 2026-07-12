@@ -15,7 +15,7 @@ export type {
   EditablePoint,
   OrderedEditableSelection,
 } from "./browser";
-export { mountJsonEditable } from "./browser";
+export { getJsonEditableDocumentHost, mountJsonEditable } from "./browser";
 export type {
   EditorAction,
   EditorFault,
@@ -23,5 +23,6 @@ export type {
   EditorResult,
   EditorSnapshot,
   JsonEditable,
+  JsonEditableDocumentHost,
   MountJsonEditableOptions,
 } from "./browser";

@@ -1,4 +1,5 @@
 import type {
+  JSONChangeMetadata,
   JSONDocument,
   JSONPatchOperation,
   SelectionSnap,
@@ -8,7 +9,10 @@ import type {
   EditorDocumentCommand,
 } from "../core";
 
-export { mountJsonEditable } from "./editorCoordinator";
+export {
+  getJsonEditableDocumentHost,
+  mountJsonEditable,
+} from "./editorCoordinator";
 
 export type EditorPhase =
   | "idle"
@@ -36,7 +40,8 @@ export type EditorFault = {
     | "input_state_lost"
     | "composition_overlap"
     | "composition_conflict"
-    | "queued_change_commit_failed";
+    | "queued_change_commit_failed"
+    | "subscriber_failed";
   recoverable: boolean;
   reason: string;
 };
@@ -69,6 +74,23 @@ export type EditorResult =
         | "commit_failed";
       reason: string;
     };
+
+export type JsonEditableDocumentHost = {
+  ownsPublication(publication: {
+    operations: ReadonlyArray<JSONPatchOperation>;
+    metadata?: JSONChangeMetadata;
+  }): false | { sequence: number };
+  runReady(request: {
+    id: string;
+    apply(): void;
+  }):
+    | { ok: true }
+    | {
+        ok: false;
+        code: "host_not_ready";
+        reason: string;
+      };
+};
 
 export type JsonEditable = {
   dispatch(action: EditorAction): EditorResult;

@@ -21,6 +21,8 @@
   },
   "dependencies": {
     "@interactive-os/json-document": "1.1.0-rc.0",
+    "@interactive-os/json-document-causal-patch-inbox": "file:vendor/json-document-e8d572d4/interactive-os-json-document-causal-patch-inbox-0.1.0.tgz",
+    "@interactive-os/json-document-id-resolver": "file:vendor/json-document-e8d572d4/interactive-os-json-document-id-resolver-0.1.0.tgz",
     "@tanstack/react-router": "^1.170.16",
     "@tanstack/react-start": "^1.168.26",
     "lucide-react": "^0.545.0",
@@ -43,6 +45,10 @@
     "vitest": "^4.1.5"
   },
   "pnpm": {
+    "overrides": {
+      "@interactive-os/json-document-patch-rebase": "file:vendor/json-document-e8d572d4/interactive-os-json-document-patch-rebase-0.1.0.tgz",
+      "@interactive-os/json-document-stable-id-rebase": "file:vendor/json-document-e8d572d4/interactive-os-json-document-stable-id-rebase-0.1.0.tgz"
+    },
     "onlyBuiltDependencies": [
       "esbuild",
       "lightningcss"

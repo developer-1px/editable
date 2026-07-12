@@ -129,6 +129,29 @@ test("ordinary browser Enter splits the selected block through the model", async
   await expect(lastFault(page)).toHaveText("null");
 });
 
+test("the delayed-edit tracer rebases across its local leading insertion", async ({
+  page,
+}) => {
+  const initialCount = (await readDocumentBlocks(page)).length;
+
+  await page.getByRole("button", { name: "지연 편집 추적" }).click();
+
+  await expect.poll(() => readDocumentBlocks(page)).toHaveLength(initialCount + 1);
+  const blocks = await readDocumentBlocks(page);
+  expect(blocks[0]).toEqual({
+    id: "causal-local-1",
+    type: "paragraph",
+    text: "로컬 선행 변경 1",
+  });
+  expect(blocks.find((block) => block.id === "render-rule")?.text).toBe(
+    "renderOutside(compositionIsland) · 지연 변경 1",
+  );
+  await expect(blockSurface(page, "render-rule")).toHaveText(
+    "renderOutside(compositionIsland) · 지연 변경 1",
+  );
+  await expect(lastFault(page)).toHaveText("null");
+});
+
 // These tests dispatch untrusted CompositionEvent/InputEvent objects in a real
 // browser page and manually perform the DOM mutation a browser would perform.
 // They validate the coordinator protocol, but they do not create an OS IME

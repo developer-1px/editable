@@ -1,4 +1,5 @@
 import type {
+  JSONChangeMetadata,
   JSONDocument,
   JSONPatchOperation,
   Pointer,
@@ -18,9 +19,11 @@ import type {
   EditorResult,
   EditorSnapshot,
   JsonEditable,
+  JsonEditableDocumentHost,
   MountJsonEditableOptions,
   OrderedEditableSelection,
 } from "./index";
+import { getJsonEditableDocumentHost } from "./index";
 import * as PublicAPI from "./index";
 
 type ExpectedBlockType = "paragraph" | "heading" | "quote" | "code";
@@ -55,7 +58,8 @@ type ExpectedFault = {
     | "input_state_lost"
     | "composition_overlap"
     | "composition_conflict"
-    | "queued_change_commit_failed";
+    | "queued_change_commit_failed"
+    | "subscriber_failed";
   recoverable: boolean;
   reason: string;
 };
@@ -109,6 +113,22 @@ type ExpectedResult =
         | "commit_failed";
       reason: string;
     };
+type ExpectedDocumentHost = {
+  ownsPublication(publication: {
+    operations: ReadonlyArray<JSONPatchOperation>;
+    metadata?: JSONChangeMetadata;
+  }): false | { sequence: number };
+  runReady(request: {
+    id: string;
+    apply(): void;
+  }):
+    | { ok: true }
+    | {
+        ok: false;
+        code: "host_not_ready";
+        reason: string;
+      };
+};
 type ExpectedEditor = {
   dispatch(action: ExpectedAction): ExpectedResult;
   getSnapshot(): ExpectedSnapshot;
@@ -130,6 +150,7 @@ describe("editable public API", () => {
       "editableBlockIndexFromTextPath",
       "editableTextPath",
       "findEditableBlockIndex",
+      "getJsonEditableDocumentHost",
       "mountJsonEditable",
       "orderedEditableSelection",
       "primaryEditablePoint",
@@ -149,6 +170,7 @@ describe("editable public API", () => {
     expectTypeOf<EditorFault>().toEqualTypeOf<ExpectedFault>();
     expectTypeOf<EditorAction>().toEqualTypeOf<ExpectedAction>();
     expectTypeOf<EditorResult>().toEqualTypeOf<ExpectedResult>();
+    expectTypeOf<JsonEditableDocumentHost>().toEqualTypeOf<ExpectedDocumentHost>();
     expectTypeOf<JsonEditable>().toEqualTypeOf<ExpectedEditor>();
     expectTypeOf<
       MountJsonEditableOptions
@@ -171,6 +193,9 @@ describe("editable public API", () => {
     >();
     expectTypeOf(PublicAPI.findEditableBlockIndex).toEqualTypeOf<
       (value: ExpectedDocument, blockId: string) => number
+    >();
+    expectTypeOf(getJsonEditableDocumentHost).toEqualTypeOf<
+      (editor: ExpectedEditor) => ExpectedDocumentHost
     >();
     expectTypeOf(PublicAPI.primaryEditablePoint).toEqualTypeOf<
       (
