@@ -5,8 +5,8 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@interactive-os/json-document-patch-rebase': file:vendor/json-document-e8d572d4/interactive-os-json-document-patch-rebase-0.1.0.tgz
-  '@interactive-os/json-document-stable-id-rebase': file:vendor/json-document-e8d572d4/interactive-os-json-document-stable-id-rebase-0.1.0.tgz
+  '@interactive-os/json-document-patch-rebase': file:vendor/json-document-218aa475/interactive-os-json-document-patch-rebase-0.1.0.tgz
+  '@interactive-os/json-document-stable-id-rebase': file:vendor/json-document-218aa475/interactive-os-json-document-stable-id-rebase-0.1.0.tgz
 
 importers:
 
@@ -16,11 +16,11 @@ importers:
         specifier: 1.1.0-rc.0
         version: 1.1.0-rc.0(react@19.2.7)(zod@4.4.3)
       '@interactive-os/json-document-causal-patch-inbox':
-        specifier: file:vendor/json-document-e8d572d4/interactive-os-json-document-causal-patch-inbox-0.1.0.tgz
-        version: file:vendor/json-document-e8d572d4/interactive-os-json-document-causal-patch-inbox-0.1.0.tgz(@interactive-os/json-document-id-resolver@file:vendor/json-document-e8d572d4/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3)))(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))
+        specifier: file:vendor/json-document-218aa475/interactive-os-json-document-causal-patch-inbox-0.1.0.tgz
+        version: file:vendor/json-document-218aa475/interactive-os-json-document-causal-patch-inbox-0.1.0.tgz(@interactive-os/json-document-id-resolver@file:vendor/json-document-218aa475/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3)))(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))
       '@interactive-os/json-document-id-resolver':
-        specifier: file:vendor/json-document-e8d572d4/interactive-os-json-document-id-resolver-0.1.0.tgz
-        version: file:vendor/json-document-e8d572d4/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))
+        specifier: file:vendor/json-document-218aa475/interactive-os-json-document-id-resolver-0.1.0.tgz
+        version: file:vendor/json-document-218aa475/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))
       '@tanstack/react-router':
         specifier: ^1.170.16
         version: 1.170.16(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -286,26 +286,26 @@ packages:
       '@noble/hashes':
         optional: true
 
-  '@interactive-os/json-document-causal-patch-inbox@file:vendor/json-document-e8d572d4/interactive-os-json-document-causal-patch-inbox-0.1.0.tgz':
-    resolution: {integrity: sha512-oGkLQJOvcAV1j05+XjKQxatp4ks7aar6LbdKh/g2cdDv3sQFz+kRNSStyJOxsHgqFLypMREV4WhSafGuCR8lUg==, tarball: file:vendor/json-document-e8d572d4/interactive-os-json-document-causal-patch-inbox-0.1.0.tgz}
+  '@interactive-os/json-document-causal-patch-inbox@file:vendor/json-document-218aa475/interactive-os-json-document-causal-patch-inbox-0.1.0.tgz':
+    resolution: {integrity: sha512-wCJ9KyWQGOobmU8Ox75UyuJCOZAMU1PBSt0fe4BlcJetCNadICf39ZRAXJzmiOov9cjxY4m4mul4qo1r1gAJqw==, tarball: file:vendor/json-document-218aa475/interactive-os-json-document-causal-patch-inbox-0.1.0.tgz}
     version: 0.1.0
     peerDependencies:
       '@interactive-os/json-document': ^1.0.0
 
-  '@interactive-os/json-document-id-resolver@file:vendor/json-document-e8d572d4/interactive-os-json-document-id-resolver-0.1.0.tgz':
-    resolution: {integrity: sha512-rEDUwGPn7syeNLWDgM+40Klu/5qUWk/GWDieeUZRS+MYVN7lBghRPb1+MRAhdKfBRTUHLWek/R1DKweG+TBLKQ==, tarball: file:vendor/json-document-e8d572d4/interactive-os-json-document-id-resolver-0.1.0.tgz}
+  '@interactive-os/json-document-id-resolver@file:vendor/json-document-218aa475/interactive-os-json-document-id-resolver-0.1.0.tgz':
+    resolution: {integrity: sha512-dKQ9kj2hj0SyyxN1aV5bThqfopNX9YGBMVkjPh42GlnJgGI0tj1qetlgjj6cGHSAWw8RwR5mtBOBVTAfMYQhQA==, tarball: file:vendor/json-document-218aa475/interactive-os-json-document-id-resolver-0.1.0.tgz}
     version: 0.1.0
     peerDependencies:
       '@interactive-os/json-document': ^1.0.0
 
-  '@interactive-os/json-document-patch-rebase@file:vendor/json-document-e8d572d4/interactive-os-json-document-patch-rebase-0.1.0.tgz':
-    resolution: {integrity: sha512-6ZZXG/6tB4DZns11lEo5yIkMVnS4m/+SVcb9tHBKCNWbTHP9zX8x9ahlrSL6kzfoEbcFXNzJPj73+tqzPZbY2Q==, tarball: file:vendor/json-document-e8d572d4/interactive-os-json-document-patch-rebase-0.1.0.tgz}
+  '@interactive-os/json-document-patch-rebase@file:vendor/json-document-218aa475/interactive-os-json-document-patch-rebase-0.1.0.tgz':
+    resolution: {integrity: sha512-6ZZXG/6tB4DZns11lEo5yIkMVnS4m/+SVcb9tHBKCNWbTHP9zX8x9ahlrSL6kzfoEbcFXNzJPj73+tqzPZbY2Q==, tarball: file:vendor/json-document-218aa475/interactive-os-json-document-patch-rebase-0.1.0.tgz}
     version: 0.1.0
     peerDependencies:
       '@interactive-os/json-document': ^1.0.0
 
-  '@interactive-os/json-document-stable-id-rebase@file:vendor/json-document-e8d572d4/interactive-os-json-document-stable-id-rebase-0.1.0.tgz':
-    resolution: {integrity: sha512-d7wp2R8AKWyQjVEAjw9EHGePz/Jyj7zmddR3Fy9lCWEA1wgxyzEyBnI5DhAerFeUCNBFFVmghLgi14xaMmD0Bw==, tarball: file:vendor/json-document-e8d572d4/interactive-os-json-document-stable-id-rebase-0.1.0.tgz}
+  '@interactive-os/json-document-stable-id-rebase@file:vendor/json-document-218aa475/interactive-os-json-document-stable-id-rebase-0.1.0.tgz':
+    resolution: {integrity: sha512-ChCf+Mf/wzC5NHV3uk1RwNgGa/YbLlyD2S/mOfjyyGRw5vLRvV3jCA1qutO8jVlU6bKpKXsv/+3ei2ZZLTzQAQ==, tarball: file:vendor/json-document-218aa475/interactive-os-json-document-stable-id-rebase-0.1.0.tgz}
     version: 0.1.0
     peerDependencies:
       '@interactive-os/json-document': ^1.0.0
@@ -1532,26 +1532,26 @@ snapshots:
 
   '@exodus/bytes@1.15.1': {}
 
-  '@interactive-os/json-document-causal-patch-inbox@file:vendor/json-document-e8d572d4/interactive-os-json-document-causal-patch-inbox-0.1.0.tgz(@interactive-os/json-document-id-resolver@file:vendor/json-document-e8d572d4/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3)))(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))':
+  '@interactive-os/json-document-causal-patch-inbox@file:vendor/json-document-218aa475/interactive-os-json-document-causal-patch-inbox-0.1.0.tgz(@interactive-os/json-document-id-resolver@file:vendor/json-document-218aa475/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3)))(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))':
     dependencies:
       '@interactive-os/json-document': 1.1.0-rc.0(react@19.2.7)(zod@4.4.3)
-      '@interactive-os/json-document-patch-rebase': file:vendor/json-document-e8d572d4/interactive-os-json-document-patch-rebase-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))
-      '@interactive-os/json-document-stable-id-rebase': file:vendor/json-document-e8d572d4/interactive-os-json-document-stable-id-rebase-0.1.0.tgz(@interactive-os/json-document-id-resolver@file:vendor/json-document-e8d572d4/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3)))(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))
+      '@interactive-os/json-document-patch-rebase': file:vendor/json-document-218aa475/interactive-os-json-document-patch-rebase-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))
+      '@interactive-os/json-document-stable-id-rebase': file:vendor/json-document-218aa475/interactive-os-json-document-stable-id-rebase-0.1.0.tgz(@interactive-os/json-document-id-resolver@file:vendor/json-document-218aa475/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3)))(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))
     transitivePeerDependencies:
       - '@interactive-os/json-document-id-resolver'
 
-  '@interactive-os/json-document-id-resolver@file:vendor/json-document-e8d572d4/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))':
+  '@interactive-os/json-document-id-resolver@file:vendor/json-document-218aa475/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))':
     dependencies:
       '@interactive-os/json-document': 1.1.0-rc.0(react@19.2.7)(zod@4.4.3)
 
-  '@interactive-os/json-document-patch-rebase@file:vendor/json-document-e8d572d4/interactive-os-json-document-patch-rebase-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))':
+  '@interactive-os/json-document-patch-rebase@file:vendor/json-document-218aa475/interactive-os-json-document-patch-rebase-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))':
     dependencies:
       '@interactive-os/json-document': 1.1.0-rc.0(react@19.2.7)(zod@4.4.3)
 
-  '@interactive-os/json-document-stable-id-rebase@file:vendor/json-document-e8d572d4/interactive-os-json-document-stable-id-rebase-0.1.0.tgz(@interactive-os/json-document-id-resolver@file:vendor/json-document-e8d572d4/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3)))(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))':
+  '@interactive-os/json-document-stable-id-rebase@file:vendor/json-document-218aa475/interactive-os-json-document-stable-id-rebase-0.1.0.tgz(@interactive-os/json-document-id-resolver@file:vendor/json-document-218aa475/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3)))(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))':
     dependencies:
       '@interactive-os/json-document': 1.1.0-rc.0(react@19.2.7)(zod@4.4.3)
-      '@interactive-os/json-document-id-resolver': file:vendor/json-document-e8d572d4/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))
+      '@interactive-os/json-document-id-resolver': file:vendor/json-document-218aa475/interactive-os-json-document-id-resolver-0.1.0.tgz(@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3))
 
   '@interactive-os/json-document@1.1.0-rc.0(react@19.2.7)(zod@4.4.3)':
     dependencies:

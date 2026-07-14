@@ -619,11 +619,7 @@ class JsonEditableCoordinator implements JsonEditable {
         (readyChange.publicationCount > 0 || selectionChanged)
       ) {
         try {
-          restoreDOMSelection(
-            this.root,
-            this.document.value,
-            this.document.selection?.snapshot() ?? null,
-          );
+          this.restoreDOMSelectionIfFocused();
         } catch (error) {
           if (!didThrow) {
             throw error;
@@ -650,6 +646,17 @@ class JsonEditableCoordinator implements JsonEditable {
       this.pendingNativeIntent === null &&
       this.pendingStructuralIntent === null &&
       this.queuedRemotePatches.length === 0
+    );
+  }
+
+  private restoreDOMSelectionIfFocused(): void {
+    if (!this.root.matches(":focus")) {
+      return;
+    }
+    restoreDOMSelection(
+      this.root,
+      this.document.value,
+      this.document.selection?.snapshot() ?? null,
     );
   }
 
@@ -1424,11 +1431,7 @@ class JsonEditableCoordinator implements JsonEditable {
     });
     this.flushQueuedRemotePatches();
     this.flushPendingStructuralIntent(session.id, selection);
-    restoreDOMSelection(
-      this.root,
-      this.document.value,
-      this.document.selection?.snapshot() ?? null,
-    );
+    this.restoreDOMSelectionIfFocused();
   }
 
   private cancelComposition(report: boolean, reason?: string): void {

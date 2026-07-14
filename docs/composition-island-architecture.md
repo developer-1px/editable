@@ -211,6 +211,13 @@ begins. The app-owned `causalDocumentInbox` tracer implements this coalesced
 retry and avoids a same-revision microtask loop when another pending input state
 still prevents readiness.
 
+Ready publications and composition settling update canonical JSON selection
+regardless of focus. They restore the matching DOM selection only when the
+editable root still matches `:focus` in its document or shadow-root context;
+automatic reconciliation must not reclaim focus from an external control.
+Explicit local commands retain their existing focus-and-selection restoration
+behavior.
+
 The demo's “remote” origin means a queued asynchronous application update, not
 a full collaborative undo model. True collaboration needs causal operations and
 origin-selective undo in the CRDT/OT layer instead of this linear queue.

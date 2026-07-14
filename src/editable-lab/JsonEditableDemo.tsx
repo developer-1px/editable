@@ -149,6 +149,7 @@ export function JsonEditableDemo() {
     if (blockIndex < 0) {
       return;
     }
+    const delayedText = `${block.text} · 지연 변경 ${sequence}`;
     if (editorSnapshot?.composition === null) {
       const local = editor.dispatch({
         type: "patch",
@@ -181,9 +182,13 @@ export function JsonEditableDemo() {
           {
             op: "replace",
             path: `/blocks/${blockIndex}/text`,
-            value: `${block.text} · 지연 변경 ${sequence}`,
+            value: delayedText,
           },
         ],
+        selectionAfter: {
+          path: `/blocks/${blockIndex}/text`,
+          offset: delayedText.length,
+        },
       },
     });
   }, [document]);

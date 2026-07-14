@@ -30,7 +30,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function setupEditor(onFault?: (fault: EditorFault) => void) {
+function setupEditor(
+  onFault?: (fault: EditorFault) => void,
+  root = window.document.createElement("div"),
+) {
   const document = createEditableDocument({
     schema: "interactive-os.editable-document@2",
     id: "causal-host-test",
@@ -39,9 +42,10 @@ function setupEditor(onFault?: (fault: EditorFault) => void) {
       { id: "beta", type: "paragraph", text: "second" },
     ],
   });
-  const root = window.document.createElement("div");
   const faults: EditorFault[] = [];
-  window.document.body.append(root);
+  if (!root.isConnected) {
+    window.document.body.append(root);
+  }
   const editor = mountJsonEditable({
     root,
     document,
@@ -102,6 +106,7 @@ function inputEvent(
 describe("editable causal document host", () => {
   it("rebases a delayed positional edit after an owned local insertion", () => {
     const fixture = setupEditor();
+    fixture.root.focus();
     const inbox = createInbox(fixture);
     const base = fixture.document.value;
     const baseRevision = inbox.current().journalRevision;
@@ -629,6 +634,7 @@ describe("editable causal document host", () => {
     expect(fixture.document.value.blocks[0]?.text).toBe("published");
     expect(textNode(fixture, "alpha").data).toBe("published");
     expect(readyOwnerships).toEqual([{ sequence: 2 }]);
+    expect(window.document.activeElement).toBe(outside);
     expect(fixture.faults).toEqual([]);
 
     expect(
@@ -642,7 +648,7 @@ describe("editable causal document host", () => {
     ).toBe(true);
   });
 
-  it("restores DOM selection after a ready test-only commit", () => {
+  it("keeps ready selection headless while another element owns focus", () => {
     const fixture = setupEditor();
     const documentHost = getJsonEditableDocumentHost(fixture.editor);
     const publications = vi.fn();
@@ -689,14 +695,50 @@ describe("editable causal document host", () => {
       anchor: { path: "/blocks/1/text", offset: 3 },
       focus: { path: "/blocks/1/text", offset: 3 },
     });
-    expect(window.getSelection()?.focusNode).toBe(textNode(fixture, "beta"));
-    expect(window.getSelection()?.focusOffset).toBe(3);
+    expect(window.document.activeElement).toBe(outside);
+  });
+
+  it("restores ready selection while a shadow-root editor owns focus", () => {
+    const shadowHost = window.document.createElement("div");
+    window.document.body.append(shadowHost);
+    const shadowRoot = shadowHost.attachShadow({ mode: "open" });
+    const root = window.document.createElement("div");
+    shadowRoot.append(root);
+    const fixture = setupEditor(undefined, root);
+    const documentHost = getJsonEditableDocumentHost(fixture.editor);
+    fixture.root.focus();
+    expect(window.document.activeElement).toBe(shadowHost);
+    expect(shadowRoot.activeElement).toBe(fixture.root);
+    const focus = vi.spyOn(fixture.root, "focus");
+
+    expect(
+      documentHost.runReady({
+        id: "shadow-selection",
+        apply() {
+          fixture.document.commit(
+            [{ op: "test", path: "/blocks/1/id", value: "beta" }],
+            {
+              mergeKey: "shadow-selection",
+              origin: "causal-test",
+              selectionAfter: { path: "/blocks/1/text", offset: 2 },
+            },
+          );
+        },
+      }),
+    ).toEqual({ ok: true });
+
+    expect(fixture.document.selection?.primaryRange).toEqual({
+      anchor: { path: "/blocks/1/text", offset: 2 },
+      focus: { path: "/blocks/1/text", offset: 2 },
+    });
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
   });
 
   it("isolates an earlier editor observer and restores selection", () => {
     const fixture = setupEditor();
     const documentHost = getJsonEditableDocumentHost(fixture.editor);
     const alpha = textNode(fixture, "alpha");
+    fixture.root.focus();
     setDOMCaret(alpha, 1);
     fixture.document.selection?.collapse({
       path: "/blocks/0/text",

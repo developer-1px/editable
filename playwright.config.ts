@@ -1,5 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const serverPort = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
+if (!Number.isInteger(serverPort) || serverPort < 1 || serverPort > 65_535) {
+  throw new Error("PLAYWRIGHT_PORT must be an integer between 1 and 65535.");
+}
+const serverURL = `http://127.0.0.1:${serverPort}`;
+
 export default defineConfig({
   forbidOnly: true,
   fullyParallel: false,
@@ -8,15 +14,15 @@ export default defineConfig({
   testDir: "./tests/browser",
   timeout: 30_000,
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: serverURL,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "pnpm exec vite dev --host 127.0.0.1 --port 4173",
+    command: `pnpm exec vite dev --host 127.0.0.1 --port ${serverPort}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    url: "http://127.0.0.1:4173",
+    url: serverURL,
   },
   projects: [
     {
