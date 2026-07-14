@@ -227,6 +227,162 @@ test.describe("synthetic composition protocol — not an OS IME reproduction", (
     );
   });
 
+  test("causal retry applies after composition settles while the editor retains focus", async ({
+    page,
+  }) => {
+    const offset = 3;
+    const inserted = "한";
+    const targetText = "renderOutside(compositionIsland) · 지연 변경 1";
+    const targetIndex = (await readDocumentBlocks(page)).findIndex(
+      (block) => block.id === "render-rule",
+    );
+    expect(targetIndex).toBeGreaterThanOrEqual(0);
+    const pinnedNode = await beginSyntheticComposition(
+      page,
+      COMPOSING_BLOCK_ID,
+      offset,
+      inserted,
+    );
+
+    await page.getByRole("button", { name: "지연 편집 추적" }).click();
+
+    expect(await readBlockText(page, "render-rule")).toBe(
+      "renderOutside(compositionIsland)",
+    );
+    expect(
+      await page.evaluate(() => {
+        const lab = (window as DemoWindow).__jsonEditableLab;
+        if (lab === undefined) {
+          throw new Error("JSON editable lab is not mounted.");
+        }
+        return lab.causalInbox.current();
+      }),
+    ).toMatchObject({
+      queued: [{ id: "causal-delayed-1", missing: [] }],
+    });
+    await expect.poll(() => readSnapshot(page)).toMatchObject({
+      composition: { blockId: COMPOSING_BLOCK_ID },
+      phase: "composing",
+    });
+
+    await blockSurface(page, COMPOSING_BLOCK_ID).evaluate((surface, data) => {
+      surface.dispatchEvent(
+        new CompositionEvent("compositionend", {
+          bubbles: true,
+          composed: true,
+          data,
+        }),
+      );
+    }, inserted);
+
+    await expect.poll(() => readBlockText(page, "render-rule")).toBe(
+      targetText,
+    );
+    await expect.poll(() => readSnapshot(page)).toMatchObject({
+      composition: null,
+      phase: "idle",
+      selection: {
+        focus: {
+          path: `/blocks/${targetIndex}/text`,
+          offset: targetText.length,
+        },
+      },
+    });
+    await expect(blockSurface(page, COMPOSING_BLOCK_ID)).toHaveText(
+      insertAt(INITIAL_COMPOSING_TEXT, offset, inserted),
+    );
+    await expectPinnedNode(blockSurface(page, COMPOSING_BLOCK_ID), pinnedNode);
+    await expect(editorRoot(page)).toBeFocused();
+    expect(
+      await blockSurface(page, "render-rule").evaluate((surface) => {
+        const selection = document.getSelection();
+        return {
+          focusNodeIsTarget: selection?.focusNode === surface.firstChild,
+          focusOffset: selection?.focusOffset,
+        };
+      }),
+    ).toEqual({
+      focusNodeIsTarget: true,
+      focusOffset: targetText.length,
+    });
+    await expect(lastFault(page)).toHaveText("null");
+  });
+
+  test("causal retry applies after settle without reclaiming external focus", async ({
+    page,
+  }) => {
+    const offset = 3;
+    const inserted = "한";
+    const targetText = "renderOutside(compositionIsland) · 지연 변경 1";
+    const targetIndex = (await readDocumentBlocks(page)).findIndex(
+      (block) => block.id === "render-rule",
+    );
+    expect(targetIndex).toBeGreaterThanOrEqual(0);
+    await beginSyntheticComposition(
+      page,
+      COMPOSING_BLOCK_ID,
+      offset,
+      inserted,
+    );
+
+    await page.getByRole("button", { name: "지연 편집 추적" }).click();
+    expect(await readBlockText(page, "render-rule")).toBe(
+      "renderOutside(compositionIsland)",
+    );
+
+    const immediate = await blockSurface(page, COMPOSING_BLOCK_ID).evaluate(
+      (surface, data) => {
+        const outside = document.createElement("button");
+        outside.dataset.testid = "outside-focus-target";
+        outside.textContent = "Outside focus target";
+        document.body.append(outside);
+        surface.dispatchEvent(
+          new CompositionEvent("compositionend", {
+            bubbles: true,
+            composed: true,
+            data,
+          }),
+        );
+        outside.focus();
+        const lab = (window as DemoWindow).__jsonEditableLab;
+        if (lab === undefined) {
+          throw new Error("JSON editable lab is not mounted.");
+        }
+        return {
+          activeElementIsOutside: document.activeElement === outside,
+          snapshot: lab.editor.getSnapshot(),
+        };
+      },
+      inserted,
+    );
+
+    expect(immediate).toMatchObject({
+      activeElementIsOutside: true,
+      snapshot: {
+        composition: { blockId: COMPOSING_BLOCK_ID },
+        phase: "settling",
+      },
+    });
+    await expect.poll(() => readBlockText(page, "render-rule")).toBe(
+      targetText,
+    );
+    await expect.poll(() => readSnapshot(page)).toMatchObject({
+      composition: null,
+      phase: "idle",
+      selection: {
+        focus: {
+          path: `/blocks/${targetIndex}/text`,
+          offset: targetText.length,
+        },
+      },
+    });
+    await expect(page.getByTestId("outside-focus-target")).toBeFocused();
+    await expect(blockSurface(page, COMPOSING_BLOCK_ID)).toHaveText(
+      insertAt(INITIAL_COMPOSING_TEXT, offset, inserted),
+    );
+    await expect(lastFault(page)).toHaveText("null");
+  });
+
   test("synthetic protocol rejects same-block overlap without claiming OS cancellation", async ({
     page,
   }) => {

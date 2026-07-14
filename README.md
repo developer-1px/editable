@@ -22,7 +22,11 @@ browser still owns a composition island, and identifies coordinator-owned
 native, application, history, and ready publications with a pre-commit
 sequence. The demo wires the SHA-pinned `json-document` causal inbox through
 that capability; “지연 편집 추적” exercises both positional rebase after a
-local insertion and settle-time retry during IME composition.
+local insertion, selection correction, and settle-time retry during IME
+composition. Ready changes always update canonical selection, but automatic
+settle and causal publication restore DOM selection only while the editable
+root already owns focus. A background change therefore cannot reclaim focus
+from another control.
 
 Enter is handled as a structural intent, independently from DOM ownership. A
 semantic paragraph event is retained and replayed once composition settles;
